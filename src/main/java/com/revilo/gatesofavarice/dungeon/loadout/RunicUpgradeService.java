@@ -101,6 +101,15 @@ public final class RunicUpgradeService {
             case ARMOR -> definition.armorRunicStatPool();
             case ITEM -> List.of(new StatRollRange("ability_power", 0.5F, 1.2F), new StatRollRange("draw_speed", 0.01F, 0.04F), new StatRollRange("bonus_chance", 0.01F, 0.03F));
         };
+        if (category != UpgradeCategory.ITEM) {
+            pool = RunicLoadoutService.filterStatsForStack(target, pool);
+            if (pool.isEmpty()) {
+                pool = List.of(new StatRollRange(
+                        target.getItem() instanceof net.minecraft.world.item.ArmorItem ? "resistance" : "attack_damage",
+                        0.05F,
+                        0.25F));
+            }
+        }
         if (category == UpgradeCategory.ITEM) {
             cards.addAll(generateItemCards(definition, category, random));
             return List.copyOf(cards);

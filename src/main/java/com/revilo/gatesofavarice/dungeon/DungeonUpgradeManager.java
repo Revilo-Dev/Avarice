@@ -62,9 +62,10 @@ public final class DungeonUpgradeManager {
                 ownerId
         );
         SESSIONS.put(player.getUUID(), session);
-        PacketDistributor.sendToPlayer(player, new OpenUpgradeCategoryPayload(session.sessionId.toString(), definition.displayName(), definition.theme().name()));
         if (preselectedCategory != null) {
             selectCategory(player, session.sessionId.toString(), preselectedCategory);
+        } else {
+            PacketDistributor.sendToPlayer(player, new OpenUpgradeCategoryPayload(session.sessionId.toString(), definition.displayName(), definition.theme().name()));
         }
         return true;
     }
@@ -110,18 +111,21 @@ public final class DungeonUpgradeManager {
             }
             return;
         }
-        UpgradeContext ctx = new UpgradeContext(player.getUUID(), session.instance.instanceId(), 1.0F, 3);
-        applyCard(player, target, card, ctx, session.definition);
-        if (!target.isEmpty()) {
-            RunicLoadoutService.syncRunicSlots(target);
-        }
-        player.inventoryMenu.broadcastChanges();
-        player.containerMenu.broadcastChanges();
-        // Regenerate cards after apply so client cannot replay stale cards.
-        if (session.waveOwnerId != null) {
-            DungeonRunManager.completeWaveUpgradeSelection(player, session.waveOwnerId);
-        } else {
-            selectCategory(player, sessionIdRaw, session.activeCategory);
+        try {
+            UpgradeContext ctx = new UpgradeContext(player.getUUID(), session.instance.instanceId(), 1.0F, 3);
+            applyCard(player, target, card, ctx, session.definition);
+            if (!target.isEmpty()) {
+                RunicLoadoutService.syncRunicSlots(target);
+            }
+            player.inventoryMenu.broadcastChanges();
+            player.containerMenu.broadcastChanges();
+        } finally {
+            // Never stall the run on UI/apply errors during between-wave upgrades.
+            if (session.waveOwnerId != null) {
+                DungeonRunManager.completeWaveUpgradeSelection(player, session.waveOwnerId);
+            } else {
+                selectCategory(player, sessionIdRaw, session.activeCategory);
+            }
         }
     }
 
@@ -143,13 +147,13 @@ public final class DungeonUpgradeManager {
                 }
                 case ADD_NEW_RUNE_STAT -> {
                     RuneStatType type = RuneStatType.byId(card.changeLabel());
-                    if (type != null) {
+                    if (type != null && RunicLoadoutService.isStatAllowedForStack(target, type)) {
                         RunicUpgradeService.addNewStat(target, type, Math.max(0.01F, parseNumber(card.newValue())), ctx);
                     }
                 }
                 case INCREASE_EXISTING_STAT_PERCENT -> {
                     RuneStatType type = RuneStatType.byId(card.changeLabel());
-                    if (type != null) {
+                    if (type != null && RunicLoadoutService.isStatAllowedForStack(target, type)) {
                         float pct = Math.max(0.01F, parsePercent(card.newValue()));
                         float current = RuneStats.get(target).get(type);
                         float delta = Math.max(0.01F, current * pct);
@@ -165,7 +169,7 @@ public final class DungeonUpgradeManager {
                     if (type == null && card.type() == UpgradeCardType.ADD_IMPLICIT) {
                         type = RuneStatType.ATTACK_DAMAGE;
                     }
-                    if (type != null) {
+                    if (type != null && RunicLoadoutService.isStatAllowedForStack(target, type)) {
                         float delta = Math.max(0.01F, parseNumber(card.newValue()));
                         if (RuneStats.get(target).has(type)) {
                             RunicUpgradeService.upgradeExistingStat(target, type, delta, ctx);

@@ -39,7 +39,7 @@ public final class GatewayExpansionConfig {
                         "simplyswords:catalysis", "simplyswords:fire_react", "simplyswords:soul_siphoner", "supplementaries:stasis",
                         "twilightforest:chill_aura", "twilightforest:destruction", "twilightforest:fire_react",
                         "minecraft:aqua_affinity", "minecraft:depth_strider", "minecraft:feather_falling", "minecraft:binding_curse",
-                        "minecraft:breach", "minecraft:channeling", "minecraft:density", "minecraft:flame", "minecraft:impaling",
+                        "minecraft:channeling", "minecraft:density", "minecraft:flame", "minecraft:impaling",
                         "minecraft:infinity", "minecraft:looting", "minecraft:luck_of_the_sea", "minecraft:multishot",
                         "minecraft:respiration", "minecraft:riptide", "minecraft:fortune", "minecraft:frost_walker",
                         "minecraft:loyalty", "minecraft:lure", "minecraft:mending", "minecraft:piercing", "minecraft:punch",

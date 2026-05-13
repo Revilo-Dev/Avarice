@@ -5,7 +5,9 @@ import com.revilo.gatesofavarice.config.GatewayExpansionConfig;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.EffectSpec;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.StatRollRange;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.Registries;
@@ -15,6 +17,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.item.component.CustomData;
@@ -25,6 +28,18 @@ import net.revilodev.runic.stat.RuneStatType;
 import net.revilodev.runic.stat.RuneStats;
 
 public final class RunicLoadoutService {
+    private static final Set<String> ARMOR_ALLOWED_STATS = Set.of(
+            "movement_speed", "durability", "resistance", "fire_resistance", "blast_resistance", "projectile_resistance",
+            "knockback_resistance", "health", "toughness", "freezing_chance", "bonus_chance", "aegis", "stone",
+            "jump_height", "power"
+    );
+    private static final Set<String> WEAPON_ALLOWED_STATS = Set.of(
+            "attack_speed", "attack_damage", "attack_range", "movement_speed", "sweeping_range", "durability",
+            "mining_speed", "undead_damage", "nether_damage", "stun_chance", "flame_chance", "bleeding_chance",
+            "shocking_chance", "poison_chance", "withering_chance", "weakening_chance", "draw_speed", "freezing_chance",
+            "leeching_chance", "bonus_chance", "fangs", "aegis", "stone", "jump_height", "power"
+    );
+
     private RunicLoadoutService() {}
 
     public static ItemStack createRunicPreset(ServerLevel level, ItemStack base, List<StatRollRange> stats, List<EffectSpec> effects, RandomSource random) {
@@ -41,6 +56,9 @@ public final class RunicLoadoutService {
             RuneStatType type = RuneStatType.byId(spec.statId());
             if (type == null) {
                 GatewayExpansion.LOGGER.warn("Unknown rune stat id in loadout preset: {}", spec.statId());
+                continue;
+            }
+            if (!isStatAllowedForStack(stack, type)) {
                 continue;
             }
             float raw = spec.min() + random.nextFloat() * (spec.max() - spec.min());
@@ -106,6 +124,28 @@ public final class RunicLoadoutService {
         for (String id : ids) {
             RuneStatType type = RuneStatType.byId(id);
             if (type != null) out.add(type);
+        }
+        return out;
+    }
+
+    public static boolean isStatAllowedForStack(ItemStack stack, RuneStatType type) {
+        if (stack.isEmpty() || type == null) return false;
+        String id = type.id();
+        if (stack.getItem() instanceof ArmorItem) {
+            return ARMOR_ALLOWED_STATS.contains(id);
+        }
+        return WEAPON_ALLOWED_STATS.contains(id);
+    }
+
+    public static List<StatRollRange> filterStatsForStack(ItemStack stack, List<StatRollRange> source) {
+        ArrayList<StatRollRange> out = new ArrayList<>(source.size());
+        Set<String> seen = new HashSet<>();
+        for (StatRollRange range : source) {
+            RuneStatType type = RuneStatType.byId(range.statId());
+            if (type == null || !isStatAllowedForStack(stack, type)) continue;
+            if (seen.add(range.statId())) {
+                out.add(range);
+            }
         }
         return out;
     }

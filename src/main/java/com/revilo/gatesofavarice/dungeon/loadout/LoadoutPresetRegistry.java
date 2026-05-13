@@ -38,7 +38,7 @@ public final class LoadoutPresetRegistry {
                 List.of(supply(Items.COOKED_BEEF, 16, 16), supply(Items.GOLDEN_CARROT, 8, 8), supply(Items.ARROW, 32, 32))));
         out.add(preset("berserker", "Berserker", LoadoutTheme.BERSERKER, "axe", "machete", armor("rage_set", "Rage Set", 7.0F, 10.0F, 0.02F, 0.06F, 0.00F, 0.03F),
                 List.of(stat("attack_damage", 1.0F, 4.0F), stat("attack_speed", 0.01F, 0.05F), stat("health", 2.0F, 5.0F), stat("bleeding_chance", 0.02F, 0.08F), stat("leeching_chance", 0.01F, 0.05F)),
-                List.of(effect("minecraft:breach", 1, 2), effect("twilightforest:destruction", 1, 1)),
+                List.of(effect("twilightforest:destruction", 1, 1)),
                 List.of(supply(Items.COOKED_BEEF, 24, 24), supply(Items.GOLDEN_APPLE, 1, 1))));
         out.add(preset("vanguard", "Vanguard", LoadoutTheme.VANGUARD, "hammer", "broadsword", armor("fortress_set", "Fortress Set", 12.0F, 16.0F, 0.08F, 0.14F, 0.08F, 0.15F),
                 List.of(stat("resistance", 0.05F, 0.12F), stat("toughness", 2.0F, 5.0F), stat("health", 3.0F, 7.0F), stat("knockback_resistance", 0.04F, 0.12F), stat("stun_chance", 0.01F, 0.05F)),
