@@ -34,6 +34,10 @@ public final class DungeonBoundItems {
         if (!isBoundCandidate(stack)) {
             return;
         }
+        forceMarkDungeonBound(stack);
+    }
+
+    public static void forceMarkDungeonBound(ItemStack stack) {
         CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
         CompoundTag root = tag.getCompound(GatewayExpansion.MOD_ID);
         root.putBoolean(DUNGEON_BOUND_KEY, true);

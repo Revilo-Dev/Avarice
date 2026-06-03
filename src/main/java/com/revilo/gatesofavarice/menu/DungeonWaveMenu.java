@@ -111,6 +111,7 @@ public class DungeonWaveMenu extends AbstractContainerMenu {
                     Component.literal(data.readUtf()),
                     data.readInt(),
                     data.readInt(),
+                    data.readInt(),
                     readStack(data),
                     readStack(data)
             ));
@@ -131,6 +132,7 @@ public class DungeonWaveMenu extends AbstractContainerMenu {
             buffer.writeUtf(option.details().getString());
             buffer.writeInt(option.inDungeonRewardPercent());
             buffer.writeInt(option.externalRewardPercent());
+            buffer.writeInt(option.difficultyRating());
             writeStack(buffer, option.displayStack());
             writeStack(buffer, option.secondaryDisplayStack());
         }
@@ -177,6 +179,7 @@ public class DungeonWaveMenu extends AbstractContainerMenu {
             Component details,
             int inDungeonRewardPercent,
             int externalRewardPercent,
+            int difficultyRating,
             ItemStack displayStack,
             ItemStack secondaryDisplayStack
     ) {

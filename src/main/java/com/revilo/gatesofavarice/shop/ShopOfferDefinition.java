@@ -361,14 +361,14 @@ public record ShopOfferDefinition(
 
     public int rollPrice(RandomSource random) {
         if (this.minPriceFluctuationPercent == 0 && this.maxPriceFluctuationPercent == 0) {
-            return this.price;
+            return Math.max(1, (int) Math.ceil(this.price * 0.5D));
         }
         int deltaPercent = this.minPriceFluctuationPercent;
         if (this.maxPriceFluctuationPercent > this.minPriceFluctuationPercent) {
             deltaPercent += random.nextInt(this.maxPriceFluctuationPercent - this.minPriceFluctuationPercent + 1);
         }
         double multiplier = 1.0D + (deltaPercent / 100.0D);
-        return Math.max(1, (int) Math.round(this.price * multiplier));
+        return Math.max(1, (int) Math.round(this.price * multiplier * 0.5D));
     }
 
     public ItemStack createStack(RandomSource random, int playerLevel) {

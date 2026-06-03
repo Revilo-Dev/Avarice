@@ -122,7 +122,8 @@ public final class EnemyPoolRegistry {
                 EntityType.PHANTOM,
                 EntityType.BEE,
                 EntityType.BREEZE,
-                EntityType.ZOGLIN
+                EntityType.ZOGLIN,
+                EntityType.RAVAGER
         );
 
         for (EnemyPoolRole role : List.of(EnemyPoolRole.ASSASSIN, EnemyPoolRole.HOARD, EnemyPoolRole.ARCHER, EnemyPoolRole.TANK)) {

@@ -51,7 +51,7 @@ public final class LoadoutPresetRegistry {
         out.add(preset("reaper", "Reaper", LoadoutTheme.REAPER, "glaive", "dagger", armor("soulbound_set", "Soulbound Set", 8.0F, 11.0F, 0.03F, 0.07F, 0.02F, 0.07F),
                 List.of(stat("withering_chance", 0.01F, 0.06F), stat("leeching_chance", 0.01F, 0.05F), stat("fangs", 1.0F, 4.0F), stat("ability_power", 1.5F, 5.0F), stat("sweeping_range", 0.1F, 0.5F)),
                 List.of(effect("simplyswords:soul_siphoner", 1, 1), effect("mysticalagriculture:soul_siphoner", 1, 1)),
-                List.of(supply(ModItems.ARCANE_APPLE.get(), 3, 3), supply(Items.BEETROOT_SOUP, 8, 8))));
+                List.of(supply(ModItems.ARCANE_APPLE.get(), 3, 3), supply(Items.COOKED_BEEF, 16, 16))));
         out.add(preset("ranger", "Ranger", LoadoutTheme.RANGER, "bow", "machete", armor("hunter_set", "Hunter Set", 5.0F, 8.0F, 0.00F, 0.04F, 0.00F, 0.03F),
                 List.of(stat("draw_speed", 0.02F, 0.08F), stat("movement_speed", 0.02F, 0.09F), stat("projectile_resistance", 0.01F, 0.06F), stat("bonus_chance", 0.01F, 0.05F), stat("attack_damage", 1.0F, 3.0F)),
                 List.of(effect("minecraft:flame", 1, 1), effect("minecraft:infinity", 1, 1), effect("minecraft:punch", 1, 2)),

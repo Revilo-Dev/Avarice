@@ -46,7 +46,10 @@ public class LootboxBlock extends BaseEntityBlock {
         if (level.isClientSide) return InteractionResult.SUCCESS;
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof LootboxBlockEntity lootbox)) return InteractionResult.PASS;
-        lootbox.burstLoot((ServerLevel) level, pos);
+        if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
+            return InteractionResult.PASS;
+        }
+        lootbox.burstLoot((ServerLevel) level, pos, serverPlayer);
         level.removeBlock(pos, false);
         return InteractionResult.CONSUME;
     }

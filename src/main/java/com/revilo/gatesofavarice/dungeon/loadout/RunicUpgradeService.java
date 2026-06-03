@@ -35,6 +35,16 @@ import net.revilodev.runic.stat.RuneStatType;
 import net.revilodev.runic.stat.RuneStats;
 
 public final class RunicUpgradeService {
+    private static final List<String> WEAPON_PRIORITY_STATS = List.of(
+            "attack_damage", "attack_speed", "attack_range", "sweeping_range", "stun_chance",
+            "leeching_chance", "bleeding_chance", "shocking_chance", "poison_chance", "bonus_chance",
+            "draw_speed", "movement_speed", "power"
+    );
+    private static final List<String> ARMOR_PRIORITY_STATS = List.of(
+            "resistance", "health", "toughness", "knockback_resistance", "projectile_resistance",
+            "fire_resistance", "blast_resistance", "movement_speed", "jump_height", "aegis", "stone", "power"
+    );
+
     private RunicUpgradeService() {}
 
     public static boolean canUpgradeExistingStat(ItemStack stack, RuneStatType type, float amount, UpgradeContext ctx) {
@@ -115,17 +125,17 @@ public final class RunicUpgradeService {
             return List.copyOf(cards);
         }
 
+        String targetLabel = target.isEmpty() ? definition.displayName() : target.getHoverName().getString();
         RuneStats current = RuneStats.get(target);
-        Set<RuneStatType> used = new HashSet<>();
-        for (int i = 0; i < count; i++) {
-            UpgradeCardType type = switch (i) {
-                case 0 -> UpgradeCardType.INCREASE_EXISTING_STAT_PERCENT;
-                case 1 -> UpgradeCardType.INCREASE_EXISTING_STAT_FLAT;
-                case 2 -> UpgradeCardType.ADD_OR_UPGRADE_EFFECT;
-                case 3 -> UpgradeCardType.ADD_NEW_RUNE_STAT;
-                default -> UpgradeCardType.ADD_IMPLICIT;
-            };
-            cards.add(generateCard(type, category, definition, pool, current, used, random));
+        List<StatRollRange> prioritizedPool = prioritizePoolForCategory(pool, category);
+        Set<String> usedIds = new HashSet<>();
+
+        appendPreferredStatCards(cards, prioritizedPool, current, category, targetLabel, usedIds, random, 3);
+        appendEffectCards(cards, definition, category, targetLabel, random, 1);
+        appendPreferredStatCards(cards, prioritizedPool, current, category, targetLabel, usedIds, random, count - cards.size());
+
+        while (cards.size() < count) {
+            cards.add(generateFallbackCard(category, targetLabel, current, prioritizedPool, usedIds, random));
         }
         return List.copyOf(cards);
     }
@@ -139,60 +149,147 @@ public final class RunicUpgradeService {
         return type.cap() * RunicLoadoutService.cursedMultiplier(stack);
     }
 
-    private static UpgradeCard generateCard(
-            UpgradeCardType type,
-            UpgradeCategory category,
-            LoadoutDefinition definition,
+    private static void appendPreferredStatCards(
+            List<UpgradeCard> cards,
             List<StatRollRange> pool,
             RuneStats current,
-            Set<RuneStatType> used,
-            RandomSource random
+            UpgradeCategory category,
+            String targetLabel,
+            Set<String> usedIds,
+            RandomSource random,
+            int maxToAdd
     ) {
-        if (type == UpgradeCardType.ADD_OR_UPGRADE_EFFECT && !definition.allowedEffectPool().isEmpty()) {
-            EffectSpec spec = definition.allowedEffectPool().get(random.nextInt(definition.allowedEffectPool().size()));
+        if (maxToAdd <= 0) return;
+        List<String> preferredIds = category == UpgradeCategory.ARMOR ? ARMOR_PRIORITY_STATS : WEAPON_PRIORITY_STATS;
+        for (String statId : preferredIds) {
+            if (cards.size() >= 5 || maxToAdd <= 0) {
+                return;
+            }
+            StatRollRange range = findRange(pool, statId);
+            if (range == null || !usedIds.add(statId)) {
+                continue;
+            }
+            cards.add(buildStatCard(range, current, category, targetLabel, random));
+            maxToAdd--;
+        }
+    }
+
+    private static void appendEffectCards(List<UpgradeCard> cards, LoadoutDefinition definition, UpgradeCategory category, String targetLabel, RandomSource random, int maxToAdd) {
+        if (maxToAdd <= 0 || definition.allowedEffectPool().isEmpty()) return;
+        List<EffectSpec> pool = definition.allowedEffectPool();
+        for (int i = 0; i < maxToAdd && cards.size() < 5; i++) {
+            EffectSpec spec = pool.get(random.nextInt(pool.size()));
             int level = spec.minLevel() + random.nextInt(Math.max(1, spec.maxLevel() - spec.minLevel() + 1));
-            return new UpgradeCard(
+            cards.add(new UpgradeCard(
                     UUID.randomUUID().toString(),
-                    type,
+                    UpgradeCardType.ADD_OR_UPGRADE_EFFECT,
                     category,
-                    "Enhance Effect",
-                    definition.displayName(),
+                    "Runic Effect",
+                    targetLabel,
                     "effect:" + spec.enchantmentId(),
                     "Lv?",
                     "Lv" + level,
                     2,
                     0
-            );
+            ));
         }
+    }
 
-        RuneStatType chosenType = pickRuneStat(pool, current, used, random, type == UpgradeCardType.ADD_NEW_RUNE_STAT);
-        if (chosenType == null) {
-            chosenType = RuneStatType.ABILITY_POWER;
-        }
-        used.add(chosenType);
-        float currentValue = current.get(chosenType);
-        String chosenId = chosenType.id();
-        StatRollRange range = pool.stream().filter(r -> r.statId().equals(chosenId)).findFirst().orElse(new StatRollRange(chosenId, 0.05F, 0.15F));
-        float roll = range.min() + random.nextFloat() * (range.max() - range.min());
-
-        return switch (type) {
-            case INCREASE_EXISTING_STAT_PERCENT -> {
-                float percent = 0.08F + random.nextFloat() * 0.10F;
-                yield new UpgradeCard(UUID.randomUUID().toString(), type, category, "Boost " + displayStat(chosenType), definition.displayName(), chosenType.id(),
-                        String.format(Locale.ROOT, "%.2f", currentValue),
-                        String.format(Locale.ROOT, "+%.0f%%", percent * 100.0F), 1, 0);
+    private static UpgradeCard generateFallbackCard(
+            UpgradeCategory category,
+            String targetLabel,
+            RuneStats current,
+            List<StatRollRange> pool,
+            Set<String> usedIds,
+            RandomSource random
+    ) {
+        StatRollRange fallback = null;
+        for (StatRollRange range : pool) {
+            if (usedIds.add(range.statId())) {
+                fallback = range;
+                break;
             }
-            case INCREASE_EXISTING_STAT_FLAT -> new UpgradeCard(UUID.randomUUID().toString(), type, category, "Raise " + displayStat(chosenType), definition.displayName(), chosenType.id(),
-                    String.format(Locale.ROOT, "%.2f", currentValue),
-                    String.format(Locale.ROOT, "+%.2f", Math.max(0.01F, roll)), 1, 0);
-            case ADD_NEW_RUNE_STAT -> new UpgradeCard(UUID.randomUUID().toString(), type, category, "Add " + displayStat(chosenType), definition.displayName(), chosenType.id(),
-                    current.has(chosenType) ? String.format(Locale.ROOT, "%.2f", currentValue) : "-", String.format(Locale.ROOT, "+%.2f", Math.max(0.01F, roll)), 2, 0);
-            case ADD_IMPLICIT -> new UpgradeCard(UUID.randomUUID().toString(), type, category, "Damage Tuning", definition.displayName(), RuneStatType.ATTACK_DAMAGE.id(),
-                    String.format(Locale.ROOT, "%.2f", current.get(RuneStatType.ATTACK_DAMAGE)),
-                    String.format(Locale.ROOT, "+%.2f", 0.4F + random.nextFloat() * 1.4F), 2, 0);
-            default -> new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.INCREASE_EXISTING_STAT_FLAT, category, "Raise " + displayStat(chosenType), definition.displayName(), chosenType.id(),
-                    String.format(Locale.ROOT, "%.2f", currentValue), String.format(Locale.ROOT, "+%.2f", Math.max(0.01F, roll)), 1, 0);
-        };
+        }
+        if (fallback == null) {
+            fallback = new StatRollRange(category == UpgradeCategory.ARMOR ? "resistance" : "attack_damage", 0.05F, 0.20F);
+        }
+        return buildStatCard(fallback, current, category, targetLabel, random);
+    }
+
+    private static UpgradeCard buildStatCard(StatRollRange range, RuneStats current, UpgradeCategory category, String targetLabel, RandomSource random) {
+        RuneStatType type = RuneStatType.byId(range.statId());
+        if (type == null) {
+            type = category == UpgradeCategory.ARMOR ? RuneStatType.RESISTANCE : RuneStatType.ATTACK_DAMAGE;
+            range = new StatRollRange(type.id(), 0.05F, 0.20F);
+        }
+        float roll = range.min() + random.nextFloat() * Math.max(0.01F, range.max() - range.min());
+        boolean hasStat = current.has(type);
+        UpgradeCardType cardType;
+        String title;
+        String currentValue;
+        String newValue;
+        int tier;
+
+        if (hasStat && random.nextBoolean()) {
+            cardType = UpgradeCardType.INCREASE_EXISTING_STAT_FLAT;
+            title = "Raise " + displayStat(type);
+            currentValue = String.format(Locale.ROOT, "%.2f", current.get(type));
+            newValue = String.format(Locale.ROOT, "+%.2f", Math.max(0.01F, roll));
+            tier = 1;
+        } else if (hasStat) {
+            float percent = 0.08F + random.nextFloat() * 0.12F;
+            cardType = UpgradeCardType.INCREASE_EXISTING_STAT_PERCENT;
+            title = "Empower " + displayStat(type);
+            currentValue = String.format(Locale.ROOT, "%.2f", current.get(type));
+            newValue = String.format(Locale.ROOT, "+%.0f%%", percent * 100.0F);
+            tier = 1;
+        } else {
+            cardType = UpgradeCardType.ADD_NEW_RUNE_STAT;
+            title = "Add " + displayStat(type);
+            currentValue = "-";
+            newValue = String.format(Locale.ROOT, "+%.2f", Math.max(0.01F, roll));
+            tier = 2;
+        }
+
+        return new UpgradeCard(
+                UUID.randomUUID().toString(),
+                cardType,
+                category,
+                title,
+                targetLabel,
+                type.id(),
+                currentValue,
+                newValue,
+                tier,
+                0
+        );
+    }
+
+    private static List<StatRollRange> prioritizePoolForCategory(List<StatRollRange> pool, UpgradeCategory category) {
+        List<String> preferredIds = category == UpgradeCategory.ARMOR ? ARMOR_PRIORITY_STATS : WEAPON_PRIORITY_STATS;
+        ArrayList<StatRollRange> prioritized = new ArrayList<>(pool.size());
+        Set<String> seen = new HashSet<>();
+        for (String statId : preferredIds) {
+            StatRollRange range = findRange(pool, statId);
+            if (range != null && seen.add(range.statId())) {
+                prioritized.add(range);
+            }
+        }
+        for (StatRollRange range : pool) {
+            if (seen.add(range.statId())) {
+                prioritized.add(range);
+            }
+        }
+        return List.copyOf(prioritized);
+    }
+
+    private static StatRollRange findRange(List<StatRollRange> pool, String statId) {
+        for (StatRollRange range : pool) {
+            if (range.statId().equals(statId)) {
+                return range;
+            }
+        }
+        return null;
     }
 
     private static List<UpgradeCard> generateItemCards(LoadoutDefinition definition, UpgradeCategory category, RandomSource random) {
@@ -204,25 +301,6 @@ public final class RunicUpgradeService {
         cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.INCREASE_EXISTING_STAT_FLAT, category, "Quickness", definition.displayName(), RuneStatType.MOVEMENT_SPEED.id(), "current", "+0.02", 1, 0));
         cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.INCREASE_EXISTING_STAT_PERCENT, category, "Sharpen Focus", definition.displayName(), RuneStatType.BONUS_CHANCE.id(), "current", "+10%", 1, 0));
         return cards;
-    }
-
-    private static RuneStatType pickRuneStat(List<StatRollRange> pool, RuneStats current, Set<RuneStatType> used, RandomSource random, boolean preferMissing) {
-        List<RuneStatType> valid = new ArrayList<>();
-        for (StatRollRange range : pool) {
-            RuneStatType type = RuneStatType.byId(range.statId());
-            if (type == null || used.contains(type)) continue;
-            if (preferMissing && current.has(type)) continue;
-            valid.add(type);
-        }
-        if (valid.isEmpty()) {
-            for (StatRollRange range : pool) {
-                RuneStatType type = RuneStatType.byId(range.statId());
-                if (type != null && !used.contains(type)) {
-                    valid.add(type);
-                }
-            }
-        }
-        return valid.isEmpty() ? null : valid.get(random.nextInt(valid.size()));
     }
 
     private static String displayStat(RuneStatType type) {

@@ -9,6 +9,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Rarity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 public final class GatewaySellValues {
 
@@ -25,6 +26,10 @@ public final class GatewaySellValues {
         }
 
         Item item = stack.getItem();
+        if (item == Items.ROTTEN_FLESH) return 2;
+        if (item == Items.SLIME_BALL) return 3;
+        if (item == Items.SPIDER_EYE) return 2;
+        if (item == Items.STRING) return 1;
         if (item == ModItems.GRIMSTONE.get()) return 18;
         if (item == ModItems.MYSTIC_ESSENCE.get()) return 20;
         if (item == ModItems.HARDENED_FLESH.get()) return 10;

@@ -67,14 +67,12 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
+import net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 public final class DungeonRunManager {
-    private static final ResourceLocation DUNGEON_EXIT_XP_SOURCE = ResourceLocation.fromNamespaceAndPath("levelup", "objective_complete");
-    private static final ResourceLocation DUNGEON_EXIT_COIN_CASHOUT_SOURCE = ResourceLocation.fromNamespaceAndPath("levelup", "dungeon_coin_cashout");
-
     private static final Map<UUID, RunState> RUNS_BY_OWNER = new HashMap<>();
     private static final Map<UUID, UUID> PLAYER_TO_OWNER = new HashMap<>();
     private static final Map<UUID, PendingDeathRestore> PENDING_DEATH_RESTORES = new HashMap<>();
@@ -85,6 +83,8 @@ public final class DungeonRunManager {
     private static final int MAX_REROLLS = 2;
     private static final int BASE_REROLL_COST = 100;
     private static final double BASE_ELITE_CHANCE = 0.06D;
+    private static final int LEVEL_POINTS_PER_KILL = 5;
+    private static final int LEVEL_POINTS_PER_LOOT_PICKUP = 1;
 
     private static final List<Item> REGULAR_DROP_POOL = List.of(
             ModItems.GRIMSTONE.get(), ModItems.MYSTIC_ESSENCE.get(), ModItems.SCRAP_METAL.get(), ModItems.MANA_GEMS.get(),
@@ -125,6 +125,7 @@ public final class DungeonRunManager {
         run.participants.add(player.getUUID());
         PLAYER_TO_OWNER.put(player.getUUID(), ownerId);
         run.snapshots.putIfAbsent(player.getUUID(), PlayerSnapshot.capture(player));
+        MythicCoinWallet.set(player, 0);
         clearForDungeon(player);
         DungeonInstanceManager.teleportToDungeonInstance(player, ownerId);
         if (player.getUUID().equals(ownerId) && run.phase == RunPhase.SELECTING_TAROT) {
@@ -141,7 +142,7 @@ public final class DungeonRunManager {
         syncHudToPlayer(player, false, run.waveNumber, 0, 1);
         int levelPoints = awardDungeonExitProgression(player, run);
         List<ItemStack> rewards = collectDungeonRewards(player);
-        ItemStack lootbox = createLootboxFromRewards(player, rewards);
+        ItemStack lootbox = createLootboxFromRewards(player, rewards, levelPoints);
         restoreSnapshot(player, snapshot);
         if (player.getUUID().equals(run.ownerId)) {
             closeOverworldEntryPortals(player.server, run.ownerId);
@@ -166,6 +167,9 @@ public final class DungeonRunManager {
 
         if (run.phase == RunPhase.SELECTING_TAROT) {
             if (buttonId == DungeonWaveMenu.BAIL_BUTTON_ID) {
+                if (run.waveNumber <= 0) {
+                    return false;
+                }
                 spawnExitPortal(run, serverPlayer.serverLevel());
                 run.phase = RunPhase.WAITING_EXIT;
                 serverPlayer.closeContainer();
@@ -217,8 +221,8 @@ public final class DungeonRunManager {
                 case 2 -> UpgradeCategory.ARMOR;
                 default -> UpgradeCategory.ITEM;
             };
-            DungeonUpgradeManager.openUpgradeScreen(serverPlayer, run.ownerId, category);
             serverPlayer.closeContainer();
+            DungeonUpgradeManager.openUpgradeScreen(serverPlayer, run.ownerId, category);
             return true;
         }
         startWave(run);
@@ -280,8 +284,11 @@ public final class DungeonRunManager {
         Entity shop = player.serverLevel().getEntity(shopkeeperEntityId);
         if (shop != null) shop.discard();
         run.shopkeeperId = -1;
-        run.phase = RunPhase.SELECTING_TAROT;
         run.rerollsUsed = 0;
+        for (ServerPlayer participant : run.liveParticipants()) {
+            participant.closeContainer();
+        }
+        run.phase = RunPhase.SELECTING_TAROT;
         rollTarotOptions(run, player.serverLevel().random);
         openWaveMenu(player, run);
         return true;
@@ -354,6 +361,12 @@ public final class DungeonRunManager {
                 run.damageReceived += damage;
             }
         }
+        if (attacker instanceof LivingEntity mob && event.getEntity() instanceof ServerPlayer player) {
+            RunState run = getRunForPlayer(player);
+            if (run != null && run.aliveMobs.contains(mob.getUUID()) && run.mobLeechPercent > 0.0D) {
+                mob.heal((float) (damage * run.mobLeechPercent));
+            }
+        }
     }
 
     @SubscribeEvent
@@ -396,6 +409,22 @@ public final class DungeonRunManager {
         if (findRunByTrackedMob(event.getEntity().getUUID()) != null) {
             event.getDrops().clear();
         }
+    }
+
+    @SubscribeEvent
+    public static void onItemPickup(ItemEntityPickupEvent.Pre event) {
+        if (!(event.getPlayer() instanceof ServerPlayer player)) {
+            return;
+        }
+        RunState run = getRunForPlayer(player);
+        if (run == null) {
+            return;
+        }
+        ItemStack stack = event.getItemEntity().getItem();
+        if (stack.isEmpty() || stack.is(ModItems.MYTHIC_COIN.get())) {
+            return;
+        }
+        run.levelSourcePoints.merge(player.getUUID(), LEVEL_POINTS_PER_LOOT_PICKUP, Integer::sum);
     }
 
     @SubscribeEvent
@@ -467,7 +496,7 @@ public final class DungeonRunManager {
     private static void completeWave(RunState run, ServerLevel level) {
         int avgLevel = averageParticipantLevel(run);
         int wave = Math.max(1, run.waveNumber);
-        int scaledCoins = ProgressionSystem.dungeonCoinReward(avgLevel, wave, run.quantityBonusModifier);
+        int scaledCoins = ProgressionSystem.dungeonCoinReward(avgLevel, wave, run.quantityBonusModifier, run.coinBonusModifier);
         run.coinsEarned += Math.max(5, scaledCoins);
         for (ServerPlayer player : run.liveParticipants()) {
             MythicCoinWallet.addRaw(player, Math.max(5, scaledCoins));
@@ -521,7 +550,7 @@ public final class DungeonRunManager {
     }
 
     private static void spawnOneMob(RunState run, ServerLevel level) {
-        WaveArchetype archetype = run.unlockedArchetypes.get(level.random.nextInt(run.unlockedArchetypes.size()));
+        WaveArchetype archetype = pickWeightedArchetype(run, level.random);
         EnemyPoolSet pools = run.currentWavePools.get(archetype);
         EntityType<?> type = pickEntityType(level.random, pools, archetype);
         if (type == null) return;
@@ -533,7 +562,8 @@ public final class DungeonRunManager {
         double y = center.getY() + 1.0D;
         mob.moveTo(x, y, z, level.random.nextFloat() * 360.0F, 0.0F);
         if (mob instanceof Mob aiMob) aiMob.finalizeSpawn(level, level.getCurrentDifficultyAt(BlockPos.containing(x, y, z)), MobSpawnType.EVENT, (SpawnGroupData) null);
-        applyMobScaling(mob, run.damageMultiplier, run.speedMultiplier);
+        mob.skipDropExperience();
+        applyMobScaling(mob, run.healthMultiplier, run.damageMultiplier, run.speedMultiplier);
         if (rollElite(run, level.random)) {
             applyEliteVariant(mob);
         }
@@ -542,7 +572,12 @@ public final class DungeonRunManager {
 
     private static void rollTarotOptions(RunState run, RandomSource random) {
         ArrayList<TarotOption> rolled = new ArrayList<>();
-        for (int i = 0; i < 4; i++) rolled.add(TarotOption.random(random));
+        int avgLevel = averageParticipantLevel(run);
+        int displayedWave = run.waveNumber + 1;
+        for (int i = 0; i < 4; i++) {
+            int difficulty = rollTarotDifficulty(displayedWave, avgLevel, random);
+            rolled.add(TarotOption.random(random, difficulty, displayedWave, avgLevel));
+        }
         run.tarotOptions = List.copyOf(rolled);
     }
 
@@ -592,13 +627,22 @@ public final class DungeonRunManager {
 
     private static void applyTarot(RunState run, TarotOption option) {
         run.enemyCountMultiplier += option.enemyCountBonus;
+        run.healthMultiplier += option.healthBonus;
         run.damageMultiplier += option.damageBonus;
         run.speedMultiplier += option.speedBonus;
-        run.extraRewardRolls += option.rewardRollBonus;
+        run.mobLeechPercent += option.mobLeechBonus;
         run.quantityBonusModifier += option.quantityBonus;
         run.rarityBonusModifier += option.rarityBonus;
+        run.coinBonusModifier += option.coinBonus;
+        run.levelMultiplier += option.levelBonus;
         run.eliteChanceBonus += option.eliteChanceBonus;
-        if (option.unlockArchetype != null && !run.unlockedArchetypes.contains(option.unlockArchetype)) run.unlockedArchetypes.add(option.unlockArchetype);
+        run.extraRewardRolls += option.rewardRollBonus;
+        run.hordeWeightBonus += option.hordeMobs;
+        run.archerWeightBonus += option.archerMobs;
+        run.assassinWeightBonus += option.assassinMobs;
+        run.tankWeightBonus += option.tankMobs;
+        run.eliteWeightBonus += option.eliteMobs;
+        run.totalDifficultySelected += option.difficulty;
     }
 
     private static void grantLoot(ServerPlayer player, RunState run, LootOption option, RandomSource random) {}
@@ -655,7 +699,9 @@ public final class DungeonRunManager {
         addRoleAware(player, secondary);
         player.getInventory().add(utility);
         for (ItemStack food : loadout.food()) {
-            player.getInventory().add(food.copy());
+            ItemStack foodCopy = food.copy();
+            DungeonBoundItems.forceMarkDungeonBound(foodCopy);
+            player.getInventory().add(foodCopy);
         }
         player.inventoryMenu.broadcastChanges();
         player.containerMenu.broadcastChanges();
@@ -1047,16 +1093,18 @@ public final class DungeonRunManager {
 
     private static int computeWaveLootRolls(RunState run, int avgLevel, RandomSource random) {
         int base = ProgressionSystem.dungeonLootRolls(avgLevel, Math.max(1, run.waveNumber), run.extraRewardRolls, run.quantityBonusModifier);
-        return base + random.nextInt(2 + Math.max(1, Math.max(1, run.waveNumber) / 6));
+        int difficultyBonus = Math.max(0, run.totalDifficultySelected - Math.max(0, run.waveNumber - 1) * 2);
+        return base + difficultyBonus / 4 + random.nextInt(2 + Math.max(1, Math.max(1, run.waveNumber) / 6));
     }
 
     private static Item pickScaledDrop(RunState run, int avgLevel, RandomSource random) {
         double rarityRoll = random.nextDouble();
-        double waveFactor = Math.min(0.30D, run.waveNumber * 0.012D);
-        double levelFactor = Math.min(0.20D, avgLevel / 500.0D);
+        double waveFactor = Math.min(0.34D, run.waveNumber * 0.014D);
+        double levelFactor = Math.min(0.08D, avgLevel / 1250.0D);
+        double difficultyFactor = Math.min(0.18D, run.totalDifficultySelected * 0.01D);
         double rarityChanceBonus = Math.max(0.0D, run.rarityBonusModifier);
-        double rareChance = 0.04D + waveFactor + levelFactor + rarityChanceBonus;
-        double uncommonChance = 0.22D + waveFactor * 0.8D + levelFactor * 0.6D + rarityChanceBonus * 0.6D;
+        double rareChance = 0.02D + waveFactor + levelFactor + difficultyFactor + rarityChanceBonus;
+        double uncommonChance = 0.18D + waveFactor * 0.8D + levelFactor * 0.8D + difficultyFactor * 0.7D + rarityChanceBonus * 0.6D;
         if (rarityRoll < rareChance) {
             return RARE_DROP_POOL.get(random.nextInt(RARE_DROP_POOL.size()));
         }
@@ -1083,22 +1131,15 @@ public final class DungeonRunManager {
         if (!(killer instanceof ServerPlayer serverPlayer) || !run.participants.contains(serverPlayer.getUUID())) {
             return;
         }
-        double healthScore = Math.max(1.0D, dead.getMaxHealth()) * 0.08D;
-        double damageScore = 1.0D;
-        if (dead.getAttribute(Attributes.ATTACK_DAMAGE) != null) {
-            damageScore += Math.max(0.0D, dead.getAttribute(Attributes.ATTACK_DAMAGE).getValue()) * 1.25D;
-        }
-        double killScore = healthScore + damageScore;
-        run.killScoreByPlayer.merge(serverPlayer.getUUID(), killScore, Double::sum);
+        run.levelSourcePoints.merge(serverPlayer.getUUID(), LEVEL_POINTS_PER_KILL, Integer::sum);
     }
 
     private static int awardDungeonExitProgression(ServerPlayer player, RunState run) {
         if (!run.awardedExitXp.add(player.getUUID())) {
             return 0;
         }
-        double score = run.killScoreByPlayer.getOrDefault(player.getUUID(), 0.0D);
-        int xp = ProgressionSystem.levelXpFromDungeonKillScore(score);
-        LevelUpIntegration.awardXp(player, xp, DUNGEON_EXIT_XP_SOURCE);
+        int sourcePoints = run.levelSourcePoints.getOrDefault(player.getUUID(), 0);
+        int xp = ProgressionSystem.dungeonLevelOrbReward(sourcePoints, run.levelMultiplier);
         run.experienceEarned += xp;
         return xp;
     }
@@ -1115,7 +1156,7 @@ public final class DungeonRunManager {
     private static Map<WaveArchetype, EnemyPoolSet> buildWavePools(RunState run) {
         Map<WaveArchetype, EnemyPoolSet> pools = new HashMap<>();
         int level = Math.max(1, 10 + run.waveNumber * 2);
-        for (WaveArchetype archetype : run.unlockedArchetypes) {
+        for (WaveArchetype archetype : WaveArchetype.values()) {
             CrystalTheme theme = switch (archetype) {
                 case UNDEAD -> CrystalTheme.UNDEAD;
                 case HORDE, TANK -> CrystalTheme.BEAST;
@@ -1126,16 +1167,31 @@ public final class DungeonRunManager {
         return pools;
     }
 
-    private static void applyMobScaling(LivingEntity mob, double damageMultiplier, double speedMultiplier) {
+    private static WaveArchetype pickWeightedArchetype(RunState run, RandomSource random) {
+        int undeadWeight = 1;
+        int hordeWeight = 1 + run.hordeWeightBonus;
+        int assassinWeight = 1 + run.assassinWeightBonus;
+        int archerWeight = 1 + run.archerWeightBonus;
+        int tankWeight = 1 + run.tankWeightBonus;
+        int total = undeadWeight + hordeWeight + assassinWeight + archerWeight + tankWeight;
+        int roll = random.nextInt(Math.max(1, total));
+        if ((roll -= undeadWeight) < 0) return WaveArchetype.UNDEAD;
+        if ((roll -= hordeWeight) < 0) return WaveArchetype.HORDE;
+        if ((roll -= assassinWeight) < 0) return WaveArchetype.ASSASSIN;
+        if ((roll -= archerWeight) < 0) return WaveArchetype.ARCHER;
+        return WaveArchetype.TANK;
+    }
+
+    private static void applyMobScaling(LivingEntity mob, double healthMultiplier, double damageMultiplier, double speedMultiplier) {
         removeMobModifiers(mob);
-        addMobModifier(mob, Attributes.MAX_HEALTH, MOB_HEALTH_MODIFIER_ID, 0.15D);
+        addMobModifier(mob, Attributes.MAX_HEALTH, MOB_HEALTH_MODIFIER_ID, Math.max(0.0D, healthMultiplier - 1.0D));
         addMobModifier(mob, Attributes.ATTACK_DAMAGE, MOB_DAMAGE_MODIFIER_ID, Math.max(0.0D, damageMultiplier - 1.0D));
         addMobModifier(mob, Attributes.MOVEMENT_SPEED, MOB_SPEED_MODIFIER_ID, Math.max(0.0D, speedMultiplier - 1.0D));
         mob.setHealth(mob.getMaxHealth());
     }
 
     private static boolean rollElite(RunState run, RandomSource random) {
-        double chance = Math.max(0.0D, Math.min(0.85D, BASE_ELITE_CHANCE + run.eliteChanceBonus));
+        double chance = Math.max(0.0D, Math.min(0.85D, BASE_ELITE_CHANCE + run.eliteChanceBonus + run.eliteWeightBonus * 0.025D));
         return random.nextDouble() < chance;
     }
 
@@ -1168,23 +1224,24 @@ public final class DungeonRunManager {
     private static void openWaveMenu(ServerPlayer owner, RunState run) {
         List<DungeonWaveMenu.WaveOptionView> views;
         if (run.phase == RunPhase.SELECTING_TAROT) {
-            views = run.tarotOptions.stream().map(option -> new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, ItemStack.EMPTY, ItemStack.EMPTY)).toList();
+            views = run.tarotOptions.stream().map(option -> new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, option.difficulty, ItemStack.EMPTY, ItemStack.EMPTY)).toList();
         } else if (run.selectingLoadout) {
             ArrayList<DungeonWaveMenu.WaveOptionView> loadoutViews = new ArrayList<>();
             for (LoadoutOption option : run.loadoutOptions) {
-                loadoutViews.add(new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, option.primary().copy(), option.secondary().copy()));
+                loadoutViews.add(new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, 0, option.primary().copy(), option.secondary().copy()));
             }
             loadoutViews.add(new DungeonWaveMenu.WaveOptionView(
                     Component.literal("Random Loadout"),
                     Component.literal("Randomly picks one of the shown loadouts"),
                     100,
                     100,
+                    0,
                     ItemStack.EMPTY,
                     ItemStack.EMPTY
             ));
             views = List.copyOf(loadoutViews);
         } else {
-            views = run.lootOptions.stream().map(option -> new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, option.stack().copy(), ItemStack.EMPTY)).toList();
+            views = run.lootOptions.stream().map(option -> new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, 0, option.stack().copy(), ItemStack.EMPTY)).toList();
         }
         int rerollsLeft = Math.max(0, MAX_REROLLS - run.rerollsUsed);
         int rerollCost = rerollsLeft <= 0 ? 0 : BASE_REROLL_COST << run.rerollsUsed;
@@ -1198,18 +1255,56 @@ public final class DungeonRunManager {
     }
 
     private static List<Component> runChangeSummary(RunState run) {
-        return List.of(
-                Component.literal(String.format(java.util.Locale.ROOT, "+spawn chance %.0f%%", Math.max(0.0D, (run.enemyCountMultiplier - 1.0D) * 100.0D))),
-                Component.literal(String.format(java.util.Locale.ROOT, "+mob speed %.0f%%", Math.max(0.0D, (run.speedMultiplier - 1.0D) * 100.0D))),
-                Component.literal(String.format(java.util.Locale.ROOT, "+mob health %.0f%%", Math.max(0.0D, (run.enemyCountMultiplier - 1.0D) * 60.0D))),
-                Component.literal(String.format(java.util.Locale.ROOT, "+mob damage %.0f%%", Math.max(0.0D, (run.damageMultiplier - 1.0D) * 100.0D))),
-                Component.literal(String.format(java.util.Locale.ROOT, "+elite spawns %.0f%%", run.eliteChanceBonus * 100.0D)),
-                Component.literal(String.format(java.util.Locale.ROOT, "+quantity %.0f%%", run.quantityBonusModifier * 100.0D)),
-                Component.literal(String.format(java.util.Locale.ROOT, "+rarity %.0f%%", run.rarityBonusModifier * 100.0D)),
-                Component.literal(String.format(java.util.Locale.ROOT, "+coins %.0f%%", Math.max(0.0D, (run.quantityBonusModifier * 0.5D + run.rarityBonusModifier * 0.5D) * 100.0D))),
-                Component.literal(String.format(java.util.Locale.ROOT, "+xp %.0f%%", Math.max(0.0D, run.quantityBonusModifier * 100.0D))),
-                Component.literal(String.format(java.util.Locale.ROOT, "+levels %.0f%%", Math.max(0.0D, run.rarityBonusModifier * 100.0D)))
-        );
+        ArrayList<Component> changes = new ArrayList<>();
+        addRunChange(changes, "spawn chance", Math.max(0.0D, (run.enemyCountMultiplier - 1.0D) * 100.0D));
+        addRunChange(changes, "mob health", Math.max(0.0D, (run.healthMultiplier - 1.0D) * 100.0D));
+        addRunChange(changes, "mob damage", Math.max(0.0D, (run.damageMultiplier - 1.0D) * 100.0D));
+        addRunChange(changes, "mob speed", Math.max(0.0D, (run.speedMultiplier - 1.0D) * 100.0D));
+        addRunChange(changes, "mob leech", run.mobLeechPercent * 100.0D);
+        addRunChange(changes, "elite spawns", (run.eliteChanceBonus + run.eliteWeightBonus * 0.025D) * 100.0D);
+        addRunChange(changes, "quantity", run.quantityBonusModifier * 100.0D);
+        addRunChange(changes, "rarity", run.rarityBonusModifier * 100.0D);
+        addRunChange(changes, "coins", run.coinBonusModifier * 100.0D);
+        addRunChange(changes, "levels", Math.max(0.0D, (run.levelMultiplier - 1.0D) * 100.0D));
+        return List.copyOf(changes);
+    }
+
+    private static void addRunChange(List<Component> changes, String label, double value) {
+        if (value <= 0.0D) {
+            return;
+        }
+        changes.add(Component.literal(String.format(java.util.Locale.ROOT, "+%s %.1f%%", label, value)));
+    }
+
+    private static int rollTarotDifficulty(int displayedWave, int avgLevel, RandomSource random) {
+        int levelPressure = Math.min(2, Math.max(0, (avgLevel - 70) / 20));
+        int roll = random.nextInt(100);
+        if (displayedWave <= 2) {
+            if (levelPressure >= 2 && roll < 10) return 4;
+            if (roll < 60) return 1;
+            if (roll < 92) return 2;
+            return 3;
+        }
+        if (displayedWave <= 5) {
+            if (levelPressure >= 2 && roll < 8) return 4;
+            if (roll < 35) return 1;
+            if (roll < 78) return 2;
+            if (roll < 97) return 3;
+            return 4;
+        }
+        if (displayedWave <= 9) {
+            if (levelPressure >= 2 && roll < 10) return 5;
+            if (roll < 18) return 1;
+            if (roll < 55) return 2;
+            if (roll < 86) return 3;
+            if (roll < 98) return 4;
+            return 5;
+        }
+        if (roll < 8) return 1;
+        if (roll < 30) return 2;
+        if (roll < 62) return 3;
+        if (roll < 88) return 4;
+        return 5;
     }
 
     private static void syncHudToPlayer(ServerPlayer player, boolean active, int wave, int remaining, int total) {
@@ -1297,7 +1392,7 @@ public final class DungeonRunManager {
         }
     }
 
-    private static ItemStack createLootboxFromRewards(ServerPlayer player, List<ItemStack> rewards) {
+    private static ItemStack createLootboxFromRewards(ServerPlayer player, List<ItemStack> rewards, int levelOrbs) {
         ItemStack lootbox = new ItemStack(ModItems.LOOTBOX.get());
         net.minecraft.nbt.ListTag list = new net.minecraft.nbt.ListTag();
         for (ItemStack stack : rewards) {
@@ -1305,10 +1400,11 @@ public final class DungeonRunManager {
                 list.add(stack.saveOptional(player.registryAccess()));
             }
         }
-        if (list.isEmpty()) return ItemStack.EMPTY;
+        if (list.isEmpty() && levelOrbs <= 0) return ItemStack.EMPTY;
         net.minecraft.nbt.CompoundTag all = lootbox.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
         net.minecraft.nbt.CompoundTag root = all.getCompound("gatesofavarice");
         root.put("lootbox_loot", list);
+        root.putInt("lootbox_level_orbs", Math.max(0, levelOrbs));
         all.put("gatesofavarice", root);
         lootbox.set(DataComponents.CUSTOM_DATA, CustomData.of(all));
         return lootbox;
@@ -1325,15 +1421,8 @@ public final class DungeonRunManager {
 
     private static int cashoutRemainingCoinsOnDungeonExit(ServerPlayer player) {
         int coins = MythicCoinWallet.get(player);
-        if (coins <= 0) {
-            return 0;
-        }
         MythicCoinWallet.set(player, 0);
-        long xp = Math.max(1L, coins);
-        if (!LevelUpIntegration.awardXp(player, xp, DUNGEON_EXIT_COIN_CASHOUT_SOURCE)) {
-            player.giveExperienceLevels(Math.max(1, coins / 100));
-        }
-        return coins;
+        return 0;
     }
 
     private static void sendCompletionScreen(ServerPlayer player, RunState run, List<ItemStack> rewards, int levelPoints, int cashedOutCoins) {
@@ -1381,7 +1470,6 @@ public final class DungeonRunManager {
         private int spawnCooldown = 0;
         private int exitPortalId = -1;
         private int shopkeeperId = -1;
-        private List<WaveArchetype> unlockedArchetypes = new ArrayList<>(List.of(WaveArchetype.UNDEAD));
         private Map<WaveArchetype, EnemyPoolSet> currentWavePools = new HashMap<>();
         private List<TarotOption> tarotOptions = List.of();
         private List<LootOption> lootOptions = List.of();
@@ -1389,14 +1477,24 @@ public final class DungeonRunManager {
         private boolean selectingLoadout = false;
         private int rerollsUsed = 0;
         private double enemyCountMultiplier = 1.0D;
+        private double healthMultiplier = 1.0D;
         private double damageMultiplier = 1.0D;
         private double speedMultiplier = 1.0D;
+        private double mobLeechPercent = 0.0D;
         private double eliteChanceBonus = 0.0D;
+        private int totalDifficultySelected = 0;
         private double quantityBonusModifier = 0.0D;
         private double rarityBonusModifier = 0.0D;
+        private double coinBonusModifier = 0.0D;
+        private double levelMultiplier = 1.0D;
         private int extraRewardRolls = 0;
+        private int hordeWeightBonus = 0;
+        private int archerWeightBonus = 0;
+        private int assassinWeightBonus = 0;
+        private int tankWeightBonus = 0;
+        private int eliteWeightBonus = 0;
         private long runStartGameTime = -1L;
-        private final Map<UUID, Double> killScoreByPlayer = new HashMap<>();
+        private final Map<UUID, Integer> levelSourcePoints = new HashMap<>();
         private final Set<UUID> awardedExitXp = new HashSet<>();
         private int mobsKilled = 0;
         private int coinsEarned = 0;
@@ -1471,76 +1569,187 @@ public final class DungeonRunManager {
         private final Component title;
         private final Component details;
         private final double enemyCountBonus;
+        private final double healthBonus;
         private final double damageBonus;
         private final double speedBonus;
+        private final double mobLeechBonus;
         private final double eliteChanceBonus;
         private final double quantityBonus;
         private final double rarityBonus;
+        private final double coinBonus;
+        private final double levelBonus;
         private final int rewardRollBonus;
-        private final WaveArchetype unlockArchetype;
+        private final int hordeMobs;
+        private final int archerMobs;
+        private final int assassinMobs;
+        private final int tankMobs;
+        private final int eliteMobs;
+        private final int difficulty;
 
-        private TarotOption(Component title, Component details, double enemyCountBonus, double damageBonus, double speedBonus, double eliteChanceBonus, double quantityBonus,
-                double rarityBonus,
-                int rewardRollBonus, WaveArchetype unlockArchetype) {
+        private TarotOption(Component title, Component details, double enemyCountBonus, double healthBonus, double damageBonus, double speedBonus, double mobLeechBonus,
+                double eliteChanceBonus, double quantityBonus, double rarityBonus, double coinBonus, double levelBonus, int rewardRollBonus,
+                int hordeMobs, int archerMobs, int assassinMobs, int tankMobs, int eliteMobs, int difficulty) {
             this.title = title;
             this.details = details;
             this.enemyCountBonus = enemyCountBonus;
+            this.healthBonus = healthBonus;
             this.damageBonus = damageBonus;
             this.speedBonus = speedBonus;
+            this.mobLeechBonus = mobLeechBonus;
             this.eliteChanceBonus = eliteChanceBonus;
             this.quantityBonus = quantityBonus;
             this.rarityBonus = rarityBonus;
+            this.coinBonus = coinBonus;
+            this.levelBonus = levelBonus;
             this.rewardRollBonus = rewardRollBonus;
-            this.unlockArchetype = unlockArchetype;
+            this.hordeMobs = hordeMobs;
+            this.archerMobs = archerMobs;
+            this.assassinMobs = assassinMobs;
+            this.tankMobs = tankMobs;
+            this.eliteMobs = eliteMobs;
+            this.difficulty = difficulty;
         }
 
-        private static TarotOption random(RandomSource random) {
-            int enemyLines = 1 + random.nextInt(3);
-            int combatLines = 1 + random.nextInt(3);
-            int rewardLines = 1 + random.nextInt(3);
-            double scaleEnemies = switch (enemyLines) { case 1 -> 1.8D; case 2 -> 1.2D; default -> 0.85D; };
-            double scaleCombat = switch (combatLines) { case 1 -> 1.8D; case 2 -> 1.2D; default -> 0.85D; };
-            double scaleRewards = switch (rewardLines) { case 1 -> 1.8D; case 2 -> 1.2D; default -> 0.85D; };
-            WaveArchetype[] values = WaveArchetype.values();
-            WaveArchetype archetype = values[random.nextInt(values.length)];
+        private static TarotOption random(RandomSource random, int difficulty, int displayedWave, int avgLevel) {
+            int wavePressure = Math.max(0, displayedWave - 1);
+            double levelPressure = Math.max(0.0D, Math.min(0.10D, Math.max(0, avgLevel - 80) * 0.001D));
+            int mobLineCount = Math.max(1, Math.min(3, 1 + (difficulty - 1) / 2 + (random.nextBoolean() ? 1 : 0)));
+            int negativeCount = Math.max(2, Math.min(5, 1 + difficulty + (random.nextBoolean() ? 1 : 0)));
+            int positiveCount = Math.max(2, Math.min(4, 1 + difficulty / 2 + (random.nextBoolean() ? 1 : 0)));
+            int hordeMobs = 0;
+            int archerMobs = 0;
+            int assassinMobs = 0;
+            int tankMobs = 0;
+            int eliteMobs = 0;
             double enemyBonus = 0.0D;
+            double health = 0.0D;
             double damage = 0.0D;
             double speed = 0.0D;
+            double leech = 0.0D;
             double eliteChance = 0.0D;
             double quantity = 0.0D;
             double rarity = 0.0D;
-            int rewards = 0;
+            double coins = 0.0D;
+            double levels = 0.0D;
             ArrayList<String> lines = new ArrayList<>();
-            ArrayList<String> enemyPool = new ArrayList<>(List.of("+hoard mobs", "+tank", "+archers", "+assassins", "+elite spawns"));
-            for (int i = 0; i < enemyLines && !enemyPool.isEmpty(); i++) {
-                String type = enemyPool.remove(random.nextInt(enemyPool.size()));
-                int value = Math.max(1, (int) Math.round((2 + random.nextInt(5)) * scaleEnemies));
-                lines.add("+" + value + " " + type.substring(1));
-                enemyBonus += value * 0.025D;
-                if (type.contains("elite")) eliteChance += value / 100.0D;
+            ArrayList<String> mobPool = new ArrayList<>(List.of("hoard", "archer", "assassin", "tank", "elite"));
+            for (int i = 0; i < mobLineCount && !mobPool.isEmpty(); i++) {
+                String type = mobPool.remove(random.nextInt(mobPool.size()));
+                switch (type) {
+                    case "hoard" -> {
+                        hordeMobs = 2 + random.nextInt(2 + Math.max(1, difficulty / 2));
+                        enemyBonus += 0.04D * hordeMobs;
+                        lines.add("+" + hordeMobs + " hoard mobs");
+                    }
+                    case "archer" -> {
+                        archerMobs = 1 + random.nextInt(Math.min(3, 1 + difficulty / 2));
+                        enemyBonus += 0.03D * archerMobs;
+                        lines.add("+" + archerMobs + " archer mobs");
+                    }
+                    case "assassin" -> {
+                        assassinMobs = 1 + random.nextInt(Math.min(3, 1 + difficulty / 2));
+                        enemyBonus += 0.03D * assassinMobs;
+                        lines.add("+" + assassinMobs + " assassin mobs");
+                    }
+                    case "tank" -> {
+                        tankMobs = 1 + random.nextInt(Math.min(3, 1 + difficulty / 2));
+                        enemyBonus += 0.025D * tankMobs;
+                        lines.add("+" + tankMobs + " tank mobs");
+                    }
+                    case "elite" -> {
+                        eliteMobs = 1 + random.nextInt(Math.min(3, Math.max(1, difficulty - 1)));
+                        eliteChance += eliteMobs * 0.015D;
+                        lines.add("+" + eliteMobs + " elite mobs");
+                    }
+                }
             }
             lines.add("-------------------");
-            ArrayList<String> combatPool = new ArrayList<>(List.of("mob speed", "mob health", "mob damage", "mob resistance", "mob regen"));
-            for (int i = 0; i < combatLines && !combatPool.isEmpty(); i++) {
-                String type = combatPool.remove(random.nextInt(combatPool.size()));
-                int value = Math.max(1, (int) Math.round((4 + random.nextInt(9)) * scaleCombat));
-                if ("mob regen".equals(type)) value = Math.max(1, Math.min(2, value / 6));
-                lines.add("+" + value + "% " + type);
-                if (type.contains("speed")) speed += value / 100.0D;
-                if (type.contains("damage")) damage += value / 100.0D;
-                if (type.contains("health")) enemyBonus += value / 200.0D;
+            ArrayList<String> negativePool = new ArrayList<>(List.of("spawn", "damage", "health", "speed", "leech"));
+            for (int i = 0; i < negativeCount && !negativePool.isEmpty(); i++) {
+                String type = negativePool.remove(random.nextInt(negativePool.size()));
+                switch (type) {
+                    case "spawn" -> {
+                        double amount = 0.06D + difficulty * 0.025D + wavePressure * 0.004D + levelPressure;
+                        enemyBonus += amount;
+                        lines.add("+" + Math.round(amount * 100.0D) + "% spawn chance");
+                    }
+                    case "damage" -> {
+                        double amount = 0.06D + difficulty * 0.03D + wavePressure * 0.005D + levelPressure;
+                        damage += amount;
+                        lines.add("+" + Math.round(amount * 100.0D) + "% mob damage");
+                    }
+                    case "health" -> {
+                        double amount = 0.08D + difficulty * 0.035D + wavePressure * 0.006D + levelPressure;
+                        health += amount;
+                        lines.add("+" + Math.round(amount * 100.0D) + "% mob health");
+                    }
+                    case "speed" -> {
+                        double amount = 0.04D + difficulty * 0.02D + wavePressure * 0.003D;
+                        speed += amount;
+                        lines.add("+" + Math.round(amount * 100.0D) + "% mob speed");
+                    }
+                    case "leech" -> {
+                        leech += 0.005D + random.nextDouble() * (0.004D * difficulty + 0.003D);
+                        lines.add("+" + String.format(java.util.Locale.ROOT, "%.1f", leech * 100.0D) + "% mob leech");
+                    }
+                }
             }
             lines.add("-------------------");
-            ArrayList<String> rewardPool = new ArrayList<>(List.of("coins", "levels", "quantity", "rarity", "xp"));
-            for (int i = 0; i < rewardLines && !rewardPool.isEmpty(); i++) {
-                String type = rewardPool.remove(random.nextInt(rewardPool.size()));
-                int value = Math.max(1, (int) Math.round((3 + random.nextInt(8)) * scaleRewards));
-                lines.add("+" + value + "% " + type);
-                if (type.contains("quantity") || type.contains("coins")) quantity += value / 100.0D;
-                if (type.contains("rarity") || type.contains("levels") || type.equals("xp")) rarity += value / 100.0D;
-                if (type.contains("levels")) rewards += Math.max(1, value / 5);
+            ArrayList<String> positivePool = new ArrayList<>(List.of("quantity", "rarity", "coins", "levels"));
+            for (int i = 0; i < positiveCount && !positivePool.isEmpty(); i++) {
+                String type = positivePool.remove(random.nextInt(positivePool.size()));
+                switch (type) {
+                    case "quantity" -> {
+                        quantity += 0.05D + difficulty * 0.03D + wavePressure * 0.006D;
+                        lines.add("+" + Math.round(quantity * 100.0D) + "% quantity");
+                    }
+                    case "rarity" -> {
+                        rarity += 0.04D + difficulty * 0.025D + wavePressure * 0.005D;
+                        lines.add("+" + Math.round(rarity * 100.0D) + "% rarity");
+                    }
+                    case "coins" -> {
+                        coins += 0.06D + difficulty * 0.03D + wavePressure * 0.006D;
+                        lines.add("+" + Math.round(coins * 100.0D) + "% coins");
+                    }
+                    case "levels" -> {
+                        double amount = 0.06D + difficulty * 0.03D + wavePressure * 0.006D;
+                        levels += amount;
+                        lines.add("+" + Math.round(amount * 100.0D) + "% levels");
+                    }
+                }
             }
-            return new TarotOption(Component.empty(), Component.literal(String.join("\n", lines)), enemyBonus, damage, speed, eliteChance, quantity, rarity, rewards, archetype);
+            Component title = Component.literal(difficultyName(difficulty));
+            return new TarotOption(
+                    title,
+                    Component.literal(String.join("\n", lines)),
+                    enemyBonus,
+                    health,
+                    damage,
+                    speed,
+                    leech,
+                    eliteChance,
+                    quantity,
+                    rarity,
+                    coins,
+                    levels,
+                    0,
+                    hordeMobs,
+                    archerMobs,
+                    assassinMobs,
+                    tankMobs,
+                    eliteMobs,
+                    difficulty
+            );
+        }
+
+        private static String difficultyName(int difficulty) {
+            return switch (difficulty) {
+                case 1 -> "Easy";
+                case 2 -> "Normal";
+                case 3 -> "Medium";
+                case 4 -> "Hard";
+                default -> "Extreme";
+            };
         }
     }
 
