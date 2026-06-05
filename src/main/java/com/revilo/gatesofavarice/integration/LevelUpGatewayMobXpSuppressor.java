@@ -1,6 +1,7 @@
 package com.revilo.gatesofavarice.integration;
 
 import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
+import com.revilo.gatesofavarice.dungeon.ModDimensions;
 import dev.shadowsoffire.gateways.entity.GatewayEntity;
 import java.util.ArrayDeque;
 import java.util.Iterator;
@@ -46,7 +47,7 @@ public final class LevelUpGatewayMobXpSuppressor {
         }
 
         pruneSuppressedDeaths(serverLevel);
-        if (matchesSuppressedDeath(serverLevel, entity.position())) {
+        if (serverLevel.dimension() == ModDimensions.DUNGEON_LEVEL || matchesSuppressedDeath(serverLevel, entity.position())) {
             event.setCanceled(true);
         }
     }

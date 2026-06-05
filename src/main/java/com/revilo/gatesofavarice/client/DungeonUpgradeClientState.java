@@ -11,7 +11,8 @@ public final class DungeonUpgradeClientState {
     public static String categoryName = "";
     public static ItemStack previewStack = ItemStack.EMPTY;
     public static List<UpgradeCard> cards = List.of();
+    public static int rerollsLeft = 0;
+    public static int rerollCost = 0;
 
     private DungeonUpgradeClientState() {}
 }
-

@@ -60,6 +60,10 @@ public final class GatewayExpansionNetwork {
             if (!(context.player() instanceof ServerPlayer player)) return;
             DungeonUpgradeManager.selectCard(player, payload.sessionId(), payload.cardId());
         });
+        registrar.playToServer(RerollUpgradeCardsPayload.TYPE, RerollUpgradeCardsPayload.STREAM_CODEC, (payload, context) -> {
+            if (!(context.player() instanceof ServerPlayer player)) return;
+            DungeonUpgradeManager.rerollCards(player, payload.sessionId());
+        });
         registrar.playToClient(OpenUpgradeCategoryPayload.TYPE, OpenUpgradeCategoryPayload.STREAM_CODEC, (payload, context) ->
                 context.enqueueWork(() -> {
                     if (!FMLEnvironment.dist.isClient()) return;
@@ -84,12 +88,19 @@ public final class GatewayExpansionNetwork {
                         state.getField("sessionId").set(null, payload.sessionId());
                         state.getField("categoryName").set(null, payload.categoryName());
                         state.getField("previewStack").set(null, payload.previewStack());
+                        state.getField("rerollsLeft").setInt(null, payload.rerollsLeft());
+                        state.getField("rerollCost").setInt(null, payload.rerollCost());
                         state.getField("cards").set(null, payload.cards());
                         Class<?> mc = Class.forName("net.minecraft.client.Minecraft");
                         Object instance = mc.getMethod("getInstance").invoke(null);
                         Class<?> screenClass = Class.forName("com.revilo.gatesofavarice.client.screen.DungeonUpgradeCardsScreen");
-                        Object screen = screenClass.getConstructor().newInstance();
-                        mc.getMethod("setScreen", Class.forName("net.minecraft.client.gui.screens.Screen")).invoke(instance, screen);
+                        Object currentScreen = mc.getField("screen").get(instance);
+                        if (currentScreen != null && screenClass.isInstance(currentScreen)) {
+                            screenClass.getMethod("applySyncPayload", SyncUpgradeCardsPayload.class).invoke(currentScreen, payload);
+                        } else {
+                            Object screen = screenClass.getConstructor().newInstance();
+                            mc.getMethod("setScreen", Class.forName("net.minecraft.client.gui.screens.Screen")).invoke(instance, screen);
+                        }
                     } catch (ReflectiveOperationException ignored) {
                     }
                 }));

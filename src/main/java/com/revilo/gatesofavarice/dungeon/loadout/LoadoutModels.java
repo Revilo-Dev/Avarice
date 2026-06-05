@@ -59,7 +59,12 @@ public final class LoadoutModels {
         ADD_OR_UPGRADE_EFFECT,
         ADD_IMPLICIT,
         UPGRADE_ARMOR_BASE_STAT,
-        UPGRADE_ITEM_SUPPLY
+        UPGRADE_ITEM_SUPPLY,
+        ITEM_REWARD_FOOD,
+        ITEM_REWARD_RESTOCK,
+        ITEM_REWARD_ABILITY,
+        ITEM_REROLL_PRIMARY_WEAPON,
+        ITEM_REROLL_SECONDARY_WEAPON
     }
 
     public record UpgradeCard(
@@ -88,4 +93,3 @@ public final class LoadoutModels {
             String summary
     ) {}
 }
-

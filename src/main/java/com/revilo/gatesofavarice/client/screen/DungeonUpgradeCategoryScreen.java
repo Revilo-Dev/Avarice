@@ -14,8 +14,8 @@ import net.minecraft.util.Mth;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 public class DungeonUpgradeCategoryScreen extends Screen {
-    private static final ResourceLocation CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/upgrade-card.png");
-    private static final ResourceLocation CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/upgrade-card_hovered.png");
+    private static final ResourceLocation CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/item-card.png");
+    private static final ResourceLocation CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/item-card_hovered.png");
     private static final int CARD_W = 76;
     private static final int CARD_H = 103;
     private static final int CARD_GAP = 6;

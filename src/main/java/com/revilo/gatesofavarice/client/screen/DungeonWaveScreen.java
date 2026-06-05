@@ -18,8 +18,12 @@ import org.lwjgl.glfw.GLFW;
 
 public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> {
 
-    private static final ResourceLocation CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/tarrot-card.png");
-    private static final ResourceLocation CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/tarrot-card-hovered.png");
+    private static final ResourceLocation TAROT_CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/tarrot-card.png");
+    private static final ResourceLocation TAROT_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/tarrot-card-hovered.png");
+    private static final ResourceLocation UPGRADE_CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/upgrade-card.png");
+    private static final ResourceLocation UPGRADE_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/upgrade-card_hovered.png");
+    private static final ResourceLocation ITEM_CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/item-card.png");
+    private static final ResourceLocation ITEM_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/item-card_hovered.png");
     private static final int CARD_W = 76;
     private static final int CARD_H = 103;
     private static final int CARD_GAP = 3;
@@ -99,8 +103,8 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
                 .pos(this.leftPos + 58, this.topPos + 175)
                 .size(224, 20)
                 .build());
-        this.rerollButton.visible = this.menu.stage() == 1;
-        this.rerollButton.active = this.menu.ownerCanSelect() && this.menu.stage() == 1 && this.menu.rerollsLeft() > 0;
+        this.rerollButton.visible = false;
+        this.rerollButton.active = false;
 
         this.skipButton = this.addRenderableWidget(Button.builder(
                         Component.literal("Skip").withStyle(ChatFormatting.GRAY),
@@ -124,7 +128,7 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
         for (int i = 0; i < this.optionButtons.size(); i++) {
             Button button = this.optionButtons.get(i);
             boolean hovered = button.isHoveredOrFocused() && this.animationState == AnimationState.IDLE;
-            ResourceLocation tex = hovered ? CARD_HOVERED : CARD;
+            ResourceLocation tex = resolveCardTexture(hovered);
             float scale = i < this.hoverScales.size() ? this.hoverScales.get(i) : 1.0F;
             drawCard(guiGraphics, tex, button.getX(), button.getY(), scale);
         }
@@ -510,7 +514,7 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
             }
         }
         this.bailButton.active = idle && this.menu.ownerCanSelect() && this.menu.stage() == 0 && this.menu.waveNumber() > 1;
-        this.rerollButton.active = idle && this.menu.ownerCanSelect() && this.menu.stage() == 1 && this.menu.rerollsLeft() > 0;
+        this.rerollButton.active = false;
         this.skipButton.active = idle && this.menu.ownerCanSelect() && this.menu.stage() == 1;
 
         if (this.animationState == AnimationState.APPEARING && this.animationTick > Mth.ceil((this.optionButtons.size() - 1) * appearDelayTicks + appearDurationTicks)) {
@@ -542,6 +546,16 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
         guiGraphics.pose().scale(scale, scale, 1.0F);
         guiGraphics.blit(texture, 0, 0, 0, 0, CARD_W, CARD_H, CARD_W, CARD_H);
         guiGraphics.pose().popPose();
+    }
+
+    private ResourceLocation resolveCardTexture(boolean hovered) {
+        if (this.menu.stage() == 0) {
+            return hovered ? TAROT_CARD_HOVERED : TAROT_CARD;
+        }
+        if (this.menu.stage() == 1) {
+            return hovered ? ITEM_CARD_HOVERED : ITEM_CARD;
+        }
+        return hovered ? UPGRADE_CARD_HOVERED : UPGRADE_CARD;
     }
 
     private enum AnimationState {

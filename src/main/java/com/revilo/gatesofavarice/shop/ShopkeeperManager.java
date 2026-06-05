@@ -1,6 +1,7 @@
 package com.revilo.gatesofavarice.shop;
 
 import com.revilo.gatesofavarice.currency.MythicCoinWallet;
+import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
 import com.revilo.gatesofavarice.entity.GatekeeperEntity;
 import com.revilo.gatesofavarice.dungeon.ModDimensions;
 import com.revilo.gatesofavarice.gateway.GatewayPartyScaling;
@@ -68,8 +69,9 @@ public final class ShopkeeperManager {
     private static final int MAX_REROLLS = 3;
     private static final int BASE_REROLL_COST = 100;
     private static final int SHOP_GATEWAY_ANIMATION_TICKS = 50;
-    private static final double COIN_ATTRACTION_RANGE = 7.5D;
-    private static final double COIN_ATTRACTION_FORCE = 0.022D;
+    private static final double COIN_ATTRACTION_RANGE = 14.0D;
+    private static final double COIN_ATTRACTION_FORCE = 0.105D;
+    private static final double COIN_ATTRACTION_MAX_SPEED = 1.15D;
     private static final List<DeferredHolder<net.minecraft.world.item.Item, ? extends LootMaterialItem>> GATEWAY_DROP_ITEMS = List.of(
             ModItems.GRIMSTONE,
             ModItems.MYSTIC_ESSENCE,
@@ -188,9 +190,23 @@ public final class ShopkeeperManager {
                     target.getY() + target.getEyeHeight() * 0.45D - itemEntity.getY(),
                     target.getZ() - itemEntity.getZ());
             double distance = direction.length();
+            if (distance <= 1.35D && target instanceof ServerPlayer serverPlayer) {
+                MythicCoinWallet.add(serverPlayer, MythicCoinStackData.getValue(stack));
+                serverPlayer.take(itemEntity, stack.getCount());
+                target.level().playSound(null, target.blockPosition(), SoundEvents.EXPERIENCE_ORB_PICKUP, SoundSource.PLAYERS, 0.25F, 1.15F);
+                itemEntity.discard();
+                return;
+            }
             if (distance > 0.001D) {
-                double pull = (1.0D - (distance / COIN_ATTRACTION_RANGE)) * COIN_ATTRACTION_FORCE;
-                itemEntity.setDeltaMovement(itemEntity.getDeltaMovement().add(direction.normalize().scale(pull)));
+                double normalizedDistance = Math.min(distance / COIN_ATTRACTION_RANGE, 1.0D);
+                double pull = COIN_ATTRACTION_FORCE * (0.6D + (1.0D - normalizedDistance) * 2.8D);
+                Vec3 boostedMotion = itemEntity.getDeltaMovement().scale(0.72D).add(direction.normalize().scale(pull));
+                if (boostedMotion.lengthSqr() > COIN_ATTRACTION_MAX_SPEED * COIN_ATTRACTION_MAX_SPEED) {
+                    boostedMotion = boostedMotion.normalize().scale(COIN_ATTRACTION_MAX_SPEED);
+                }
+                itemEntity.setDeltaMovement(boostedMotion);
+                itemEntity.hasImpulse = true;
+                itemEntity.hurtMarked = true;
             }
         }
 
@@ -220,6 +236,9 @@ public final class ShopkeeperManager {
 
         event.setCanceled(true);
         event.setCancellationResult(net.minecraft.world.InteractionResult.SUCCESS);
+        if (DungeonRunManager.tryResumePendingWaveMenu(player, trader.getId())) {
+            return;
+        }
         MenuProvider provider = new net.minecraft.world.SimpleMenuProvider(
                 (containerId, inventory, ignored) -> new ShopkeeperMenu(containerId, inventory, trader.getId()),
                 Component.translatable("entity.gatesofavarice.shopkeeper"));

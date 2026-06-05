@@ -17,10 +17,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.component.CustomData;
@@ -77,15 +81,42 @@ public final class DungeonUpgradeManager {
             return;
         }
         ItemStack target = targetStack(player, category);
-        ItemStack preview = target.isEmpty() ? previewStackForCategory(category, player) : target;
-        List<UpgradeCard> cards = RunicUpgradeService.generateUpgradeCards(player, target, session.instance, session.definition, category);
+        ItemStack preview = target.isEmpty()
+                ? (category == UpgradeCategory.ITEM ? new ItemStack(defaultFoodItem(session.definition)) : previewStackForCategory(category, player))
+                : target;
+        int waveNumber = session.waveOwnerId == null ? 1 : DungeonRunManager.getUpgradeWaveNumber(session.waveOwnerId);
+        List<UpgradeCard> cards = RunicUpgradeService.generateUpgradeCards(player, target, session.instance, session.definition, category, waveNumber, session.cardGenerationNonce);
         session.activeCategory = category;
         session.cardsByCategory.put(category, cards);
         session.cardsById.clear();
         for (UpgradeCard card : cards) {
             session.cardsById.put(card.id(), card);
         }
-        PacketDistributor.sendToPlayer(player, new SyncUpgradeCardsPayload(session.sessionId.toString(), category.name(), preview.copy(), cards));
+        int rerollsLeft = session.waveOwnerId == null ? 0 : DungeonRunManager.getUpgradeRerollsLeft(session.waveOwnerId);
+        int rerollCost = session.waveOwnerId == null ? 0 : DungeonRunManager.getUpgradeRerollCost(session.waveOwnerId);
+        PacketDistributor.sendToPlayer(player, new SyncUpgradeCardsPayload(session.sessionId.toString(), category.name(), preview.copy(), rerollsLeft, rerollCost, cards));
+    }
+
+    public static void rerollCards(ServerPlayer player, String sessionIdRaw) {
+        UpgradeSession session = SESSIONS.get(player.getUUID());
+        if (session == null || !session.sessionId.toString().equals(sessionIdRaw)) {
+            reject(player, "Invalid upgrade session.");
+            return;
+        }
+        if (session.activeCategory == null) {
+            reject(player, "No active category.");
+            return;
+        }
+        if (session.waveOwnerId == null) {
+            reject(player, "This upgrade screen cannot reroll.");
+            return;
+        }
+        if (!DungeonRunManager.consumeUpgradeReroll(player, session.waveOwnerId)) {
+            reject(player, "Unable to reroll upgrade cards.");
+            return;
+        }
+        session.cardGenerationNonce++;
+        selectCategory(player, sessionIdRaw, session.activeCategory);
     }
 
     public static void selectCard(ServerPlayer player, String sessionIdRaw, String cardId) {
@@ -131,11 +162,11 @@ public final class DungeonUpgradeManager {
 
     private static void applyCard(ServerPlayer player, ItemStack target, UpgradeCard card, UpgradeContext ctx, LoadoutDefinition definition) {
         try {
-            if (card.type() == UpgradeCardType.UPGRADE_ITEM_SUPPLY || card.category() == UpgradeCategory.ITEM) {
-                applyItemUpgrade(player, definition);
-                return;
-            }
             switch (card.type()) {
+                case ITEM_REWARD_FOOD, ITEM_REWARD_RESTOCK, ITEM_REWARD_ABILITY, ITEM_REROLL_PRIMARY_WEAPON, ITEM_REROLL_SECONDARY_WEAPON, UPGRADE_ITEM_SUPPLY -> {
+                    applyItemUpgrade(player, definition, card.type());
+                    return;
+                }
                 case ADD_OR_UPGRADE_EFFECT -> {
                     if (!card.changeLabel().startsWith("effect:")) return;
                     String raw = card.changeLabel().substring("effect:".length());
@@ -146,13 +177,13 @@ public final class DungeonUpgradeManager {
                     }
                 }
                 case ADD_NEW_RUNE_STAT -> {
-                    RuneStatType type = RuneStatType.byId(card.changeLabel());
+                    RuneStatType type = resolveCardStatType(card);
                     if (type != null && RunicLoadoutService.isStatAllowedForStack(target, type)) {
-                        RunicUpgradeService.addNewStat(target, type, Math.max(0.01F, parseNumber(card.newValue())), ctx);
+                        RunicUpgradeService.addNewStat(target, type, clampDisplayedStatDelta(type, card.newValue()), ctx);
                     }
                 }
                 case INCREASE_EXISTING_STAT_PERCENT -> {
-                    RuneStatType type = RuneStatType.byId(card.changeLabel());
+                    RuneStatType type = resolveCardStatType(card);
                     if (type != null && RunicLoadoutService.isStatAllowedForStack(target, type)) {
                         float pct = Math.max(0.01F, parsePercent(card.newValue()));
                         float current = RuneStats.get(target).get(type);
@@ -165,12 +196,12 @@ public final class DungeonUpgradeManager {
                     }
                 }
                 default -> {
-                    RuneStatType type = RuneStatType.byId(card.changeLabel());
+                    RuneStatType type = resolveCardStatType(card);
                     if (type == null && card.type() == UpgradeCardType.ADD_IMPLICIT) {
                         type = RuneStatType.ATTACK_DAMAGE;
                     }
                     if (type != null && RunicLoadoutService.isStatAllowedForStack(target, type)) {
-                        float delta = Math.max(0.01F, parseNumber(card.newValue()));
+                        float delta = clampDisplayedStatDelta(type, card.newValue());
                         if (RuneStats.get(target).has(type)) {
                             RunicUpgradeService.upgradeExistingStat(target, type, delta, ctx);
                         } else {
@@ -184,20 +215,60 @@ public final class DungeonUpgradeManager {
         }
     }
 
-    private static void applyItemUpgrade(ServerPlayer player, LoadoutDefinition definition) {
-        if (definition.id().contains("ranger") || definition.id().contains("marksman") || definition.id().contains("warlord") || definition.id().contains("nomad")) {
-            player.getInventory().add(new ItemStack(Items.ARROW, 16));
+    private static void applyItemUpgrade(ServerPlayer player, LoadoutDefinition definition, UpgradeCardType type) {
+        RandomSource random = player.getRandom();
+        switch (type) {
+            case ITEM_REWARD_FOOD -> giveBoundStack(player, new ItemStack(defaultFoodItem(definition), 16));
+            case ITEM_REWARD_RESTOCK, UPGRADE_ITEM_SUPPLY -> giveBoundStack(player, rollRestockReward(random));
+            case ITEM_REWARD_ABILITY -> giveBoundStack(player, new ItemStack(com.revilo.gatesofavarice.registry.ModItems.ARCANE_APPLE.get(), 1 + random.nextInt(3)));
+            case ITEM_REROLL_PRIMARY_WEAPON -> rerollWeapon(player, definition, true, random);
+            case ITEM_REROLL_SECONDARY_WEAPON -> rerollWeapon(player, definition, false, random);
+            default -> {
+            }
+        }
+    }
+
+    private static Item defaultFoodItem(LoadoutDefinition definition) {
+        return definition.supplies().stream().findFirst().map(spec -> spec.item()).orElse(Items.COOKED_BEEF);
+    }
+
+    private static ItemStack rollRestockReward(RandomSource random) {
+        float roll = random.nextFloat();
+        if (roll < 0.18F) {
+            return new ItemStack(Items.ENCHANTED_GOLDEN_APPLE, 1);
+        }
+        if (roll < 0.52F) {
+            return new ItemStack(Items.ARROW, 32 + random.nextInt(33));
+        }
+        return new ItemStack(Items.GOLDEN_APPLE, 5 + random.nextInt(12));
+    }
+
+    private static void rerollWeapon(ServerPlayer player, LoadoutDefinition definition, boolean primary, RandomSource random) {
+        int playerLevel = Math.max(1, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player));
+        ItemStack current = targetStack(player, primary ? UpgradeCategory.PRIMARY_WEAPON : UpgradeCategory.SECONDARY_WEAPON);
+        Item item = primary
+                ? DungeonUpgradeWeaponRolls.rollPrimaryUpgradeWeapon(random, playerLevel, current)
+                : DungeonUpgradeWeaponRolls.rollSecondaryUpgradeWeapon(random, playerLevel, current);
+        ItemStack replacement = new ItemStack(item);
+        DungeonGearRoller.rollAndBind(replacement, random, playerLevel, 0L, player.registryAccess());
+        if (primary) {
+            DungeonBoundItems.markPrimaryWeapon(replacement);
+        } else {
+            DungeonBoundItems.markSecondaryWeapon(replacement);
+        }
+        if (!DungeonBoundItems.replaceRoleWeapon(player, replacement)) {
+            player.getInventory().add(replacement);
+        }
+    }
+
+    private static void giveBoundStack(ServerPlayer player, ItemStack stack) {
+        if (stack.isEmpty()) {
             return;
         }
-        if (definition.id().contains("vanguard") || definition.id().contains("knight") || definition.id().contains("gladiator")) {
-            player.getInventory().add(new ItemStack(Items.GOLDEN_APPLE, 1));
-            return;
-        }
-        if (definition.id().contains("spellblade") || definition.id().contains("reaper") || definition.id().contains("samurai")) {
-            player.getInventory().add(new ItemStack(com.revilo.gatesofavarice.registry.ModItems.ARCANE_APPLE.get(), 1));
-            return;
-        }
-        player.getInventory().add(new ItemStack(Items.COOKED_BEEF, 4));
+        DungeonBoundItems.forceMarkDungeonBound(stack);
+        player.getInventory().add(stack);
+        player.inventoryMenu.broadcastChanges();
+        player.containerMenu.broadcastChanges();
     }
 
     private static ItemStack targetStack(ServerPlayer player, UpgradeCategory category) {
@@ -256,6 +327,46 @@ public final class DungeonUpgradeManager {
         return Float.parseFloat(cleaned);
     }
 
+    private static float clampDisplayedStatDelta(RuneStatType type, String text) {
+        float parsed = parseNumber(text);
+        return Math.max(0.01F, parsed);
+    }
+
+    private static RuneStatType resolveCardStatType(UpgradeCard card) {
+        RuneStatType direct = RuneStatType.byId(card.changeLabel());
+        if (direct != null) {
+            return direct;
+        }
+        return switch (card.changeLabel()) {
+            case "Toxic" -> RuneStatType.byId("poison_chance");
+            case "Fire Aspect" -> RuneStatType.byId("flame_chance");
+            case "Withering" -> RuneStatType.byId("withering_chance");
+            case "Bleeding" -> RuneStatType.byId("bleeding_chance");
+            case "Stunning" -> RuneStatType.byId("stun_chance");
+            case "Shocking" -> RuneStatType.byId("shocking_chance");
+            case "Leeching" -> RuneStatType.byId("leeching_chance");
+            case "Freezing" -> RuneStatType.byId("freezing_chance");
+            case "Fangs" -> RuneStatType.byId("fangs");
+            case "Health Boost" -> RuneStatType.byId("health");
+            case "Toughness" -> RuneStatType.byId("toughness");
+            case "Leaping" -> RuneStatType.byId("jump_height");
+            case "Ability Power" -> RuneStatType.byId("power");
+            case "Movement Speed" -> RuneStatType.byId("movement_speed");
+            case "Resistance" -> RuneStatType.byId("resistance");
+            case "Fire Resistance" -> RuneStatType.byId("fire_resistance");
+            case "Projectile Resistance" -> RuneStatType.byId("projectile_resistance");
+            case "Blast Resistance" -> RuneStatType.byId("blast_resistance");
+            case "Attack Damage" -> RuneStatType.byId("attack_damage");
+            case "Undead Damage" -> RuneStatType.byId("undead_damage");
+            case "Attack Range" -> RuneStatType.byId("attack_range");
+            case "Attack Speed" -> RuneStatType.byId("attack_speed");
+            case "Sweeping Range" -> RuneStatType.byId("sweeping_range");
+            case "Aegis" -> RuneStatType.byId("aegis");
+            case "Stone Skin" -> RuneStatType.byId("stone");
+            default -> null;
+        };
+    }
+
     private static int parseEffectLevel(String text) {
         String cleaned = text.replace("Lv", "").replace("lv", "").replace("+", "").trim();
         return Math.max(1, Integer.parseInt(cleaned));
@@ -272,6 +383,7 @@ public final class DungeonUpgradeManager {
         private final LoadoutDefinition definition;
         private final UUID waveOwnerId;
         private UpgradeCategory activeCategory;
+        private long cardGenerationNonce = 0L;
         private final Map<UpgradeCategory, List<UpgradeCard>> cardsByCategory = new HashMap<>();
         private final Map<String, UpgradeCard> cardsById = new HashMap<>();
 
@@ -280,6 +392,92 @@ public final class DungeonUpgradeManager {
             this.instance = instance;
             this.definition = definition;
             this.waveOwnerId = waveOwnerId;
+        }
+    }
+
+    private static final class DungeonUpgradeWeaponRolls {
+        private DungeonUpgradeWeaponRolls() {
+        }
+
+        private static Item rollPrimaryUpgradeWeapon(RandomSource random, int playerLevel, ItemStack current) {
+            int currentTier = weaponTier(current);
+            Item item = pickWeapon(random, playerLevel, currentTier <= 0 ? -1 : currentTier, true, current.getItem());
+            return item == null ? Items.IRON_SWORD : item;
+        }
+
+        private static Item rollSecondaryUpgradeWeapon(RandomSource random, int playerLevel, ItemStack current) {
+            int currentTier = weaponTier(current);
+            if (currentTier <= 0) {
+                return rollPrimaryUpgradeWeapon(random, playerLevel, current);
+            }
+            Item item = pickWeapon(random, playerLevel, currentTier, true, current.getItem());
+            return item == null ? Items.IRON_SWORD : item;
+        }
+
+        private static Item pickWeapon(RandomSource random, int playerLevel, int targetTier, boolean allowRareTierUp, Item exclude) {
+            int safeLevel = Math.max(1, playerLevel);
+            java.util.ArrayList<Item> exactPool = new java.util.ArrayList<>();
+            java.util.ArrayList<Item> tierUpPool = new java.util.ArrayList<>();
+            for (Item item : BuiltInRegistries.ITEM) {
+                ResourceLocation id = BuiltInRegistries.ITEM.getKey(item);
+                if (id == null || !isUpgradeableWeapon(id, item)) {
+                    continue;
+                }
+                int tier = weaponTier(id);
+                if ((safeLevel < 10 && tier > 2) || (safeLevel < 35 && tier > 3) || (safeLevel < 50 && tier > 4)) {
+                    continue;
+                }
+                if (exclude != null && item == exclude) {
+                    continue;
+                }
+                if (targetTier <= 0) {
+                    exactPool.add(item);
+                } else if (tier == targetTier) {
+                    exactPool.add(item);
+                } else if (allowRareTierUp && tier == targetTier + 1) {
+                    tierUpPool.add(item);
+                }
+            }
+            if (allowRareTierUp && !tierUpPool.isEmpty() && random.nextFloat() < 0.12F) {
+                return tierUpPool.get(random.nextInt(tierUpPool.size()));
+            }
+            if (!exactPool.isEmpty()) {
+                return exactPool.get(random.nextInt(exactPool.size()));
+            }
+            if (!tierUpPool.isEmpty()) {
+                return tierUpPool.get(random.nextInt(tierUpPool.size()));
+            }
+            return null;
+        }
+
+        private static boolean isUpgradeableWeapon(ResourceLocation id, Item item) {
+            String path = id.getPath();
+            if ("minecraft".equals(id.getNamespace())) {
+                return item == Items.BOW || item == Items.CROSSBOW || item == Items.IRON_SWORD;
+            }
+            return path.contains("paxel")
+                    || path.contains("sword")
+                    || path.contains("broadsword")
+                    || path.contains("dagger")
+                    || path.contains("gaundao")
+                    || path.contains("glaive")
+                    || path.contains("hammer")
+                    || path.contains("longsword")
+                    || path.contains("machete");
+        }
+
+        private static int weaponTier(ItemStack stack) {
+            return weaponTier(BuiltInRegistries.ITEM.getKey(stack.getItem()));
+        }
+
+        private static int weaponTier(ResourceLocation id) {
+            if (id == null) return 1;
+            String path = id.getPath();
+            if (path.contains("mana_steel")) return 1;
+            if (path.contains("elixrite")) return 2;
+            if (path.contains("astrite") || path.contains("lunarium")) return 3;
+            if (path.contains("ignite") || path.contains("iridium")) return 4;
+            return 5;
         }
     }
 }
