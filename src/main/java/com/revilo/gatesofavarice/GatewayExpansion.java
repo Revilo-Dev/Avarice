@@ -19,6 +19,7 @@ import com.revilo.gatesofavarice.integration.CuriosCompat;
 import com.revilo.gatesofavarice.integration.DungeonBoundTooltipHandler;
 import com.revilo.gatesofavarice.integration.ArsenalWeaponTraitHandler;
 import com.revilo.gatesofavarice.integration.LevelUpGatewayXpRewards;
+import com.revilo.gatesofavarice.integration.LevelUpGatewayMobXpSuppressor;
 import com.revilo.gatesofavarice.integration.LevelUpHudGateStateManager;
 import com.revilo.gatesofavarice.integration.MagnetHandler;
 import com.revilo.gatesofavarice.integration.ModCompat;
@@ -84,6 +85,7 @@ public final class GatewayExpansion {
             NeoForge.EVENT_BUS.register(GeneratedGatewayPearlTracker.class);
             NeoForge.EVENT_BUS.register(StabilityPearlHandler.class);
             NeoForge.EVENT_BUS.register(LevelUpGatewayXpRewards.class);
+            NeoForge.EVENT_BUS.register(LevelUpGatewayMobXpSuppressor.class);
             NeoForge.EVENT_BUS.register(LevelUpHudGateStateManager.class);
             NeoForge.EVENT_BUS.register(GatewayThornsHandler.class);
             NeoForge.EVENT_BUS.register(GatewayDisplayManager.class);

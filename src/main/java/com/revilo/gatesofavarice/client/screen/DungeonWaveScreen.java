@@ -18,8 +18,8 @@ import org.lwjgl.glfw.GLFW;
 
 public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> {
 
-    private static final ResourceLocation CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/card.png");
-    private static final ResourceLocation CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/card-hovered.png");
+    private static final ResourceLocation CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/tarrot-card.png");
+    private static final ResourceLocation CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/tarrot-card-hovered.png");
     private static final int CARD_W = 76;
     private static final int CARD_H = 103;
     private static final int CARD_GAP = 3;
@@ -114,6 +114,7 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
 
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+        this.renderBackground(guiGraphics, mouseX, mouseY, partialTick);
         super.render(guiGraphics, mouseX, mouseY, partialTick);
         this.renderTooltip(guiGraphics, mouseX, mouseY);
     }
@@ -550,4 +551,3 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
         DISCARDING_ALL
     }
 }
-

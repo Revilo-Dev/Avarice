@@ -5,6 +5,7 @@ import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCard;
 import com.revilo.gatesofavarice.network.SelectUpgradeCardPayload;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -15,8 +16,15 @@ import net.minecraft.util.Mth;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 public class DungeonUpgradeCardsScreen extends Screen {
-    private static final ResourceLocation CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/card.png");
-    private static final ResourceLocation CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/card-hovered.png");
+    private static final ResourceLocation EFFECT_CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/effect-card.png");
+    private static final ResourceLocation EFFECT_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/effect-card_hovered.png");
+    private static final ResourceLocation DAMAGE_CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/damage-card.png");
+    private static final ResourceLocation DAMAGE_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/damage-card_hovered.png");
+    private static final ResourceLocation STAT_CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/stat-card.png");
+    private static final ResourceLocation STAT_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/stat-card_hovered.png");
+    private static final ResourceLocation UPGRADE_CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/upgrade-card.png");
+    private static final ResourceLocation UPGRADE_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/upgrade-card_hovered.png");
+    private static final ResourceLocation ICON_BASE = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/icons/");
     private static final int CARD_W = 76;
     private static final int CARD_H = 103;
     private static final int CARD_GAP = 3;
@@ -68,9 +76,10 @@ public class DungeonUpgradeCardsScreen extends Screen {
         for (int i = 0; i < this.cardButtons.size() && i < DungeonUpgradeClientState.cards.size(); i++) {
             Button button = this.cardButtons.get(i);
             float scale = this.hoverScales.get(i);
-            ResourceLocation texture = button.isHoveredOrFocused() ? CARD_HOVERED : CARD;
+            UpgradeCard card = DungeonUpgradeClientState.cards.get(i);
+            ResourceLocation texture = resolveCardTexture(card, button.isHoveredOrFocused());
             drawCard(gg, texture, button.getX(), button.getY(), scale);
-            renderCardContents(gg, button, DungeonUpgradeClientState.cards.get(i), scale);
+            renderCardContents(gg, button, card, scale);
         }
     }
 
@@ -106,9 +115,12 @@ public class DungeonUpgradeCardsScreen extends Screen {
             if (rowY > 24) break;
         }
 
-        drawScaledCentered(gg, card.targetLabel(), center, 30, 0.58F, 0xF4F4F4);
+        ResourceLocation icon = resolveCardIcon(card);
+        if (icon != null) {
+            gg.blit(icon, center - 8, 30, 0, 0, 16, 16, 16, 16);
+        }
 
-        int detailY = 42;
+        int detailY = 50;
         for (String line : wrap(card.changeLabel(), 16)) {
             drawScaledCentered(gg, line, center, detailY, 0.58F, 0xD7F0D9);
             detailY += 7;
@@ -126,6 +138,55 @@ public class DungeonUpgradeCardsScreen extends Screen {
             return;
         }
         PacketDistributor.sendToServer(new SelectUpgradeCardPayload(DungeonUpgradeClientState.sessionId, DungeonUpgradeClientState.cards.get(idx).id()));
+    }
+
+    private static ResourceLocation resolveCardTexture(UpgradeCard card, boolean hovered) {
+        return switch (card.title()) {
+            case "Effect Card" -> hovered ? EFFECT_CARD_HOVERED : EFFECT_CARD;
+            case "Damage Card", "Offence Card" -> hovered ? DAMAGE_CARD_HOVERED : DAMAGE_CARD;
+            case "Stat Card" -> hovered ? STAT_CARD_HOVERED : STAT_CARD;
+            default -> hovered ? UPGRADE_CARD_HOVERED : UPGRADE_CARD;
+        };
+    }
+
+    private static ResourceLocation resolveCardIcon(UpgradeCard card) {
+        String iconName = switch (card.changeLabel()) {
+            case "Toxic" -> "poison_chance";
+            case "Fire Aspect" -> "flame";
+            case "Withering" -> "withering_chance";
+            case "Bleeding" -> "bleeding_chance";
+            case "Stunning" -> "stun_chance";
+            case "Shocking" -> "shocking_chance";
+            case "Leeching" -> "leeching_chance";
+            case "Freezing" -> "freezing_chance";
+            case "Fangs" -> "fangs";
+            case "Health Boost" -> "health";
+            case "Toughness" -> "toughness";
+            case "Leaping" -> "jump_height";
+            case "Ability Power" -> "power";
+            case "Movement Speed" -> "movement_speed";
+            case "Resistance" -> "resistance";
+            case "Fire Resistance" -> "fire_resistance";
+            case "Projectile Resistance" -> "projectile_resistance";
+            case "Blast Resistance" -> "blast_resistance";
+            case "Attack Damage" -> "attack_damage";
+            case "Undead Damage" -> "undead_damage";
+            case "Attack Range" -> "attack_range";
+            case "Attack Speed" -> "attack_speed";
+            case "Sweeping Range" -> "sweeping_range";
+            case "Aegis" -> "aegis";
+            case "Stone Skin" -> "stone_skin";
+            default -> inferIconName(card.changeLabel());
+        };
+        return ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/icons/" + iconName + ".png");
+    }
+
+    private static String inferIconName(String label) {
+        return switch (label) {
+            case "supply" -> "capacity";
+            case "current" -> "power";
+            default -> label.toLowerCase(Locale.ROOT).replace(' ', '_');
+        };
     }
 
     private void drawCard(GuiGraphics guiGraphics, ResourceLocation texture, int x, int y, float scale) {

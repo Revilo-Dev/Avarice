@@ -66,6 +66,14 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
     }
 
     @Override
+    public void broadcastChanges() {
+        if (!this.player.level().isClientSide) {
+            this.syncFromTrader();
+        }
+        super.broadcastChanges();
+    }
+
+    @Override
     public ItemStack quickMoveStack(Player player, int index) {
         Slot slot = this.slots.get(index);
         if (slot == null || !slot.hasItem()) {

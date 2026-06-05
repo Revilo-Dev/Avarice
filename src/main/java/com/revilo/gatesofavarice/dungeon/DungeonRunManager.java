@@ -31,7 +31,11 @@ import java.util.UUID;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceKey;
@@ -69,13 +73,15 @@ import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
 import net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 public final class DungeonRunManager {
+    public static final String DUNGEON_WAVE_SPAWN_KEY = "gatesofavarice.dungeon_wave_spawn";
     private static final Map<UUID, RunState> RUNS_BY_OWNER = new HashMap<>();
     private static final Map<UUID, UUID> PLAYER_TO_OWNER = new HashMap<>();
-    private static final Map<UUID, PendingDeathRestore> PENDING_DEATH_RESTORES = new HashMap<>();
+    private static final Map<UUID, PendingSnapshotRestore> PENDING_SNAPSHOT_RESTORES = new HashMap<>();
 
     private static final ResourceLocation MOB_HEALTH_MODIFIER_ID = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_wave_health");
     private static final ResourceLocation MOB_DAMAGE_MODIFIER_ID = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_wave_damage");
@@ -85,6 +91,13 @@ public final class DungeonRunManager {
     private static final double BASE_ELITE_CHANCE = 0.06D;
     private static final int LEVEL_POINTS_PER_KILL = 5;
     private static final int LEVEL_POINTS_PER_LOOT_PICKUP = 1;
+    private static final int AUTOSAVE_INTERVAL_TICKS = 20 * 30;
+    private static final String RUNS_KEY = "runs";
+    private static final String PENDING_RESTORES_KEY = "pending_restores";
+
+    private static boolean persistedStateLoaded = false;
+    private static boolean persistedStateDirty = false;
+    private static long lastAutosaveTick = Long.MIN_VALUE;
 
     private static final List<Item> REGULAR_DROP_POOL = List.of(
             ModItems.GRIMSTONE.get(), ModItems.MYSTIC_ESSENCE.get(), ModItems.SCRAP_METAL.get(), ModItems.MANA_GEMS.get(),
@@ -116,7 +129,41 @@ public final class DungeonRunManager {
 
     private DungeonRunManager() {}
 
+    private static void ensureLoaded(MinecraftServer server) {
+        if (server == null || persistedStateLoaded) {
+            return;
+        }
+        RUNS_BY_OWNER.clear();
+        PLAYER_TO_OWNER.clear();
+        PENDING_SNAPSHOT_RESTORES.clear();
+        ServerLevel overworld = server.overworld();
+        if (overworld != null) {
+            loadPersistedState(DungeonRunStorage.get(overworld).state(), server, overworld.registryAccess());
+        }
+        persistedStateLoaded = true;
+        persistedStateDirty = false;
+        lastAutosaveTick = Long.MIN_VALUE;
+    }
+
+    private static void markStateDirty() {
+        persistedStateDirty = true;
+    }
+
+    private static void savePersistedState(MinecraftServer server) {
+        if (server == null) {
+            return;
+        }
+        ensureLoaded(server);
+        ServerLevel overworld = server.overworld();
+        if (overworld == null) {
+            return;
+        }
+        DungeonRunStorage.get(overworld).setState(buildPersistedState(overworld));
+        persistedStateDirty = false;
+    }
+
     public static void enterFromGateway(ServerPlayer player, UUID ownerId) {
+        ensureLoaded(player.server);
         RunState run = RUNS_BY_OWNER.computeIfAbsent(ownerId, RunState::new);
         run.server = player.server;
         if (run.runStartGameTime < 0L) {
@@ -132,9 +179,12 @@ public final class DungeonRunManager {
             rollTarotOptions(run, player.serverLevel().random);
             openWaveMenu(player, run);
         }
+        markStateDirty();
+        forceCriticalSave(player.server);
     }
 
     public static void exitViaBailPortal(ServerPlayer player, UUID ownerId, GatewayCrystalEntity portal) {
+        ensureLoaded(player.server);
         RunState run = RUNS_BY_OWNER.get(ownerId);
         if (run == null || run.exitPortalId != portal.getId()) return;
         PlayerSnapshot snapshot = run.snapshots.get(player.getUUID());
@@ -154,8 +204,12 @@ public final class DungeonRunManager {
         sendCompletionScreen(player, run, rewards, levelPoints, cashedOutCoins);
         PLAYER_TO_OWNER.remove(player.getUUID());
         run.participants.remove(player.getUUID());
+        run.snapshots.remove(player.getUUID());
         if (run.participants.isEmpty()) {
             finishAndCleanup(run);
+        } else {
+            markStateDirty();
+            forceCriticalSave(player.server);
         }
     }
 
@@ -312,8 +366,10 @@ public final class DungeonRunManager {
 
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
-        if (RUNS_BY_OWNER.isEmpty()) return;
-        ArrayList<UUID> empty = new ArrayList<>();
+        ensureLoaded(event.getServer());
+        if (RUNS_BY_OWNER.isEmpty() && PENDING_SNAPSHOT_RESTORES.isEmpty()) {
+            return;
+        }
         ServerLevel dungeonLevel = event.getServer().getLevel(ModDimensions.DUNGEON_LEVEL);
         if (dungeonLevel != null) {
             dungeonLevel.setDayTime(18000L);
@@ -327,16 +383,35 @@ public final class DungeonRunManager {
                 rollTarotOptions(run, dungeon.random);
                 ServerPlayer owner = run.online(run.ownerId);
                 if (owner != null) openWaveMenu(owner, run);
+            } else if (run.phase == RunPhase.SELECTING_LOOT) {
+                boolean rebuiltOptions = false;
+                if (run.selectingLoadout) {
+                    if (run.loadoutOptions.isEmpty()) {
+                        rollLoadoutOptions(run, dungeon.random);
+                        rebuiltOptions = true;
+                    }
+                } else if (run.lootOptions.isEmpty()) {
+                    rollLootOptions(run, dungeon.random);
+                    rebuiltOptions = true;
+                }
+                if (rebuiltOptions) {
+                    ServerPlayer owner = run.online(run.ownerId);
+                    if (owner != null) openWaveMenu(owner, run);
+                }
             } else if (run.phase == RunPhase.IN_WAVE) {
+                if (run.currentWavePools.isEmpty()) {
+                    run.currentWavePools = buildWavePools(run);
+                }
                 tickWave(run, dungeon);
+            } else if (run.phase == RunPhase.SHOP) {
+                ensureShopkeeper(run, dungeon);
+            } else if (run.phase == RunPhase.WAITING_EXIT) {
+                spawnExitPortal(run, dungeon);
             }
-
-            if (run.participants.isEmpty()) empty.add(run.ownerId);
         }
-        for (UUID ownerId : empty) {
-            RunState run = RUNS_BY_OWNER.get(ownerId);
-            if (run != null) finishAndCleanup(run);
-        }
+        markStateDirty();
+        ServerLevel overworld = event.getServer().overworld();
+        maybeAutosave(event.getServer(), dungeonLevel != null ? dungeonLevel.getGameTime() : (overworld != null ? overworld.getGameTime() : 0L));
     }
 
     @SubscribeEvent
@@ -372,15 +447,17 @@ public final class DungeonRunManager {
     @SubscribeEvent
     public static void onPlayerDeath(LivingDeathEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            ensureLoaded(player.server);
             UUID ownerId = PLAYER_TO_OWNER.remove(player.getUUID());
             if (ownerId == null) return;
             RunState run = RUNS_BY_OWNER.get(ownerId);
             if (run == null) return;
             PlayerSnapshot snapshot = run.snapshots.get(player.getUUID());
             if (snapshot != null) {
-                PENDING_DEATH_RESTORES.put(player.getUUID(), new PendingDeathRestore(snapshot));
+                PENDING_SNAPSHOT_RESTORES.put(player.getUUID(), new PendingSnapshotRestore(snapshot));
             }
             run.participants.remove(player.getUUID());
+            run.snapshots.remove(player.getUUID());
             if (player.getUUID().equals(run.ownerId)) {
                 closeOverworldEntryPortals(player.server, run.ownerId);
             }
@@ -388,7 +465,10 @@ public final class DungeonRunManager {
             syncHudToPlayer(player, false, run.waveNumber, 0, 1);
             if (run.liveParticipants().isEmpty()) {
                 finishAndCleanup(run);
+            } else {
+                markStateDirty();
             }
+            forceCriticalSave(player.server);
             return;
         }
         if (!(event.getEntity() instanceof LivingEntity dead) || dead.level().isClientSide) return;
@@ -402,7 +482,7 @@ public final class DungeonRunManager {
 
     @SubscribeEvent
     public static void onLivingDrops(LivingDropsEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player && PENDING_DEATH_RESTORES.containsKey(player.getUUID())) {
+        if (event.getEntity() instanceof ServerPlayer player && PENDING_SNAPSHOT_RESTORES.containsKey(player.getUUID())) {
             event.getDrops().clear();
             return;
         }
@@ -432,26 +512,88 @@ public final class DungeonRunManager {
         if (!event.isWasDeath() || !(event.getEntity() instanceof ServerPlayer player)) {
             return;
         }
-        PendingDeathRestore pending = PENDING_DEATH_RESTORES.remove(player.getUUID());
+        ensureLoaded(player.server);
+        PendingSnapshotRestore pending = PENDING_SNAPSHOT_RESTORES.remove(player.getUUID());
         if (pending == null) {
             return;
         }
-        restoreSnapshot(player, pending.snapshot());
+        restorePlayerSnapshot(player, pending.snapshot(), true);
+    }
+
+    @SubscribeEvent
+    public static void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        ensureLoaded(player.server);
+        if (restorePendingSnapshot(player)) {
+            return;
+        }
+        UUID ownerId = PLAYER_TO_OWNER.get(player.getUUID());
+        if (ownerId == null) {
+            return;
+        }
+        RunState run = RUNS_BY_OWNER.get(ownerId);
+        if (run == null) {
+            PlayerSnapshot snapshot = findSnapshotForPlayer(player.getUUID());
+            if (snapshot != null) {
+                restorePlayerSnapshot(player, snapshot, true);
+            }
+            return;
+        }
+        run.server = player.server;
+        if (player.level().dimension() != ModDimensions.DUNGEON_LEVEL) {
+            DungeonInstanceManager.teleportToDungeonInstance(player, ownerId);
+        }
+        syncHudToPlayer(player, run.phase == RunPhase.IN_WAVE, run.waveNumber, Math.max(0, run.toSpawn + run.aliveMobs.size()), Math.max(1, run.waveTotalMobs));
+        if (player.getUUID().equals(run.ownerId) && (run.phase == RunPhase.SELECTING_TAROT || run.phase == RunPhase.SELECTING_LOOT)) {
+            openWaveMenu(player, run);
+        }
     }
 
     @SubscribeEvent
     public static void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
-        UUID ownerId = PLAYER_TO_OWNER.remove(player.getUUID());
+        ensureLoaded(player.server);
+        UUID ownerId = PLAYER_TO_OWNER.get(player.getUUID());
         if (ownerId == null) return;
         RunState run = RUNS_BY_OWNER.get(ownerId);
         if (run != null) {
-            run.participants.remove(player.getUUID());
-            if (player.getUUID().equals(run.ownerId)) {
-                closeOverworldEntryPortals(player.server, run.ownerId);
-            }
-            if (run.participants.isEmpty()) finishAndCleanup(run);
+            run.server = player.server;
         }
+        forceCriticalSave(player.server);
+    }
+
+    @SubscribeEvent
+    public static void onLevelLoad(LevelEvent.Load event) {
+        if (!(event.getLevel() instanceof ServerLevel level) || level != level.getServer().overworld()) {
+            return;
+        }
+        persistedStateLoaded = false;
+        ensureLoaded(level.getServer());
+    }
+
+    @SubscribeEvent
+    public static void onLevelSave(LevelEvent.Save event) {
+        if (!(event.getLevel() instanceof ServerLevel level) || level != level.getServer().overworld()) {
+            return;
+        }
+        if (persistedStateDirty) {
+            savePersistedState(level.getServer());
+        }
+    }
+
+    @SubscribeEvent
+    public static void onLevelUnload(LevelEvent.Unload event) {
+        if (!(event.getLevel() instanceof ServerLevel level) || level != level.getServer().overworld()) {
+            return;
+        }
+        RUNS_BY_OWNER.clear();
+        PLAYER_TO_OWNER.clear();
+        PENDING_SNAPSHOT_RESTORES.clear();
+        persistedStateLoaded = false;
+        persistedStateDirty = false;
+        lastAutosaveTick = Long.MIN_VALUE;
     }
 
     private static void startWave(RunState run) {
@@ -523,6 +665,13 @@ public final class DungeonRunManager {
     }
 
     private static boolean ensureShopkeeper(RunState run, ServerLevel level) {
+        if (run.shopkeeperId >= 0) {
+            Entity existing = level.getEntity(run.shopkeeperId);
+            if (existing != null && existing.isAlive()) {
+                return true;
+            }
+            run.shopkeeperId = -1;
+        }
         BlockPos center = DungeonInstanceManager.instanceCenter(run.ownerId);
         ServerPlayer owner = run.online(run.ownerId);
         Player summoner = owner;
@@ -562,6 +711,7 @@ public final class DungeonRunManager {
         double y = center.getY() + 1.0D;
         mob.moveTo(x, y, z, level.random.nextFloat() * 360.0F, 0.0F);
         if (mob instanceof Mob aiMob) aiMob.finalizeSpawn(level, level.getCurrentDifficultyAt(BlockPos.containing(x, y, z)), MobSpawnType.EVENT, (SpawnGroupData) null);
+        mob.getPersistentData().putBoolean(DUNGEON_WAVE_SPAWN_KEY, true);
         mob.skipDropExperience();
         applyMobScaling(mob, run.healthMultiplier, run.damageMultiplier, run.speedMultiplier);
         if (rollElite(run, level.random)) {
@@ -743,25 +893,25 @@ public final class DungeonRunManager {
                 loadout("Assassin", "dagger", "dagger", "Shadow Leather Set", Items.LEATHER_HELMET, Items.LEATHER_CHESTPLATE, Items.LEATHER_LEGGINGS, Items.LEATHER_BOOTS,
                         List.of("Very high speed", "Low defence", "Small crit bonus", "Low health"), List.of(new ItemStack(Items.GOLDEN_APPLE, 2), new ItemStack(Items.COOKED_PORKCHOP, 16))),
                 loadout("Knight", "longsword", "crossbow", "Steel Knight Set", Items.IRON_HELMET, Items.IRON_CHESTPLATE, Items.IRON_LEGGINGS, Items.IRON_BOOTS,
-                        List.of("High defence", "Medium speed", "Medium health boost", "Small thorns"), List.of(new ItemStack(Items.COOKED_BEEF, 16), new ItemStack(Items.GOLDEN_CARROT, 8))),
+                        List.of("High defence", "Medium speed", "Medium health boost", "Small blocking"), List.of(new ItemStack(Items.COOKED_BEEF, 16), new ItemStack(Items.GOLDEN_CARROT, 8))),
                 loadout("Berserker", "axe", "machete", "Rage Plate Set", Items.IRON_HELMET, Items.IRON_CHESTPLATE, Items.IRON_LEGGINGS, Items.IRON_BOOTS,
                         List.of("Medium defence", "Medium speed", "High health boost", "Low ability power"), List.of(new ItemStack(Items.COOKED_BEEF, 24), new ItemStack(Items.GOLDEN_APPLE, 1))),
                 loadout("Vanguard", "hammer", "broadsword", "Fortress Set", Items.DIAMOND_HELMET, Items.DIAMOND_CHESTPLATE, Items.DIAMOND_LEGGINGS, Items.DIAMOND_BOOTS,
-                        List.of("Very high defence", "Very low speed", "Massive health boost", "Medium thorns"), List.of(new ItemStack(Items.RABBIT_STEW, 6), new ItemStack(Items.COOKED_BEEF, 12))),
+                        List.of("Very high defence", "Very low speed", "Massive health boost", "Medium shockwaves"), List.of(new ItemStack(Items.RABBIT_STEW, 6), new ItemStack(Items.COOKED_BEEF, 12))),
                 loadout("Samurai", "gaundao", "dagger", "Windwalker Set", Items.CHAINMAIL_HELMET, Items.CHAINMAIL_CHESTPLATE, Items.CHAINMAIL_LEGGINGS, Items.CHAINMAIL_BOOTS,
                         List.of("High speed", "Medium defence", "Small ability power", "Medium health"), List.of(new ItemStack(ModItems.ARCANE_APPLE.get(), 2), new ItemStack(Items.COOKED_SALMON, 16), new ItemStack(Items.GOLDEN_CARROT, 12))),
                 loadout("Reaper", "glaive", "dagger", "Soulbound Set", Items.CHAINMAIL_HELMET, Items.IRON_CHESTPLATE, Items.CHAINMAIL_LEGGINGS, Items.IRON_BOOTS,
-                        List.of("Medium defence", "Medium speed", "High thorns", "Medium ability power"), List.of(new ItemStack(ModItems.ARCANE_APPLE.get(), 3), new ItemStack(Items.BEETROOT_SOUP, 8))),
+                        List.of("Medium defence", "Medium speed", "High soul drain", "Medium ability power"), List.of(new ItemStack(ModItems.ARCANE_APPLE.get(), 3), new ItemStack(Items.BEETROOT_SOUP, 8))),
                 loadout("Ranger", "bow", "machete", "Hunter Set", Items.LEATHER_HELMET, Items.LEATHER_CHESTPLATE, Items.LEATHER_LEGGINGS, Items.LEATHER_BOOTS,
                         List.of("High speed", "Low-medium defence", "Small ability power", "Low health boost"), List.of(new ItemStack(ModItems.ARCANE_APPLE.get(), 1), new ItemStack(Items.COOKED_CHICKEN, 16), new ItemStack(Items.SWEET_BERRIES, 32))),
                 loadout("Marksman", "crossbow", "longsword", "Sharpshooter Set", Items.CHAINMAIL_HELMET, Items.CHAINMAIL_CHESTPLATE, Items.CHAINMAIL_LEGGINGS, Items.CHAINMAIL_BOOTS,
                         List.of("Medium defence", "Medium speed", "Medium ability power", "Small health boost"), List.of(new ItemStack(ModItems.ARCANE_APPLE.get(), 2), new ItemStack(Items.GOLDEN_CARROT, 16), new ItemStack(Items.PUMPKIN_PIE, 8))),
                 loadout("Gladiator", "broadsword", "dagger", "Arena Set", Items.IRON_HELMET, Items.IRON_CHESTPLATE, Items.IRON_LEGGINGS, Items.IRON_BOOTS,
-                        List.of("Medium-high defence", "Medium speed", "Medium thorns", "Medium health boost"), List.of(new ItemStack(Items.COOKED_BEEF, 20), new ItemStack(Items.GOLDEN_APPLE, 1))),
+                        List.of("Medium-high defence", "Medium speed", "Medium blocking", "Medium health boost"), List.of(new ItemStack(Items.COOKED_BEEF, 20), new ItemStack(Items.GOLDEN_APPLE, 1))),
                 loadout("Spellblade", "longsword", "glaive", "Arcane Set", Items.GOLDEN_HELMET, Items.CHAINMAIL_CHESTPLATE, Items.GOLDEN_LEGGINGS, Items.CHAINMAIL_BOOTS,
                         List.of("Medium defence", "Medium speed", "High ability power", "Small health boost"), List.of(new ItemStack(ModItems.ARCANE_APPLE.get(), 4), new ItemStack(Items.GOLDEN_CARROT, 16), new ItemStack(Items.HONEY_BOTTLE, 6))),
                 loadout("Warlord", "hammer", "crossbow", "Tyrant Set", Items.DIAMOND_HELMET, Items.DIAMOND_CHESTPLATE, Items.DIAMOND_LEGGINGS, Items.DIAMOND_BOOTS,
-                        List.of("Very high defence", "High thorns", "High health boost", "Very low speed"), List.of(new ItemStack(Items.COOKED_MUTTON, 24), new ItemStack(Items.GOLDEN_APPLE, 3))),
+                        List.of("Very high defence", "Heavy shockwaves", "High health boost", "Very low speed"), List.of(new ItemStack(Items.COOKED_MUTTON, 24), new ItemStack(Items.GOLDEN_APPLE, 3))),
                 loadout("Nomad", "machete", "bow", "Traveler Set", Items.LEATHER_HELMET, Items.CHAINMAIL_CHESTPLATE, Items.LEATHER_LEGGINGS, Items.LEATHER_BOOTS,
                         List.of("Very high speed", "Low defence", "Small health boost", "Low ability power"), List.of(new ItemStack(Items.BREAD, 24), new ItemStack(Items.COOKED_COD, 12)))
         );
@@ -1314,6 +1464,16 @@ public final class DungeonRunManager {
     private static void finishAndCleanup(RunState run) {
         syncHud(run, false);
         closeOverworldEntryPortals(run.server, run.ownerId);
+        for (Map.Entry<UUID, PlayerSnapshot> entry : run.snapshots.entrySet()) {
+            UUID playerId = entry.getKey();
+            PLAYER_TO_OWNER.remove(playerId);
+            ServerPlayer player = run.online(playerId);
+            if (player != null) {
+                restorePlayerSnapshot(player, entry.getValue(), true);
+            } else {
+                PENDING_SNAPSHOT_RESTORES.put(playerId, new PendingSnapshotRestore(entry.getValue()));
+            }
+        }
         ServerLevel dungeon = getDungeonLevel(run);
         if (run.shopkeeperId >= 0) {
             if (dungeon != null) {
@@ -1329,6 +1489,7 @@ public final class DungeonRunManager {
         }
         DungeonInstanceManager.cleanupInstance(run.ownerId, dungeon);
         RUNS_BY_OWNER.remove(run.ownerId);
+        markStateDirty();
     }
 
     private static void closeOverworldEntryPortals(MinecraftServer server, UUID ownerId) {
@@ -1419,10 +1580,320 @@ public final class DungeonRunManager {
         player.containerMenu.broadcastChanges();
     }
 
+    private static void restorePlayerSnapshot(ServerPlayer player, PlayerSnapshot snapshot, boolean returnToSavedLocation) {
+        restoreSnapshot(player, snapshot);
+        syncHudToPlayer(player, false, 0, 0, 1);
+        if (returnToSavedLocation) {
+            DungeonInstanceManager.teleportToSavedLocation(player, snapshot.dimension, snapshot.returnPos, snapshot.yaw, snapshot.pitch);
+        }
+    }
+
+    private static boolean restorePendingSnapshot(ServerPlayer player) {
+        PendingSnapshotRestore pending = PENDING_SNAPSHOT_RESTORES.remove(player.getUUID());
+        if (pending == null) {
+            return false;
+        }
+        restorePlayerSnapshot(player, pending.snapshot(), true);
+        markStateDirty();
+        return true;
+    }
+
+    private static PlayerSnapshot findSnapshotForPlayer(UUID playerId) {
+        for (RunState run : RUNS_BY_OWNER.values()) {
+            PlayerSnapshot snapshot = run.snapshots.get(playerId);
+            if (snapshot != null) {
+                return snapshot;
+            }
+        }
+        return null;
+    }
+
+    private static void maybeAutosave(MinecraftServer server, long gameTime) {
+        if (!persistedStateDirty || gameTime - lastAutosaveTick < AUTOSAVE_INTERVAL_TICKS) {
+            return;
+        }
+        savePersistedState(server);
+        server.saveEverything(true, false, true);
+        lastAutosaveTick = gameTime;
+    }
+
+    private static void forceCriticalSave(MinecraftServer server) {
+        if (server == null) {
+            return;
+        }
+        savePersistedState(server);
+        server.saveEverything(true, false, true);
+        ServerLevel overworld = server.overworld();
+        lastAutosaveTick = overworld != null ? overworld.getGameTime() : lastAutosaveTick;
+    }
+
+    private static CompoundTag buildPersistedState(ServerLevel dataLevel) {
+        CompoundTag root = new CompoundTag();
+        ListTag runs = new ListTag();
+        for (RunState run : RUNS_BY_OWNER.values()) {
+            runs.add(saveRun(run, dataLevel.registryAccess()));
+        }
+        root.put(RUNS_KEY, runs);
+        ListTag pendingRestores = new ListTag();
+        for (Map.Entry<UUID, PendingSnapshotRestore> entry : PENDING_SNAPSHOT_RESTORES.entrySet()) {
+            CompoundTag pending = new CompoundTag();
+            pending.putUUID("player", entry.getKey());
+            pending.put("snapshot", saveSnapshot(entry.getValue().snapshot(), dataLevel.registryAccess()));
+            pendingRestores.add(pending);
+        }
+        root.put(PENDING_RESTORES_KEY, pendingRestores);
+        return root;
+    }
+
+    private static void loadPersistedState(CompoundTag root, MinecraftServer server, HolderLookup.Provider registries) {
+        ListTag runs = root.getList(RUNS_KEY, Tag.TAG_COMPOUND);
+        for (Tag value : runs) {
+            RunState run = loadRun((CompoundTag) value, server, registries);
+            if (run == null) {
+                continue;
+            }
+            RUNS_BY_OWNER.put(run.ownerId, run);
+            for (UUID participantId : run.participants) {
+                PLAYER_TO_OWNER.put(participantId, run.ownerId);
+            }
+        }
+        ListTag pendingRestores = root.getList(PENDING_RESTORES_KEY, Tag.TAG_COMPOUND);
+        for (Tag value : pendingRestores) {
+            CompoundTag pending = (CompoundTag) value;
+            if (!pending.hasUUID("player") || !pending.contains("snapshot", Tag.TAG_COMPOUND)) {
+                continue;
+            }
+            PlayerSnapshot snapshot = loadSnapshot(pending.getCompound("snapshot"), registries);
+            if (snapshot != null) {
+                PENDING_SNAPSHOT_RESTORES.put(pending.getUUID("player"), new PendingSnapshotRestore(snapshot));
+            }
+        }
+    }
+
+    private static CompoundTag saveRun(RunState run, HolderLookup.Provider registries) {
+        CompoundTag tag = new CompoundTag();
+        tag.putUUID("owner", run.ownerId);
+        tag.putString("phase", run.phase.name());
+        tag.putInt("wave_number", run.waveNumber);
+        tag.putInt("to_spawn", run.toSpawn);
+        tag.putInt("wave_total_mobs", run.waveTotalMobs);
+        tag.putInt("spawn_cooldown", run.spawnCooldown);
+        tag.putInt("rerolls_used", run.rerollsUsed);
+        tag.putBoolean("selecting_loadout", run.selectingLoadout);
+        tag.putDouble("enemy_count_multiplier", run.enemyCountMultiplier);
+        tag.putDouble("health_multiplier", run.healthMultiplier);
+        tag.putDouble("damage_multiplier", run.damageMultiplier);
+        tag.putDouble("speed_multiplier", run.speedMultiplier);
+        tag.putDouble("mob_leech_percent", run.mobLeechPercent);
+        tag.putDouble("elite_chance_bonus", run.eliteChanceBonus);
+        tag.putInt("total_difficulty_selected", run.totalDifficultySelected);
+        tag.putDouble("quantity_bonus_modifier", run.quantityBonusModifier);
+        tag.putDouble("rarity_bonus_modifier", run.rarityBonusModifier);
+        tag.putDouble("coin_bonus_modifier", run.coinBonusModifier);
+        tag.putDouble("level_multiplier", run.levelMultiplier);
+        tag.putInt("extra_reward_rolls", run.extraRewardRolls);
+        tag.putInt("horde_weight_bonus", run.hordeWeightBonus);
+        tag.putInt("archer_weight_bonus", run.archerWeightBonus);
+        tag.putInt("assassin_weight_bonus", run.assassinWeightBonus);
+        tag.putInt("tank_weight_bonus", run.tankWeightBonus);
+        tag.putInt("elite_weight_bonus", run.eliteWeightBonus);
+        tag.putLong("run_start_game_time", run.runStartGameTime);
+        tag.putInt("mobs_killed", run.mobsKilled);
+        tag.putInt("coins_earned", run.coinsEarned);
+        tag.putInt("experience_earned", run.experienceEarned);
+        tag.putFloat("damage_dealt", run.damageDealt);
+        tag.putFloat("damage_received", run.damageReceived);
+        tag.put("participants", saveUuidList(run.participants));
+        tag.put("alive_mobs", saveUuidList(run.aliveMobs));
+        ListTag snapshots = new ListTag();
+        for (Map.Entry<UUID, PlayerSnapshot> entry : run.snapshots.entrySet()) {
+            CompoundTag snapshot = new CompoundTag();
+            snapshot.putUUID("player", entry.getKey());
+            snapshot.put("data", saveSnapshot(entry.getValue(), registries));
+            snapshots.add(snapshot);
+        }
+        tag.put("snapshots", snapshots);
+        tag.put("level_source_points", saveIntegerMap(run.levelSourcePoints));
+        tag.put("awarded_exit_xp", saveUuidList(run.awardedExitXp));
+        return tag;
+    }
+
+    private static RunState loadRun(CompoundTag tag, MinecraftServer server, HolderLookup.Provider registries) {
+        if (!tag.hasUUID("owner")) {
+            return null;
+        }
+        UUID ownerId = tag.getUUID("owner");
+        RunState run = new RunState(ownerId);
+        run.server = server;
+        run.participants.clear();
+        run.participants.addAll(loadUuidSet(tag.getList("participants", Tag.TAG_COMPOUND)));
+        if (run.participants.isEmpty()) {
+            run.participants.add(ownerId);
+        }
+        run.snapshots.clear();
+        ListTag snapshots = tag.getList("snapshots", Tag.TAG_COMPOUND);
+        for (Tag value : snapshots) {
+            CompoundTag snapshot = (CompoundTag) value;
+            if (!snapshot.hasUUID("player") || !snapshot.contains("data", Tag.TAG_COMPOUND)) {
+                continue;
+            }
+            PlayerSnapshot loadedSnapshot = loadSnapshot(snapshot.getCompound("data"), registries);
+            if (loadedSnapshot != null) {
+                run.snapshots.put(snapshot.getUUID("player"), loadedSnapshot);
+            }
+        }
+        run.phase = parseRunPhase(tag.getString("phase"));
+        run.waveNumber = tag.getInt("wave_number");
+        run.aliveMobs = loadUuidSet(tag.getList("alive_mobs", Tag.TAG_COMPOUND));
+        run.toSpawn = tag.getInt("to_spawn");
+        run.waveTotalMobs = tag.getInt("wave_total_mobs");
+        run.spawnCooldown = tag.getInt("spawn_cooldown");
+        run.exitPortalId = -1;
+        run.shopkeeperId = -1;
+        run.currentWavePools = new HashMap<>();
+        run.tarotOptions = List.of();
+        run.lootOptions = List.of();
+        run.loadoutOptions = List.of();
+        run.selectingLoadout = tag.getBoolean("selecting_loadout");
+        run.rerollsUsed = tag.getInt("rerolls_used");
+        run.enemyCountMultiplier = tag.contains("enemy_count_multiplier") ? tag.getDouble("enemy_count_multiplier") : 1.0D;
+        run.healthMultiplier = tag.contains("health_multiplier") ? tag.getDouble("health_multiplier") : 1.0D;
+        run.damageMultiplier = tag.contains("damage_multiplier") ? tag.getDouble("damage_multiplier") : 1.0D;
+        run.speedMultiplier = tag.contains("speed_multiplier") ? tag.getDouble("speed_multiplier") : 1.0D;
+        run.mobLeechPercent = tag.getDouble("mob_leech_percent");
+        run.eliteChanceBonus = tag.getDouble("elite_chance_bonus");
+        run.totalDifficultySelected = tag.getInt("total_difficulty_selected");
+        run.quantityBonusModifier = tag.getDouble("quantity_bonus_modifier");
+        run.rarityBonusModifier = tag.getDouble("rarity_bonus_modifier");
+        run.coinBonusModifier = tag.getDouble("coin_bonus_modifier");
+        run.levelMultiplier = tag.contains("level_multiplier") ? tag.getDouble("level_multiplier") : 1.0D;
+        run.extraRewardRolls = tag.getInt("extra_reward_rolls");
+        run.hordeWeightBonus = tag.getInt("horde_weight_bonus");
+        run.archerWeightBonus = tag.getInt("archer_weight_bonus");
+        run.assassinWeightBonus = tag.getInt("assassin_weight_bonus");
+        run.tankWeightBonus = tag.getInt("tank_weight_bonus");
+        run.eliteWeightBonus = tag.getInt("elite_weight_bonus");
+        run.runStartGameTime = tag.contains("run_start_game_time") ? tag.getLong("run_start_game_time") : -1L;
+        run.levelSourcePoints.clear();
+        run.levelSourcePoints.putAll(loadIntegerMap(tag.getList("level_source_points", Tag.TAG_COMPOUND)));
+        run.awardedExitXp.clear();
+        run.awardedExitXp.addAll(loadUuidSet(tag.getList("awarded_exit_xp", Tag.TAG_COMPOUND)));
+        run.mobsKilled = tag.getInt("mobs_killed");
+        run.coinsEarned = tag.getInt("coins_earned");
+        run.experienceEarned = tag.getInt("experience_earned");
+        run.damageDealt = tag.getFloat("damage_dealt");
+        run.damageReceived = tag.getFloat("damage_received");
+        return run;
+    }
+
+    private static CompoundTag saveSnapshot(PlayerSnapshot snapshot, HolderLookup.Provider registries) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString("dimension", snapshot.dimension.location().toString());
+        tag.putInt("return_x", snapshot.returnPos.getX());
+        tag.putInt("return_y", snapshot.returnPos.getY());
+        tag.putInt("return_z", snapshot.returnPos.getZ());
+        tag.putFloat("yaw", snapshot.yaw);
+        tag.putFloat("pitch", snapshot.pitch);
+        tag.putInt("selected_slot", snapshot.selectedSlot);
+        tag.put("items", saveItemStacks(snapshot.items, registries));
+        tag.put("armor", saveItemStacks(snapshot.armor, registries));
+        tag.put("offhand", saveItemStacks(snapshot.offhand, registries));
+        return tag;
+    }
+
+    private static PlayerSnapshot loadSnapshot(CompoundTag tag, HolderLookup.Provider registries) {
+        if (!tag.contains("dimension", Tag.TAG_STRING)) {
+            return null;
+        }
+        ResourceLocation dimensionId = ResourceLocation.tryParse(tag.getString("dimension"));
+        if (dimensionId == null) {
+            return null;
+        }
+        return new PlayerSnapshot(
+                ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION, dimensionId),
+                new BlockPos(tag.getInt("return_x"), tag.getInt("return_y"), tag.getInt("return_z")),
+                tag.getFloat("yaw"),
+                tag.getFloat("pitch"),
+                loadItemStacks(tag.getList("items", Tag.TAG_COMPOUND), registries, 36),
+                loadItemStacks(tag.getList("armor", Tag.TAG_COMPOUND), registries, 4),
+                loadItemStacks(tag.getList("offhand", Tag.TAG_COMPOUND), registries, 1),
+                tag.getInt("selected_slot"));
+    }
+
+    private static ListTag saveUuidList(Iterable<UUID> uuids) {
+        ListTag list = new ListTag();
+        for (UUID uuid : uuids) {
+            CompoundTag entry = new CompoundTag();
+            entry.putUUID("id", uuid);
+            list.add(entry);
+        }
+        return list;
+    }
+
+    private static Set<UUID> loadUuidSet(ListTag list) {
+        Set<UUID> uuids = new HashSet<>();
+        for (Tag value : list) {
+            CompoundTag entry = (CompoundTag) value;
+            if (entry.hasUUID("id")) {
+                uuids.add(entry.getUUID("id"));
+            }
+        }
+        return uuids;
+    }
+
+    private static ListTag saveIntegerMap(Map<UUID, Integer> values) {
+        ListTag list = new ListTag();
+        for (Map.Entry<UUID, Integer> entry : values.entrySet()) {
+            CompoundTag tag = new CompoundTag();
+            tag.putUUID("player", entry.getKey());
+            tag.putInt("value", entry.getValue());
+            list.add(tag);
+        }
+        return list;
+    }
+
+    private static Map<UUID, Integer> loadIntegerMap(ListTag list) {
+        Map<UUID, Integer> values = new HashMap<>();
+        for (Tag value : list) {
+            CompoundTag entry = (CompoundTag) value;
+            if (entry.hasUUID("player")) {
+                values.put(entry.getUUID("player"), entry.getInt("value"));
+            }
+        }
+        return values;
+    }
+
+    private static ListTag saveItemStacks(List<ItemStack> stacks, HolderLookup.Provider registries) {
+        ListTag list = new ListTag();
+        for (ItemStack stack : stacks) {
+            list.add(stack.saveOptional(registries));
+        }
+        return list;
+    }
+
+    private static List<ItemStack> loadItemStacks(ListTag list, HolderLookup.Provider registries, int expectedSize) {
+        ArrayList<ItemStack> stacks = new ArrayList<>(expectedSize);
+        for (int i = 0; i < list.size(); i++) {
+            stacks.add(ItemStack.parseOptional(registries, list.getCompound(i)));
+        }
+        while (stacks.size() < expectedSize) {
+            stacks.add(ItemStack.EMPTY);
+        }
+        return List.copyOf(stacks);
+    }
+
+    private static RunPhase parseRunPhase(String name) {
+        try {
+            return RunPhase.valueOf(name);
+        } catch (IllegalArgumentException ignored) {
+            return RunPhase.SELECTING_TAROT;
+        }
+    }
+
     private static int cashoutRemainingCoinsOnDungeonExit(ServerPlayer player) {
         int coins = MythicCoinWallet.get(player);
         MythicCoinWallet.set(player, 0);
-        return 0;
+        return coins;
     }
 
     private static void sendCompletionScreen(ServerPlayer player, RunState run, List<ItemStack> rewards, int levelPoints, int cashedOutCoins) {
@@ -1562,7 +2033,7 @@ public final class DungeonRunManager {
         }
     }
 
-    private record PendingDeathRestore(PlayerSnapshot snapshot) {
+    private record PendingSnapshotRestore(PlayerSnapshot snapshot) {
     }
 
     private static final class TarotOption {

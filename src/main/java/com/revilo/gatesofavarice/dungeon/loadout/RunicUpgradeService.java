@@ -1,11 +1,8 @@
 package com.revilo.gatesofavarice.dungeon.loadout;
 
 import com.revilo.gatesofavarice.GatewayExpansion;
-import com.revilo.gatesofavarice.config.GatewayExpansionConfig;
-import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.EffectSpec;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.LoadoutDefinition;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.LoadoutInstance;
-import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.StatRollRange;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCard;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCardType;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCategory;
@@ -15,7 +12,6 @@ import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.Holder;
@@ -27,6 +23,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.revilodev.runic.item.custom.RuneItem;
@@ -35,14 +32,43 @@ import net.revilodev.runic.stat.RuneStatType;
 import net.revilodev.runic.stat.RuneStats;
 
 public final class RunicUpgradeService {
-    private static final List<String> WEAPON_PRIORITY_STATS = List.of(
-            "attack_damage", "attack_speed", "attack_range", "sweeping_range", "stun_chance",
-            "leeching_chance", "bleeding_chance", "shocking_chance", "poison_chance", "bonus_chance",
-            "draw_speed", "movement_speed", "power"
+    private static final int CARD_COUNT = 5;
+    private static final List<CardSpec> WEAPON_EFFECT_CARDS = List.of(
+            statCard("poison_chance", "Effect Card", "Toxic", 0.01F, 0.05F),
+            statCard("flame_chance", "Effect Card", "Fire Aspect", 0.01F, 0.05F),
+            statCard("withering_chance", "Effect Card", "Withering", 0.01F, 0.05F),
+            statCard("bleeding_chance", "Effect Card", "Bleeding", 0.01F, 0.06F),
+            statCard("stun_chance", "Effect Card", "Stunning", 0.01F, 0.05F),
+            statCard("shocking_chance", "Effect Card", "Shocking", 0.01F, 0.05F),
+            statCard("leeching_chance", "Effect Card", "Leeching", 0.01F, 0.05F),
+            statCard("freezing_chance", "Effect Card", "Freezing", 0.01F, 0.05F),
+            statCard("fangs", "Effect Card", "Fangs", 1.0F, 4.0F)
     );
-    private static final List<String> ARMOR_PRIORITY_STATS = List.of(
-            "resistance", "health", "toughness", "knockback_resistance", "projectile_resistance",
-            "fire_resistance", "blast_resistance", "movement_speed", "jump_height", "aegis", "stone", "power"
+    private static final List<CardSpec> WEAPON_DAMAGE_CARDS = List.of(
+            statCard("attack_damage", "Damage Card", "Attack Damage", 1.0F, 4.0F),
+            statCard("undead_damage", "Damage Card", "Undead Damage", 1.0F, 4.0F)
+    );
+    private static final List<CardSpec> WEAPON_STAT_CARDS = List.of(
+            statCard("attack_range", "Stat Card", "Attack Range", 0.20F, 0.80F),
+            statCard("attack_speed", "Stat Card", "Attack Speed", 0.01F, 0.06F),
+            statCard("sweeping_range", "Stat Card", "Sweeping Range", 0.10F, 0.60F)
+    );
+    private static final List<CardSpec> ARMOR_EFFECT_CARDS = List.of(
+            statCard("health", "Effect Card", "Health Boost", 1.0F, 5.0F),
+            statCard("toughness", "Effect Card", "Toughness", 1.0F, 4.0F),
+            bootsOnlyStatCard("jump_height", "Effect Card", "Leaping", 0.03F, 0.12F),
+            statCard("ability_power", "Effect Card", "Ability Power", 0.50F, 2.50F),
+            statCard("movement_speed", "Effect Card", "Movement Speed", 0.01F, 0.06F)
+    );
+    private static final List<CardSpec> ARMOR_STAT_CARDS = List.of(
+            statCard("resistance", "Stat Card", "Resistance", 0.02F, 0.10F),
+            statCard("fire_resistance", "Stat Card", "Fire Resistance", 0.02F, 0.10F),
+            statCard("projectile_resistance", "Stat Card", "Projectile Resistance", 0.02F, 0.10F),
+            statCard("blast_resistance", "Stat Card", "Blast Resistance", 0.02F, 0.10F)
+    );
+    private static final List<CardSpec> ARMOR_OFFENCE_CARDS = List.of(
+            statCard("aegis", "Offence Card", "Aegis", 1.0F, 4.0F),
+            statCard("stone", "Offence Card", "Stone Skin", 1.0F, 4.0F)
     );
 
     private RunicUpgradeService() {}
@@ -102,40 +128,28 @@ public final class RunicUpgradeService {
     }
 
     public static List<UpgradeCard> generateUpgradeCards(ServerPlayer player, ItemStack target, LoadoutInstance loadout, LoadoutDefinition definition, UpgradeCategory category) {
-        int count = 5;
         RandomSource random = RandomSource.create(loadout.seed() ^ category.ordinal() ^ target.getItem().hashCode());
-        ArrayList<UpgradeCard> cards = new ArrayList<>(count);
-        List<StatRollRange> pool = switch (category) {
-            case PRIMARY_WEAPON -> definition.primaryRunicStatPool();
-            case SECONDARY_WEAPON -> definition.secondaryRunicStatPool();
-            case ARMOR -> definition.armorRunicStatPool();
-            case ITEM -> List.of(new StatRollRange("ability_power", 0.5F, 1.2F), new StatRollRange("draw_speed", 0.01F, 0.04F), new StatRollRange("bonus_chance", 0.01F, 0.03F));
-        };
-        if (category != UpgradeCategory.ITEM) {
-            pool = RunicLoadoutService.filterStatsForStack(target, pool);
-            if (pool.isEmpty()) {
-                pool = List.of(new StatRollRange(
-                        target.getItem() instanceof net.minecraft.world.item.ArmorItem ? "resistance" : "attack_damage",
-                        0.05F,
-                        0.25F));
-            }
-        }
         if (category == UpgradeCategory.ITEM) {
-            cards.addAll(generateItemCards(definition, category, random));
-            return List.copyOf(cards);
+            return generateItemCards(definition, category, random);
         }
 
+        ArrayList<UpgradeCard> cards = new ArrayList<>(CARD_COUNT);
         String targetLabel = target.isEmpty() ? definition.displayName() : target.getHoverName().getString();
         RuneStats current = RuneStats.get(target);
-        List<StatRollRange> prioritizedPool = prioritizePoolForCategory(pool, category);
         Set<String> usedIds = new HashSet<>();
 
-        appendPreferredStatCards(cards, prioritizedPool, current, category, targetLabel, usedIds, random, 3);
-        appendEffectCards(cards, definition, category, targetLabel, random, 1);
-        appendPreferredStatCards(cards, prioritizedPool, current, category, targetLabel, usedIds, random, count - cards.size());
+        if (category == UpgradeCategory.ARMOR) {
+            appendCardSpecs(cards, ARMOR_EFFECT_CARDS, current, category, targetLabel, target, usedIds, random, 2);
+            appendCardSpecs(cards, ARMOR_STAT_CARDS, current, category, targetLabel, target, usedIds, random, 2);
+            appendCardSpecs(cards, ARMOR_OFFENCE_CARDS, current, category, targetLabel, target, usedIds, random, 1);
+        } else {
+            appendCardSpecs(cards, WEAPON_EFFECT_CARDS, current, category, targetLabel, target, usedIds, random, 3);
+            appendCardSpecs(cards, WEAPON_DAMAGE_CARDS, current, category, targetLabel, target, usedIds, random, 1);
+            appendCardSpecs(cards, WEAPON_STAT_CARDS, current, category, targetLabel, target, usedIds, random, 1);
+        }
 
-        while (cards.size() < count) {
-            cards.add(generateFallbackCard(category, targetLabel, current, prioritizedPool, usedIds, random));
+        while (cards.size() < CARD_COUNT) {
+            cards.add(generateFallbackCard(category, targetLabel, current, usedIds, random));
         }
         return List.copyOf(cards);
     }
@@ -149,49 +163,27 @@ public final class RunicUpgradeService {
         return type.cap() * RunicLoadoutService.cursedMultiplier(stack);
     }
 
-    private static void appendPreferredStatCards(
+    private static void appendCardSpecs(
             List<UpgradeCard> cards,
-            List<StatRollRange> pool,
+            List<CardSpec> specs,
             RuneStats current,
             UpgradeCategory category,
             String targetLabel,
+            ItemStack target,
             Set<String> usedIds,
             RandomSource random,
             int maxToAdd
     ) {
         if (maxToAdd <= 0) return;
-        List<String> preferredIds = category == UpgradeCategory.ARMOR ? ARMOR_PRIORITY_STATS : WEAPON_PRIORITY_STATS;
-        for (String statId : preferredIds) {
-            if (cards.size() >= 5 || maxToAdd <= 0) {
-                return;
+        for (CardSpec spec : specs) {
+            if (cards.size() >= CARD_COUNT || maxToAdd <= 0) {
+                break;
             }
-            StatRollRange range = findRange(pool, statId);
-            if (range == null || !usedIds.add(statId)) {
+            if (!isCardSpecAllowed(spec, target) || !usedIds.add(spec.statId())) {
                 continue;
             }
-            cards.add(buildStatCard(range, current, category, targetLabel, random));
+            cards.add(buildStatCard(spec, current, category, targetLabel, random));
             maxToAdd--;
-        }
-    }
-
-    private static void appendEffectCards(List<UpgradeCard> cards, LoadoutDefinition definition, UpgradeCategory category, String targetLabel, RandomSource random, int maxToAdd) {
-        if (maxToAdd <= 0 || definition.allowedEffectPool().isEmpty()) return;
-        List<EffectSpec> pool = definition.allowedEffectPool();
-        for (int i = 0; i < maxToAdd && cards.size() < 5; i++) {
-            EffectSpec spec = pool.get(random.nextInt(pool.size()));
-            int level = spec.minLevel() + random.nextInt(Math.max(1, spec.maxLevel() - spec.minLevel() + 1));
-            cards.add(new UpgradeCard(
-                    UUID.randomUUID().toString(),
-                    UpgradeCardType.ADD_OR_UPGRADE_EFFECT,
-                    category,
-                    "Runic Effect",
-                    targetLabel,
-                    "effect:" + spec.enchantmentId(),
-                    "Lv?",
-                    "Lv" + level,
-                    2,
-                    0
-            ));
         }
     }
 
@@ -199,53 +191,51 @@ public final class RunicUpgradeService {
             UpgradeCategory category,
             String targetLabel,
             RuneStats current,
-            List<StatRollRange> pool,
             Set<String> usedIds,
             RandomSource random
     ) {
-        StatRollRange fallback = null;
-        for (StatRollRange range : pool) {
-            if (usedIds.add(range.statId())) {
-                fallback = range;
+        List<CardSpec> fallbacks = category == UpgradeCategory.ARMOR ? ARMOR_STAT_CARDS : WEAPON_DAMAGE_CARDS;
+        CardSpec fallback = null;
+        for (CardSpec spec : fallbacks) {
+            if (usedIds.add(spec.statId())) {
+                fallback = spec;
                 break;
             }
         }
         if (fallback == null) {
-            fallback = new StatRollRange(category == UpgradeCategory.ARMOR ? "resistance" : "attack_damage", 0.05F, 0.20F);
+            fallback = category == UpgradeCategory.ARMOR
+                    ? statCard("resistance", "Stat Card", "Resistance", 0.05F, 0.20F)
+                    : statCard("attack_damage", "Damage Card", "Attack Damage", 1.0F, 3.0F);
         }
         return buildStatCard(fallback, current, category, targetLabel, random);
     }
 
-    private static UpgradeCard buildStatCard(StatRollRange range, RuneStats current, UpgradeCategory category, String targetLabel, RandomSource random) {
-        RuneStatType type = RuneStatType.byId(range.statId());
+    private static UpgradeCard buildStatCard(CardSpec spec, RuneStats current, UpgradeCategory category, String targetLabel, RandomSource random) {
+        RuneStatType type = RuneStatType.byId(spec.statId());
         if (type == null) {
             type = category == UpgradeCategory.ARMOR ? RuneStatType.RESISTANCE : RuneStatType.ATTACK_DAMAGE;
-            range = new StatRollRange(type.id(), 0.05F, 0.20F);
+            spec = statCard(type.id(), category == UpgradeCategory.ARMOR ? "Stat Card" : "Damage Card", displayStat(type), 0.05F, 0.20F);
         }
-        float roll = range.min() + random.nextFloat() * Math.max(0.01F, range.max() - range.min());
+        float roll = spec.min() + random.nextFloat() * Math.max(0.01F, spec.max() - spec.min());
         boolean hasStat = current.has(type);
         UpgradeCardType cardType;
-        String title;
         String currentValue;
         String newValue;
         int tier;
 
         if (hasStat && random.nextBoolean()) {
             cardType = UpgradeCardType.INCREASE_EXISTING_STAT_FLAT;
-            title = "Raise " + displayStat(type);
             currentValue = String.format(Locale.ROOT, "%.2f", current.get(type));
             newValue = String.format(Locale.ROOT, "+%.2f", Math.max(0.01F, roll));
             tier = 1;
         } else if (hasStat) {
             float percent = 0.08F + random.nextFloat() * 0.12F;
             cardType = UpgradeCardType.INCREASE_EXISTING_STAT_PERCENT;
-            title = "Empower " + displayStat(type);
             currentValue = String.format(Locale.ROOT, "%.2f", current.get(type));
             newValue = String.format(Locale.ROOT, "+%.0f%%", percent * 100.0F);
             tier = 1;
         } else {
             cardType = UpgradeCardType.ADD_NEW_RUNE_STAT;
-            title = "Add " + displayStat(type);
             currentValue = "-";
             newValue = String.format(Locale.ROOT, "+%.2f", Math.max(0.01F, roll));
             tier = 2;
@@ -255,41 +245,14 @@ public final class RunicUpgradeService {
                 UUID.randomUUID().toString(),
                 cardType,
                 category,
-                title,
+                spec.title(),
                 targetLabel,
-                type.id(),
+                spec.label(),
                 currentValue,
                 newValue,
                 tier,
                 0
         );
-    }
-
-    private static List<StatRollRange> prioritizePoolForCategory(List<StatRollRange> pool, UpgradeCategory category) {
-        List<String> preferredIds = category == UpgradeCategory.ARMOR ? ARMOR_PRIORITY_STATS : WEAPON_PRIORITY_STATS;
-        ArrayList<StatRollRange> prioritized = new ArrayList<>(pool.size());
-        Set<String> seen = new HashSet<>();
-        for (String statId : preferredIds) {
-            StatRollRange range = findRange(pool, statId);
-            if (range != null && seen.add(range.statId())) {
-                prioritized.add(range);
-            }
-        }
-        for (StatRollRange range : pool) {
-            if (seen.add(range.statId())) {
-                prioritized.add(range);
-            }
-        }
-        return List.copyOf(prioritized);
-    }
-
-    private static StatRollRange findRange(List<StatRollRange> pool, String statId) {
-        for (StatRollRange range : pool) {
-            if (range.statId().equals(statId)) {
-                return range;
-            }
-        }
-        return null;
     }
 
     private static List<UpgradeCard> generateItemCards(LoadoutDefinition definition, UpgradeCategory category, RandomSource random) {
@@ -307,12 +270,26 @@ public final class RunicUpgradeService {
         return type.id().replace('_', ' ');
     }
 
-    private static String categoryTitle(UpgradeCategory category) {
-        return switch (category) {
-            case PRIMARY_WEAPON -> "Primary Weapon";
-            case SECONDARY_WEAPON -> "Secondary Weapon";
-            case ARMOR -> "Armor";
-            case ITEM -> "Item";
-        };
+    private static boolean isCardSpecAllowed(CardSpec spec, ItemStack stack) {
+        RuneStatType type = RuneStatType.byId(spec.statId());
+        if (type == null || !RunicLoadoutService.isStatAllowedForStack(stack, type)) {
+            return false;
+        }
+        if (!spec.bootsOnly()) {
+            return true;
+        }
+        return stack.getItem() instanceof ArmorItem armorItem
+                && armorItem.getEquipmentSlot() == net.minecraft.world.entity.EquipmentSlot.FEET;
+    }
+
+    private static CardSpec statCard(String statId, String title, String label, float min, float max) {
+        return new CardSpec(statId, title, label, min, max, false);
+    }
+
+    private static CardSpec bootsOnlyStatCard(String statId, String title, String label, float min, float max) {
+        return new CardSpec(statId, title, label, min, max, true);
+    }
+
+    private record CardSpec(String statId, String title, String label, float min, float max, boolean bootsOnly) {
     }
 }

@@ -66,6 +66,7 @@ public final class DungeonInstanceManager {
             return;
         }
         BlockPos origin = instanceOrigin(instanceOwnerId);
+        ensurePlatform(dungeonLevel, origin);
         ACTIVE_PLATFORMS.put(origin.immutable(), dungeonLevel.getGameTime() + PLATFORM_LIFETIME_TICKS);
     }
 
@@ -90,7 +91,7 @@ public final class DungeonInstanceManager {
         long gameTime = dungeonLevel.getGameTime();
         ArrayList<BlockPos> expiredPlatforms = new ArrayList<>();
         for (Map.Entry<BlockPos, Long> entry : ACTIVE_PLATFORMS.entrySet()) {
-            if (gameTime >= entry.getValue() || !hasPlayersNearInstance(dungeonLevel, entry.getKey())) {
+            if (gameTime >= entry.getValue()) {
                 closeGatewaysInInstance(dungeonLevel, entry.getKey());
                 clearPlatform(dungeonLevel, entry.getKey());
                 expiredPlatforms.add(entry.getKey());
@@ -147,17 +148,6 @@ public final class DungeonInstanceManager {
                 }
             }
         }
-    }
-
-    private static boolean hasPlayersNearInstance(ServerLevel level, BlockPos origin) {
-        AABB bounds = new AABB(
-                origin.getX() - INSTANCE_CLEANUP_RADIUS,
-                origin.getY() - 16,
-                origin.getZ() - INSTANCE_CLEANUP_RADIUS,
-                origin.getX() + INSTANCE_CLEANUP_RADIUS,
-                origin.getY() + 64,
-                origin.getZ() + INSTANCE_CLEANUP_RADIUS);
-        return !level.getEntitiesOfClass(ServerPlayer.class, bounds).isEmpty();
     }
 
     private static void closeGatewaysInInstance(ServerLevel level, BlockPos origin) {

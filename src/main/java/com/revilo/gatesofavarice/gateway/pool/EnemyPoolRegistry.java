@@ -122,6 +122,7 @@ public final class EnemyPoolRegistry {
                 EntityType.PHANTOM,
                 EntityType.BEE,
                 EntityType.BREEZE,
+                EntityType.ILLUSIONER,
                 EntityType.ZOGLIN,
                 EntityType.RAVAGER
         );
@@ -196,7 +197,7 @@ public final class EnemyPoolRegistry {
                 pools.pool(EnemyPoolRole.RANGED).add(EntityType.PILLAGER, 4, "vanilla").add(EntityType.BLAZE, 7, "vanilla").add(EntityType.WITCH, 5, "vanilla");
                 pools.pool(EnemyPoolRole.TANK).add(EntityType.ENDERMAN, 5, "vanilla");
                 pools.pool(EnemyPoolRole.FAST).add(EntityType.VEX, 8, "vanilla").add(EntityType.ENDERMITE, 4, "vanilla");
-                pools.pool(EnemyPoolRole.ELITE).add(EntityType.ENDERMAN, 8, "vanilla").add(EntityType.WITCH, 4, "vanilla").add(EntityType.EVOKER, 1, "vanilla").add(EntityType.ILLUSIONER, 1, "vanilla");
+                pools.pool(EnemyPoolRole.ELITE).add(EntityType.ENDERMAN, 8, "vanilla").add(EntityType.WITCH, 4, "vanilla").add(EntityType.EVOKER, 1, "vanilla");
                 pools.pool(EnemyPoolRole.SUPPORT).add(EntityType.WITCH, 8, "vanilla").add(EntityType.BREEZE, 3, "vanilla");
                 pools.pool(EnemyPoolRole.THEME).add(EntityType.VEX, 7, "vanilla").add(EntityType.ENDERMAN, 6, "vanilla").add(EntityType.ENDERMITE, 3, "vanilla");
                 if (level >= 20) {
@@ -211,7 +212,7 @@ public final class EnemyPoolRegistry {
                 if (level >= 50) {
                     pools.pool(EnemyPoolRole.MELEE).add(EntityType.SHULKER, 2, "vanilla");
                     pools.pool(EnemyPoolRole.TANK).add(EntityType.SHULKER, 3, "vanilla");
-                    pools.pool(EnemyPoolRole.ELITE).add(EntityType.SHULKER, 2, "vanilla").add(EntityType.ILLUSIONER, 1, "vanilla");
+                    pools.pool(EnemyPoolRole.ELITE).add(EntityType.SHULKER, 2, "vanilla");
                 }
             }
             case NETHER -> {
@@ -242,7 +243,7 @@ public final class EnemyPoolRegistry {
                 pools.pool(EnemyPoolRole.RANGED).add(EntityType.PILLAGER, 15, "vanilla");
                 pools.pool(EnemyPoolRole.TANK).add(EntityType.RAVAGER, 8, "vanilla");
                 pools.pool(EnemyPoolRole.FAST).add(EntityType.PILLAGER, 10, "vanilla").add(EntityType.VINDICATOR, 1, "vanilla");
-                pools.pool(EnemyPoolRole.ELITE).add(EntityType.VINDICATOR, 5, "vanilla").add(EntityType.ILLUSIONER, 2, "vanilla");
+                pools.pool(EnemyPoolRole.ELITE).add(EntityType.VINDICATOR, 5, "vanilla");
                 pools.pool(EnemyPoolRole.SUPPORT).add(EntityType.PILLAGER, 10, "vanilla").add(EntityType.VINDICATOR, 1, "vanilla");
                 pools.pool(EnemyPoolRole.THEME).add(EntityType.PILLAGER, 13, "vanilla").add(EntityType.VINDICATOR, 3, "vanilla");
                 if (level >= 20) {
@@ -255,7 +256,6 @@ public final class EnemyPoolRegistry {
                 }
                 if (level >= 50) {
                     pools.pool(EnemyPoolRole.TANK).add(EntityType.RAVAGER, 4, "vanilla");
-                    pools.pool(EnemyPoolRole.ELITE).add(EntityType.ILLUSIONER, 1, "vanilla");
                 }
             }
         }
@@ -402,22 +402,12 @@ public final class EnemyPoolRegistry {
         }
         if (theme == CrystalTheme.RAIDER) {
             List<EntityType<?>> assassins = ModCompat.findEntitiesByIds(RAIDER_FRIENDS_AND_FOES_IDS);
-            List<EntityType<?>> illusioners = level >= 30 ? ModCompat.findEntitiesByIds(RAIDER_FRIENDS_AND_FOES_ILLUSIONER_IDS) : List.of();
             pools.pool(EnemyPoolRole.THEME).addAll(assassins, 2, "friendsandfoes");
-            if (!illusioners.isEmpty()) {
-                pools.pool(EnemyPoolRole.THEME).addAll(illusioners, 2, "friendsandfoes");
-            }
             if (level >= 20) {
                 pools.pool(EnemyPoolRole.FAST).addAll(assassins, 2, "friendsandfoes");
-                if (!illusioners.isEmpty()) {
-                    pools.pool(EnemyPoolRole.FAST).addAll(illusioners, 2, "friendsandfoes");
-                }
             }
             if (level >= 35) {
                 pools.pool(EnemyPoolRole.ELITE).addAll(assassins, 2, "friendsandfoes");
-                if (!illusioners.isEmpty()) {
-                    pools.pool(EnemyPoolRole.ELITE).addAll(illusioners, 2, "friendsandfoes");
-                }
             }
         }
     }
