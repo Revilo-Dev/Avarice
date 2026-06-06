@@ -522,7 +522,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         if (this.nextWaveButton == null) {
             return;
         }
-        boolean show = this.activePage == Page.BUY && this.menu.canStartNextWave();
+        boolean show = this.menu.canStartNextWave();
         this.nextWaveButton.visible = show;
         this.nextWaveButton.active = show;
     }

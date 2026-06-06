@@ -315,7 +315,15 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
             this.showRunChanges = !this.showRunChanges;
             return true;
         }
+        if (keyCode == GLFW.GLFW_KEY_ESCAPE || this.minecraft != null && this.minecraft.options.keyInventory.matches(keyCode, scanCode)) {
+            return true;
+        }
         return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    @Override
+    public boolean shouldCloseOnEsc() {
+        return false;
     }
 
     private void drawScaledCentered(GuiGraphics gg, String text, int x, int y, float scale, int color) {
@@ -467,9 +475,9 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
 
     private void tickAnimations() {
         this.animationTick++;
-        float appearDelayTicks = 3.3F;
-        float appearDurationTicks = 6.6F;
-        float discardDurationTicks = 8.8F;
+        float appearDelayTicks = 4.2F;
+        float appearDurationTicks = 9.6F;
+        float discardDurationTicks = 11.8F;
 
         for (int i = 0; i < this.optionButtons.size(); i++) {
             int baseX = this.baseCardX.get(i);
@@ -479,22 +487,34 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
 
             if (this.animationState == AnimationState.APPEARING) {
                 float p = Mth.clamp((this.animationTick - i * appearDelayTicks) / (float) appearDurationTicks, 0.0F, 1.0F);
-                p = p * p * (3.0F - 2.0F * p);
-                targetY = Mth.floor(Mth.lerp(p, -CARD_H - 20, baseY));
+                p = easeOutCubic(p);
+                int centerCardX = this.leftPos + (this.imageWidth - CARD_W) / 2;
+                int centerCardY = baseY - 8;
+                targetX = Mth.floor(Mth.lerp(p, centerCardX, baseX));
+                targetY = Mth.floor(Mth.lerp(p, this.height + CARD_H + 24, centerCardY));
             } else if (this.animationState == AnimationState.DISCARDING_SELECT) {
                 float p = Mth.clamp(this.animationTick / (float) discardDurationTicks, 0.0F, 1.0F);
-                p = p * p * (3.0F - 2.0F * p);
+                float eased = easeInOutCubic(p);
                 if (i == this.selectedCard) {
                     int centerX = this.leftPos + (this.imageWidth - CARD_W) / 2;
-                    targetX = Mth.floor(Mth.lerp(p, baseX, centerX));
-                    targetY = baseY;
+                    targetX = Mth.floor(Mth.lerp(eased, baseX, centerX));
+                    targetY = Mth.floor(Mth.lerp(eased, baseY, baseY - 10));
                 } else {
-                    targetY = Mth.floor(Mth.lerp(p, baseY, this.height + CARD_H + 20));
+                    int centerCardX = this.leftPos + (this.imageWidth - CARD_W) / 2;
+                    float inward = easeInOutCubic(Math.min(p / 0.58F, 1.0F));
+                    float drop = easeInCubic(Math.max(0.0F, (p - 0.28F) / 0.72F));
+                    int centeredY = Mth.floor(Mth.lerp(inward, baseY, baseY - 8));
+                    targetX = Mth.floor(Mth.lerp(inward, baseX, centerCardX));
+                    targetY = Mth.floor(Mth.lerp(drop, centeredY, this.height + CARD_H + 24));
                 }
             } else if (this.animationState == AnimationState.DISCARDING_ALL) {
                 float p = Mth.clamp(this.animationTick / (float) discardDurationTicks, 0.0F, 1.0F);
-                p = p * p * (3.0F - 2.0F * p);
-                targetY = Mth.floor(Mth.lerp(p, baseY, this.height + CARD_H + 20));
+                int centerCardX = this.leftPos + (this.imageWidth - CARD_W) / 2;
+                float inward = easeInOutCubic(Math.min(p / 0.58F, 1.0F));
+                float drop = easeInCubic(Math.max(0.0F, (p - 0.28F) / 0.72F));
+                int centeredY = Mth.floor(Mth.lerp(inward, baseY, baseY - 8));
+                targetX = Mth.floor(Mth.lerp(inward, baseX, centerCardX));
+                targetY = Mth.floor(Mth.lerp(drop, centeredY, this.height + CARD_H + 24));
             }
 
             this.animatedCardX.set(i, targetX);
@@ -530,6 +550,20 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
                 this.settleHoldTicks = 0;
             }
         }
+    }
+
+    private static float easeOutCubic(float t) {
+        return 1.0F - (float) Math.pow(1.0F - t, 3.0F);
+    }
+
+    private static float easeInCubic(float t) {
+        return t * t * t;
+    }
+
+    private static float easeInOutCubic(float t) {
+        return t < 0.5F
+                ? 4.0F * t * t * t
+                : 1.0F - (float) Math.pow(-2.0F * t + 2.0F, 3.0F) / 2.0F;
     }
 
     private void drawCard(GuiGraphics guiGraphics, ResourceLocation texture, int x, int y, float scale) {

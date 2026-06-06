@@ -1,6 +1,7 @@
 package com.revilo.gatesofavarice.dungeon;
 
 import com.revilo.gatesofavarice.GatewayExpansion;
+import com.revilo.gatesofavarice.registry.ModItems;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.player.Inventory;
@@ -113,7 +114,8 @@ public final class DungeonBoundItems {
                 || stack.getItem() instanceof BowItem
                 || stack.getItem() instanceof CrossbowItem
                 || stack.getItem() instanceof TridentItem
-                || stack.getItem() instanceof ShieldItem;
+                || stack.getItem() instanceof ShieldItem
+                || stack.is(ModItems.HEART_FRAGMENT.get());
     }
 
     private static void markWeaponRole(ItemStack stack, String role) {

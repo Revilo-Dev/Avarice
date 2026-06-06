@@ -38,6 +38,12 @@ public final class ModAttachments {
                     .copyOnDeath()
                     .sync(ByteBufCodecs.BOOL)
                     .build());
+    public static final DeferredHolder<AttachmentType<?>, AttachmentType<Integer>> BEST_WAVE =
+            ATTACHMENTS.register("best_wave", () -> AttachmentType.builder(() -> 0)
+                    .serialize(Codec.INT)
+                    .copyOnDeath()
+                    .sync(ByteBufCodecs.VAR_INT)
+                    .build());
 
     private ModAttachments() {
     }

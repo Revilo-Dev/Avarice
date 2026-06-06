@@ -3,6 +3,7 @@ package com.revilo.gatesofavarice.registry;
 import com.revilo.gatesofavarice.GatewayExpansion;
 import com.revilo.gatesofavarice.entity.GatekeeperEntity;
 import com.revilo.gatesofavarice.entity.GatewayCrystalEntity;
+import com.revilo.gatesofavarice.entity.MythicCoinOrbEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -26,6 +27,12 @@ public final class ModEntities {
                     .clientTrackingRange(10)
                     .updateInterval(1)
                     .build("gateway_crystal"));
+    public static final DeferredHolder<EntityType<?>, EntityType<MythicCoinOrbEntity>> MYTHIC_COIN_ORB = ENTITY_TYPES.register("mythic_coin_orb",
+            () -> EntityType.Builder.<MythicCoinOrbEntity>of(MythicCoinOrbEntity::new, MobCategory.MISC)
+                    .sized(0.35F, 0.35F)
+                    .clientTrackingRange(8)
+                    .updateInterval(1)
+                    .build("mythic_coin_orb"));
 
     private ModEntities() {
     }

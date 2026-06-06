@@ -38,7 +38,8 @@ public final class LoadoutModels {
             List<StatRollRange> armorRunicStatPool,
             List<StatRollRange> primaryRunicStatPool,
             List<StatRollRange> secondaryRunicStatPool,
-            List<EffectSpec> allowedEffectPool,
+            List<EffectSpec> armorEffectPool,
+            List<EffectSpec> weaponEffectPool,
             List<FoodSupplySpec> supplies
     ) {}
 

@@ -13,7 +13,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 
 public record DungeonCompletePayload(
+        boolean survived,
         int wavesComplete,
+        int bestWave,
         long timeSpentTicks,
         int levelPointsEarned,
         int coinsEarned,
@@ -35,7 +37,9 @@ public record DungeonCompletePayload(
             StreamCodec.of(DungeonCompletePayload::write, DungeonCompletePayload::read);
 
     private static void write(RegistryFriendlyByteBuf buffer, DungeonCompletePayload payload) {
+        buffer.writeBoolean(payload.survived);
         buffer.writeVarInt(payload.wavesComplete);
+        buffer.writeVarInt(payload.bestWave);
         buffer.writeVarLong(payload.timeSpentTicks);
         buffer.writeVarInt(payload.levelPointsEarned);
         buffer.writeVarInt(payload.coinsEarned);
@@ -54,7 +58,9 @@ public record DungeonCompletePayload(
     }
 
     private static DungeonCompletePayload read(RegistryFriendlyByteBuf buffer) {
+        boolean survived = buffer.readBoolean();
         int wavesComplete = buffer.readVarInt();
+        int bestWave = buffer.readVarInt();
         long timeSpentTicks = buffer.readVarLong();
         int levelPointsEarned = buffer.readVarInt();
         int coinsEarned = buffer.readVarInt();
@@ -71,7 +77,7 @@ public record DungeonCompletePayload(
         for (int i = 0; i < rewardCount; i++) {
             rewards.add(readStack(buffer));
         }
-        return new DungeonCompletePayload(wavesComplete, timeSpentTicks, levelPointsEarned, coinsEarned, mobsKilled, damageDealt,
+        return new DungeonCompletePayload(survived, wavesComplete, bestWave, timeSpentTicks, levelPointsEarned, coinsEarned, mobsKilled, damageDealt,
                 damageReceived, experienceEarned, rarityLevel, quantityLevel, mobHealth, mobDamage, List.copyOf(rewards));
     }
 

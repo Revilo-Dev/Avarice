@@ -18,6 +18,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ArmorItem;
+import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.minecraft.world.item.component.CustomData;
@@ -29,15 +30,14 @@ import net.revilodev.runic.stat.RuneStats;
 
 public final class RunicLoadoutService {
     private static final Set<String> ARMOR_ALLOWED_STATS = Set.of(
-            "movement_speed", "durability", "resistance", "fire_resistance", "blast_resistance", "projectile_resistance",
-            "knockback_resistance", "health", "toughness", "freezing_chance", "bonus_chance", "aegis", "stone",
-            "jump_height", "power"
+            "movement_speed", "resistance", "fire_resistance", "blast_resistance", "projectile_resistance",
+            "knockback_resistance", "health", "aegis", "jump_height", "power"
     );
     private static final Set<String> WEAPON_ALLOWED_STATS = Set.of(
             "attack_speed", "attack_damage", "attack_range", "movement_speed", "sweeping_range", "durability",
             "mining_speed", "undead_damage", "nether_damage", "stun_chance", "flame_chance", "bleeding_chance",
             "shocking_chance", "poison_chance", "withering_chance", "weakening_chance", "draw_speed", "freezing_chance",
-            "leeching_chance", "bonus_chance", "fangs", "aegis", "stone", "jump_height", "power"
+            "leeching_chance", "bonus_chance", "fangs", "jump_height", "power"
     );
 
     private RunicLoadoutService() {}
@@ -63,6 +63,9 @@ public final class RunicLoadoutService {
             }
             float raw = spec.min() + random.nextFloat() * (spec.max() - spec.min());
             float value = raw * GatewayExpansionConfig.LOADOUT_STAT_ROLL_MULTIPLIER.get().floatValue();
+            if (RunicUpgradeService.isPercentLike(type)) {
+                value = Math.max(1.0F, (float) Math.ceil(value * 100.0F));
+            }
             merged = RuneStats.combine(merged, RuneStats.single(type, value));
         }
         RuneStats.set(stack, merged);
@@ -82,6 +85,9 @@ public final class RunicLoadoutService {
             }
             if (!RuneItem.isEffectEnchantment(holder)) {
                 GatewayExpansion.LOGGER.warn("Rejected non-effect enchantment in loadout preset: {}", effect.enchantmentId());
+                continue;
+            }
+            if (!isEffectAllowedForStack(stack, effect.enchantmentId())) {
                 continue;
             }
             int levelRoll = effect.minLevel() + random.nextInt(Math.max(1, effect.maxLevel() - effect.minLevel() + 1));
@@ -105,6 +111,16 @@ public final class RunicLoadoutService {
 
     public static boolean isAllowedEffect(ResourceLocation enchantmentId) {
         return RuneItem.allowedEffectIds().contains(enchantmentId);
+    }
+
+    public static boolean isEffectAllowedForStack(ItemStack stack, ResourceLocation enchantmentId) {
+        if (!isAllowedEffect(enchantmentId)) {
+            return false;
+        }
+        if (enchantmentId.equals(ResourceLocation.withDefaultNamespace("multishot"))) {
+            return stack.getItem() instanceof CrossbowItem;
+        }
+        return true;
     }
 
     public static int clampEffectLevel(Holder<Enchantment> holder, int requestedLevel) {

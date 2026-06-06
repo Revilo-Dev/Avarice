@@ -7,6 +7,7 @@ import com.revilo.gatesofavarice.item.AugmentItem;
 import com.revilo.gatesofavarice.item.CatalystItem;
 import com.revilo.gatesofavarice.item.CrystalItem;
 import com.revilo.gatesofavarice.item.GatewaySwordItem;
+import com.revilo.gatesofavarice.item.HeartFragmentItem;
 import com.revilo.gatesofavarice.item.LootMaterialItem;
 import com.revilo.gatesofavarice.item.MagnetItem;
 import com.revilo.gatesofavarice.item.MythicCoinItem;
@@ -75,14 +76,22 @@ public final class ModItems {
             () -> new LootMaterialItem(LootRarity.COMMON, new Item.Properties().stacksTo(64)));
     public static final DeferredHolder<Item, LootMaterialItem> HARDENED_FLESH = ITEMS.register("hardened_flesh",
             () -> new LootMaterialItem(LootRarity.COMMON, new Item.Properties().stacksTo(64)));
+    public static final DeferredHolder<Item, LootMaterialItem> SHATTERED_BONES = ITEMS.register("shattered_bones",
+            () -> new LootMaterialItem(LootRarity.COMMON, new Item.Properties().stacksTo(64)));
     public static final DeferredHolder<Item, LootMaterialItem> DARK_ESSENCE = ITEMS.register("dark_essence",
             () -> new LootMaterialItem(LootRarity.RARE, new Item.Properties().stacksTo(64)));
     public static final DeferredHolder<Item, LootMaterialItem> ARCANE_ESSENCE = ITEMS.register("arcane_essence",
             () -> new LootMaterialItem(LootRarity.UNCOMMON, new Item.Properties().stacksTo(64)));
+    public static final DeferredHolder<Item, HeartFragmentItem> HEART_FRAGMENT = ITEMS.register("heart_fragment",
+            () -> new HeartFragmentItem(LootRarity.UNCOMMON, new Item.Properties().stacksTo(64)));
     public static final DeferredHolder<Item, LootMaterialItem> MANASTONES = ITEMS.register("manastones",
             () -> new LootMaterialItem(LootRarity.UNCOMMON, new Item.Properties().stacksTo(64)));
     public static final DeferredHolder<Item, LootMaterialItem> MANA_GEMS = ITEMS.register("mana_gems",
             () -> new LootMaterialItem(LootRarity.UNCOMMON, new Item.Properties().stacksTo(64)));
+    public static final DeferredHolder<Item, LootMaterialItem> PLASMA = ITEMS.register("plasma",
+            () -> new LootMaterialItem(LootRarity.UNCOMMON, new Item.Properties().stacksTo(64).rarity(Rarity.UNCOMMON)));
+    public static final DeferredHolder<Item, LootMaterialItem> SAPHIRE = ITEMS.register("saphire",
+            () -> new LootMaterialItem(LootRarity.RARE, new Item.Properties().stacksTo(64).rarity(Rarity.RARE)));
     public static final DeferredHolder<Item, LootMaterialItem> MANA_STEEL_SCRAP = ITEMS.register("mana_steel_scrap",
             () -> new LootMaterialItem(LootRarity.COMMON, new Item.Properties().stacksTo(64)));
     public static final DeferredHolder<Item, LootMaterialItem> MANA_STEEL_INGOT = ITEMS.register("mana_steel_ingot",
@@ -113,6 +122,12 @@ public final class ModItems {
             () -> new LootMaterialItem(LootRarity.LEGENDARY, new Item.Properties().stacksTo(64)));
     public static final DeferredHolder<Item, LootMaterialItem> SOLAR_SHARD = ITEMS.register("solar_shard",
             () -> new LootMaterialItem(LootRarity.RARE, new Item.Properties().stacksTo(64).rarity(Rarity.RARE)));
+    public static final DeferredHolder<Item, LootMaterialItem> PETRIFIED_SOUL_SHARD = ITEMS.register("petrified_soul_shard",
+            () -> new LootMaterialItem(LootRarity.RARE, new Item.Properties().stacksTo(64).rarity(Rarity.RARE)));
+    public static final DeferredHolder<Item, LootMaterialItem> RUBY = ITEMS.register("ruby",
+            () -> new LootMaterialItem(LootRarity.RARE, new Item.Properties().stacksTo(64).rarity(Rarity.RARE)));
+    public static final DeferredHolder<Item, LootMaterialItem> OPAL = ITEMS.register("opal",
+            () -> new LootMaterialItem(LootRarity.EPIC, new Item.Properties().stacksTo(64).rarity(Rarity.EPIC)));
     public static final DeferredHolder<Item, ArcaneAppleItem> ARCANE_APPLE = ITEMS.register("arcane_apple",
             () -> new ArcaneAppleItem(
                     LootRarity.RARE,

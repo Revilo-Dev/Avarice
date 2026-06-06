@@ -147,28 +147,46 @@ public final class EnemyPoolRegistry {
     private static void addVanilla(CrystalTheme theme, int level, EnemyPoolSet pools) {
         switch (theme) {
             case UNDEAD -> {
-                pools.pool(EnemyPoolRole.MELEE).add(EntityType.ZOMBIE, 8, "vanilla").add(EntityType.HUSK, 5, "vanilla").add(EntityType.SKELETON, 4, "vanilla");
-                pools.pool(EnemyPoolRole.RANGED).add(EntityType.SKELETON, 8, "vanilla").add(EntityType.STRAY, 4, "vanilla").add(EntityType.BOGGED, 4, "vanilla").add(EntityType.DROWNED, 4, "vanilla");
-                pools.pool(EnemyPoolRole.TANK).add(EntityType.ZOMBIE, 6, "vanilla").add(EntityType.WITHER_SKELETON, 2, "vanilla");
-                pools.pool(EnemyPoolRole.FAST).add(EntityType.HUSK, 5, "vanilla").add(EntityType.SILVERFISH, 3, "vanilla").add(EntityType.ZOMBIE_VILLAGER, 3, "vanilla");
-                pools.pool(EnemyPoolRole.ELITE).add(EntityType.WITHER_SKELETON, 5, "vanilla").add(EntityType.WITCH, 4, "vanilla").add(EntityType.STRAY, 3, "vanilla");
-                pools.pool(EnemyPoolRole.SUPPORT).add(EntityType.WITCH, 8, "vanilla").add(EntityType.BOGGED, 3, "vanilla").add(EntityType.CAVE_SPIDER, 2, "vanilla");
-                pools.pool(EnemyPoolRole.THEME).add(EntityType.ZOMBIE, 7, "vanilla").add(EntityType.SKELETON, 6, "vanilla").add(EntityType.HUSK, 4, "vanilla");
-                if (level >= 20) {
-                    pools.pool(EnemyPoolRole.MELEE).add(EntityType.ZOMBIE_VILLAGER, 4, "vanilla");
-                    pools.pool(EnemyPoolRole.FAST).add(EntityType.DROWNED, 3, "vanilla");
-                    pools.pool(EnemyPoolRole.RANGED).add(EntityType.DROWNED, 4, "vanilla");
-                    pools.pool(EnemyPoolRole.THEME).add(EntityType.ZOMBIE_VILLAGER, 4, "vanilla");
-                }
-                if (level >= 35) {
-                    pools.pool(EnemyPoolRole.RANGED).add(EntityType.PHANTOM, 3, "vanilla");
-                    pools.pool(EnemyPoolRole.SUPPORT).add(EntityType.PHANTOM, 2, "vanilla");
-                    pools.pool(EnemyPoolRole.ELITE).add(EntityType.PHANTOM, 2, "vanilla");
-                }
-                if (level >= 50) {
-                    pools.pool(EnemyPoolRole.ELITE).add(EntityType.BREEZE, 2, "vanilla");
-                    pools.pool(EnemyPoolRole.TANK).add(EntityType.ZOGLIN, 2, "vanilla");
-                }
+                pools.pool(EnemyPoolRole.MELEE)
+                        .add(EntityType.ZOMBIE, 12, "vanilla")
+                        .add(EntityType.HUSK, 7, "vanilla")
+                        .add(EntityType.DROWNED, 6, "vanilla")
+                        .add(EntityType.ZOMBIE_VILLAGER, 5, "vanilla")
+                        .add(EntityType.SKELETON, 5, "vanilla");
+                pools.pool(EnemyPoolRole.RANGED)
+                        .add(EntityType.SKELETON, 12, "vanilla")
+                        .add(EntityType.STRAY, 7, "vanilla")
+                        .add(EntityType.BOGGED, 7, "vanilla")
+                        .add(EntityType.DROWNED, 5, "vanilla")
+                        .add(EntityType.WITHER_SKELETON, 3, "vanilla");
+                pools.pool(EnemyPoolRole.TANK)
+                        .add(EntityType.ZOMBIE, 10, "vanilla")
+                        .add(EntityType.ZOMBIE_VILLAGER, 7, "vanilla")
+                        .add(EntityType.HUSK, 6, "vanilla")
+                        .add(EntityType.WITHER_SKELETON, 4, "vanilla");
+                pools.pool(EnemyPoolRole.FAST)
+                        .add(EntityType.HUSK, 7, "vanilla")
+                        .add(EntityType.DROWNED, 6, "vanilla")
+                        .add(EntityType.ZOMBIE_VILLAGER, 5, "vanilla")
+                        .add(EntityType.SILVERFISH, 2, "vanilla");
+                pools.pool(EnemyPoolRole.ELITE)
+                        .add(EntityType.WITHER_SKELETON, 6, "vanilla")
+                        .add(EntityType.WITCH, 4, "vanilla")
+                        .add(EntityType.STRAY, 4, "vanilla")
+                        .add(EntityType.BOGGED, 3, "vanilla");
+                pools.pool(EnemyPoolRole.SUPPORT)
+                        .add(EntityType.WITCH, 8, "vanilla")
+                        .add(EntityType.BOGGED, 5, "vanilla")
+                        .add(EntityType.DROWNED, 4, "vanilla");
+                pools.pool(EnemyPoolRole.THEME)
+                        .add(EntityType.ZOMBIE, 12, "vanilla")
+                        .add(EntityType.SKELETON, 12, "vanilla")
+                        .add(EntityType.HUSK, 7, "vanilla")
+                        .add(EntityType.DROWNED, 7, "vanilla")
+                        .add(EntityType.ZOMBIE_VILLAGER, 6, "vanilla")
+                        .add(EntityType.STRAY, 5, "vanilla")
+                        .add(EntityType.BOGGED, 5, "vanilla")
+                        .add(EntityType.WITHER_SKELETON, 4, "vanilla");
             }
             case BEAST -> {
                 pools.pool(EnemyPoolRole.MELEE).add(EntityType.SPIDER, 8, "vanilla").add(EntityType.SLIME, 4, "vanilla");
@@ -437,15 +455,14 @@ public final class EnemyPoolRegistry {
         List<EntityType<?>> variants = ModCompat.hostileEntitiesForNamespaces(VARIANTS_IDS);
         if (theme == CrystalTheme.UNDEAD) {
             List<EntityType<?>> undeadVariants = ModCompat.findEntitiesByIds(UNDEAD_VARIANTS_IDS);
-            pools.pool(EnemyPoolRole.MELEE).addAll(ModCompat.findEntitiesByIds("variantsandventures:thicket"), 2, "variants_and_ventures");
-            pools.pool(EnemyPoolRole.RANGED).addAll(ModCompat.findEntitiesByIds("variantsandventures:gelid", "variantsandventures:verdant"), 2, "variants_and_ventures");
-            pools.pool(EnemyPoolRole.TANK).addAll(ModCompat.findEntitiesByIds("variantsandventures:murk"), 2, "variants_and_ventures");
-            pools.pool(EnemyPoolRole.SUPPORT).addAll(ModCompat.findEntitiesByIds("variantsandventures:verdant", "variantsandventures:murk"), 2, "variants_and_ventures");
-            pools.pool(EnemyPoolRole.THEME).addAll(undeadVariants, 3, "variants_and_ventures");
-            if (level >= 35) {
-                pools.pool(EnemyPoolRole.ELITE).addAll(undeadVariants, 2, "variants_and_ventures");
-                pools.pool(EnemyPoolRole.FAST).addAll(ModCompat.findEntitiesByIds("variantsandventures:gelid", "variantsandventures:thicket"), 2, "variants_and_ventures");
-            }
+            pools.pool(EnemyPoolRole.MELEE).addAll(ModCompat.findEntitiesByIds("variantsandventures:thicket"), 1, "variants_and_ventures");
+            pools.pool(EnemyPoolRole.RANGED).addAll(ModCompat.findEntitiesByIds("variantsandventures:gelid", "variantsandventures:verdant"), 1, "variants_and_ventures");
+            pools.pool(EnemyPoolRole.TANK).addAll(ModCompat.findEntitiesByIds("variantsandventures:murk"), 1, "variants_and_ventures");
+            pools.pool(EnemyPoolRole.SUPPORT).addAll(ModCompat.findEntitiesByIds("variantsandventures:verdant", "variantsandventures:murk"), 1, "variants_and_ventures");
+            pools.pool(EnemyPoolRole.THEME).addAll(undeadVariants, 1, "variants_and_ventures");
+            pools.pool(EnemyPoolRole.ELITE).addAll(undeadVariants, 1, "variants_and_ventures");
+            pools.pool(EnemyPoolRole.FAST).addAll(ModCompat.findEntitiesByIds("variantsandventures:gelid", "variantsandventures:thicket"), 1, "variants_and_ventures");
+            return;
         }
         pools.pool(EnemyPoolRole.MELEE).addAll(ModCompat.findEntitiesMatching(VARIANTS_IDS, "zombie", "spider", "piglin"), 2, "variants_and_ventures");
         pools.pool(EnemyPoolRole.RANGED).addAll(ModCompat.findEntitiesMatching(VARIANTS_IDS, "skeleton", "archer", "pillager"), 2, "variants_and_ventures");

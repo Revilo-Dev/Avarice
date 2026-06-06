@@ -1,6 +1,6 @@
 package com.revilo.gatesofavarice.item;
 
-import com.revilo.gatesofavarice.currency.MythicCoinWallet;
+import com.revilo.gatesofavarice.entity.MythicCoinOrbEntity;
 import java.util.List;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -32,12 +32,12 @@ public class MythicCoinItem extends Item {
             return InteractionResultHolder.sidedSuccess(stack, true);
         }
 
-        int value = MythicCoinStackData.getValue(stack);
+        int value = MythicCoinStackData.getValue(stack) * Math.max(1, stack.getCount());
         if (value <= 0) {
             return InteractionResultHolder.pass(stack);
         }
 
-        MythicCoinWallet.add(serverPlayer, value);
+        MythicCoinOrbEntity.spawn(serverPlayer.serverLevel(), serverPlayer.getX(), serverPlayer.getY() + 0.6D, serverPlayer.getZ(), value);
         stack.shrink(stack.getCount());
         return InteractionResultHolder.sidedSuccess(stack, false);
     }
@@ -48,11 +48,11 @@ public class MythicCoinItem extends Item {
         if (level.isClientSide || !(entity instanceof ServerPlayer player) || stack.isEmpty()) {
             return;
         }
-        int valuePerItem = MythicCoinStackData.getValue(stack);
-        if (valuePerItem <= 0) {
+        int totalValue = MythicCoinStackData.getValue(stack) * stack.getCount();
+        if (totalValue <= 0) {
             return;
         }
-        MythicCoinWallet.add(player, valuePerItem * stack.getCount());
+        MythicCoinOrbEntity.spawn(player.serverLevel(), player.getX(), player.getY() + 0.6D, player.getZ(), totalValue);
         stack.setCount(0);
     }
 }

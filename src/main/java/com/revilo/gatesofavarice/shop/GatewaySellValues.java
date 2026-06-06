@@ -33,9 +33,13 @@ public final class GatewaySellValues {
         if (item == ModItems.GRIMSTONE.get()) return 18;
         if (item == ModItems.MYSTIC_ESSENCE.get()) return 20;
         if (item == ModItems.HARDENED_FLESH.get()) return 10;
+        if (item == ModItems.SHATTERED_BONES.get()) return 12;
         if (item == ModItems.SCRAP_METAL.get()) return 16;
         if (item == ModItems.RUSTY_COIN.get()) return 12;
+        if (item == ModItems.HEART_FRAGMENT.get()) return 52;
         if (item == ModItems.MANA_GEMS.get()) return 48;
+        if (item == ModItems.PLASMA.get()) return 58;
+        if (item == ModItems.SAPHIRE.get()) return 175;
         if (item == ModItems.MANA_STEEL_SCRAP.get()) return 36;
         if (item == ModItems.MANA_STEEL_INGOT.get()) return 324;
         if (item == ModItems.MAGNETITE_SCRAP.get()) return 44;
@@ -54,6 +58,9 @@ public final class GatewaySellValues {
         if (item == ModItems.ASTRITE_UPGRADE_TEMPLATE.get()) return 968;
         if (item == ModItems.ASTRITE_MAGNET.get()) return 1860;
         if (item == ModItems.SOLAR_SHARD.get()) return 140;
+        if (item == ModItems.PETRIFIED_SOUL_SHARD.get()) return 170;
+        if (item == ModItems.RUBY.get()) return 185;
+        if (item == ModItems.OPAL.get()) return 320;
         if (item == ModItems.ARCANE_APPLE.get()) return 180;
         if (item == ModItems.ENCHANTED_ARCANE_APPLE.get()) return 420;
         if (item == ModItems.PRISMATIC_SHARD.get()) return 32;

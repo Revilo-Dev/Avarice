@@ -110,7 +110,7 @@ public final class ShopkeeperManager {
             int completionBurst = computeCompletionCoinBurst(gate, serverLevel.random);
             int awardedCoins = applyGatewayCoinAdjustments(gate, completionBurst);
             awardedCoins = Math.max(awardedCoins, minimumCompletionCoinReward(gate));
-            spawnCoins(gate, awardedCoins);
+            creditCoins(gate, awardedCoins);
         }
         spawnGatewayLoot(gate, computeCompletionLootRolls(gate, serverLevel.random));
     }
@@ -124,7 +124,7 @@ public final class ShopkeeperManager {
                 int waveBurst = computeWaveCoinBurst(gate, serverLevel.random);
                 awardedCoins = applyGatewayCoinAdjustments(gate, waveBurst);
                 awardedCoins = Math.max(awardedCoins, minimumWaveCoinReward(gate));
-                spawnCoins(gate, awardedCoins);
+                creditCoins(gate, awardedCoins);
             }
             spawnGatewayLoot(gate, computeWaveLootRolls(gate, serverLevel.random));
             sendWaveSummary(gate, awardedCoins);
@@ -412,59 +412,14 @@ public final class ShopkeeperManager {
         trader.getPersistentData().putIntArray(STOCK_KEY, stocks);
     }
 
-    private static void spawnCoins(GatewayEntity gate, int amount) {
-        RandomSource random = gate.level().random;
-        int remaining = Math.max(0, amount);
-        List<Integer> coinValues = new ArrayList<>();
-        while (remaining >= 5) {
-            int coinValue = rollCoinDropValue(remaining, random);
-            coinValues.add(coinValue);
-            remaining -= coinValue;
+    private static void creditCoins(GatewayEntity gate, int amount) {
+        if (amount <= 0) {
+            return;
         }
-
-        if (remaining > 0 && !coinValues.isEmpty()) {
-            for (int index = coinValues.size() - 1; index >= 0 && remaining > 0; index--) {
-                int current = coinValues.get(index);
-                int room = 10 - current;
-                if (room <= 0) {
-                    continue;
-                }
-                int add = Math.min(room, remaining);
-                coinValues.set(index, current + add);
-                remaining -= add;
-            }
+        ServerPlayer player = LevelUpGatewayXpRewards.findRewardPlayer(gate);
+        if (player != null) {
+            MythicCoinWallet.add(player, amount);
         }
-
-        if (remaining > 0) {
-            coinValues.add(remaining);
-        }
-
-        for (int coinValue : coinValues) {
-            ItemEntity itemEntity = new ItemEntity(gate.level(), gate.getX(), gate.getY() + 1.0D, gate.getZ(), MythicCoinStackData.createStack(coinValue));
-            itemEntity.setDeltaMovement(
-                    random.nextDouble() * 0.38D - 0.19D,
-                    0.28D + random.nextDouble() * 0.20D,
-                    random.nextDouble() * 0.38D - 0.19D);
-            itemEntity.setNoPickUpDelay();
-            gate.level().addFreshEntity(itemEntity);
-        }
-    }
-
-    private static int rollCoinDropValue(int remaining, RandomSource random) {
-        int capped = Math.min(10, remaining);
-        if (capped <= 5) {
-            return capped;
-        }
-
-        for (int attempt = 0; attempt < 8; attempt++) {
-            int candidate = 5 + random.nextInt(capped - 4);
-            int leftover = remaining - candidate;
-            if (leftover == 0 || leftover >= 5) {
-                return candidate;
-            }
-        }
-
-        return remaining - 10 >= 5 ? 10 : 5;
     }
 
     private static void spawnGatewayLoot(GatewayEntity gate, int rolls) {
@@ -523,7 +478,8 @@ public final class ShopkeeperManager {
     private static void rollVisibleOffers(GatekeeperEntity trader, RandomSource random, int playerLevel) {
         List<ShopOfferDefinition> allOffers = ShopOfferDefinition.allOffers();
         int tempCount = Math.min(ShopkeeperMenu.GRID_SLOT_COUNT, allOffers.size());
-        int[] picks = pickTempOfferIndexes(random, tempCount, playerLevel);
+        boolean dungeonShop = trader.level().dimension() == ModDimensions.DUNGEON_LEVEL;
+        int[] picks = pickTempOfferIndexes(random, tempCount, playerLevel, dungeonShop);
         List<ShopOfferDefinition> offers = buildOffers(picks);
         trader.getPersistentData().putIntArray(TEMP_TRADE_KEY, picks);
         trader.getPersistentData().putIntArray(STOCK_KEY, rollStocks(offers, random));
@@ -567,14 +523,14 @@ public final class ShopkeeperManager {
         return offers;
     }
 
-    private static int[] pickTempOfferIndexes(RandomSource random, int tempCount, int playerLevel) {
+    private static int[] pickTempOfferIndexes(RandomSource random, int tempCount, int playerLevel, boolean dungeonShop) {
         List<ShopOfferDefinition> allOffers = ShopOfferDefinition.allOffers();
         Set<String> activePaxelOfferIds = activePaxelOfferIds(allOffers, playerLevel);
         java.util.List<Integer> eligible = allOffers.stream()
                 .filter(offer -> offer.minLevel() <= playerLevel && playerLevel <= offer.maxLevel())
                 .filter(offer -> !isSuppressedMidgameMaterialOffer(offer, playerLevel))
                 .filter(offer -> !isRetiredPaxelOffer(offer, activePaxelOfferIds))
-                .filter(ShopkeeperManager::isDungeonAidOffer)
+                .filter(offer -> dungeonShop ? isDungeonAidOffer(offer) : isDungeonAidOffer(offer) || isPremiumUtilityOffer(offer))
                 .map(allOffers::indexOf)
                 .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
         if (eligible.isEmpty()) {
@@ -664,6 +620,10 @@ public final class ShopkeeperManager {
                 || preview.is(ModItems.HARDENED_FLESH.get());
     }
 
+    private static boolean isPremiumUtilityOffer(ShopOfferDefinition offer) {
+        return offer.id().startsWith("premium_");
+    }
+
     private static Set<String> activePaxelOfferIds(List<ShopOfferDefinition> allOffers, int playerLevel) {
         List<ShopOfferDefinition> unlockedPaxels = new ArrayList<>();
         for (int index = allOffers.size() - 1; index >= 0; index--) {
@@ -701,6 +661,9 @@ public final class ShopkeeperManager {
         }
         if (preview.is(ModItems.SOLAR_SHARD.get()) || preview.is(ModItems.DARK_ESSENCE.get()) || preview.is(ModItems.ASTRITE_SCRAP.get())) {
             return 2;
+        }
+        if (isPremiumUtilityOffer(offer)) {
+            return 1;
         }
         return 9;
     }

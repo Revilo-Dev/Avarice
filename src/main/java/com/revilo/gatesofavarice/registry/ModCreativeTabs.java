@@ -35,10 +35,14 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.GRIMSTONE.get());
                         output.accept(ModItems.MYSTIC_ESSENCE.get());
                         output.accept(ModItems.HARDENED_FLESH.get());
+                        output.accept(ModItems.SHATTERED_BONES.get());
                         output.accept(ModItems.DARK_ESSENCE.get());
                         output.accept(ModItems.ARCANE_ESSENCE.get());
+                        output.accept(ModItems.HEART_FRAGMENT.get());
                         output.accept(ModItems.MANASTONES.get());
                         output.accept(ModItems.MANA_GEMS.get());
+                        output.accept(ModItems.PLASMA.get());
+                        output.accept(ModItems.SAPHIRE.get());
                         output.accept(ModItems.MANA_STEEL_SCRAP.get());
                         output.accept(ModItems.MANA_STEEL_INGOT.get());
                         output.accept(ModItems.MAGNETITE_SCRAP.get());
@@ -64,6 +68,9 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.ASTRITE_PAXEL.get());
                         output.accept(ModItems.PRISMATIC_CORE.get());
                         output.accept(ModItems.SOLAR_SHARD.get());
+                        output.accept(ModItems.PETRIFIED_SOUL_SHARD.get());
+                        output.accept(ModItems.RUBY.get());
+                        output.accept(ModItems.OPAL.get());
                         output.accept(ModItems.ARCANE_APPLE.get());
                         output.accept(ModItems.ENCHANTED_ARCANE_APPLE.get());
                         output.accept(ModItems.PRISMATIC_SHARD.get());

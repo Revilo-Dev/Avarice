@@ -63,18 +63,11 @@ public record ShopOfferDefinition(
         List<ShopOfferDefinition> offers = new ArrayList<>();
 
         // id, price, minLevel, maxLevel, minStock, maxStock, minFluct, maxFluct
-        addMaterialOffer(offers, "grimstone", "grimstone", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.GRIMSTONE.get())), 0, MAX_PLAYER_LEVEL, 32, 48, 0, 0, ModItems.GRIMSTONE.get());
-        addMaterialOffer(offers, "mystic_essence", "mystic_essence", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.MYSTIC_ESSENCE.get())), 0, MAX_PLAYER_LEVEL, 32, 48, 0, 0, ModItems.MYSTIC_ESSENCE.get());
-        addShopOnlyOffer(offers, "rusty_coin", 12, 0, MAX_PLAYER_LEVEL, 8, 14, 0, 0, ModItems.RUSTY_COIN.get(), "Cheap filler currency from weak gates.");
-        addShopOnlyOffer(offers, "hardened_flesh", 14, 0, MAX_PLAYER_LEVEL, 8, 14, 0, 0, ModItems.HARDENED_FLESH.get(), "Cheap undead residue used in early crafting.");
-        addMaterialOffer(offers, "scrap_metal", "scrap_metal", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.SCRAP_METAL.get())), 0, MAX_PLAYER_LEVEL, 32, 48, 0, 0, ModItems.SCRAP_METAL.get());
-        addMaterialOffer(offers, "mana_gems", "mana_gems", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.MANA_GEMS.get())), 0, MAX_PLAYER_LEVEL, 18, 28, 0, 0, ModItems.MANA_GEMS.get());
+        addShopOnlyOffer(offers, "heart_fragment", 26, 0, MAX_PLAYER_LEVEL, 8, 16, 0, 0, ModItems.HEART_FRAGMENT.get(), "Dungeon-only healing fragment.");
         addMaterialOffer(offers, "mana_steel_scrap", "mana_steel_scrap", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.MANA_STEEL_SCRAP.get())), 5, MAX_PLAYER_LEVEL, 1, 7, 0, 0, ModItems.MANA_STEEL_SCRAP.get());
         addMaterialOffer(offers, "mana_steel_ingot", "mana_steel_ingot", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.MANA_STEEL_INGOT.get())), 5, MAX_PLAYER_LEVEL, 1, 2, 0, 0, ModItems.MANA_STEEL_INGOT.get());
         addMaterialOffer(offers, "upgrade_base", "upgrade_base", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.UPGRADE_BASE.get())), 5, MAX_PLAYER_LEVEL, 1, 3, 0, 0, ModItems.UPGRADE_BASE.get());
         addSwordTemplateOffer(offers, "mana_steel_upgrade_template", 5, MAX_PLAYER_LEVEL, ModItems.MANA_STEEL_UPGRADE_TEMPLATE.get(), ModItems.MANA_STEEL_SCRAP.get(), 8);
-        addMaterialOffer(offers, "arcane_essence", "arcane_essence", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.ARCANE_ESSENCE.get())), 0, MAX_PLAYER_LEVEL, 18, 28, 0, 0, ModItems.ARCANE_ESSENCE.get());
-        addMaterialOffer(offers, "manastones", "manastones", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.MANASTONES.get())), 0, MAX_PLAYER_LEVEL, 18, 28, 0, 0, ModItems.MANASTONES.get());
         addMaterialOffer(offers, "elixrite_scrap", "elixrite_scrap", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.ELIXRITE_SCRAP.get())), 5, MAX_PLAYER_LEVEL, 1, 7, 0, 0, ModItems.ELIXRITE_SCRAP.get());
         addMaterialOffer(offers, "elixrite_ingot", "elixrite_ingot", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.ELIXRITE_INGOT.get())), 5, MAX_PLAYER_LEVEL, 1, 2, 0, 0, ModItems.ELIXRITE_INGOT.get());
         addSwordTemplateOffer(offers, "elixrite_upgrade_template", 5, MAX_PLAYER_LEVEL, ModItems.ELIXRITE_UPGRADE_TEMPLATE.get(), ModItems.ELIXRITE_SCRAP.get(), 8);
@@ -105,8 +98,15 @@ public record ShopOfferDefinition(
         addMaterialOffer(offers, "prismatic_steel_scrap", "prismatic_steel_scrap", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.PRISMATIC_STEEL_SCRAP.get())), 81, MAX_PLAYER_LEVEL, 8, 14, 0, 0, ModItems.PRISMATIC_STEEL_SCRAP.get());
         addMaterialOffer(offers, "prismatic_steel_ingot", "prismatic_steel_ingot", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.PRISMATIC_STEEL_INGOT.get())), 81, MAX_PLAYER_LEVEL, 8, 14, 0, 0, ModItems.PRISMATIC_STEEL_INGOT.get());
         addMaterialOffer(offers, "prismatic_core", "prismatic_core", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.PRISMATIC_CORE.get())), 60, MAX_PLAYER_LEVEL, 3, 5, -5, 5, ModItems.PRISMATIC_CORE.get());
+        addShopOnlyOffer(offers, "shattered_bones", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.SHATTERED_BONES.get())), 10, MAX_PLAYER_LEVEL, 6, 12, 0, 0, ModItems.SHATTERED_BONES.get(), "Fractured remains from dungeon undead.");
+        addShopOnlyOffer(offers, "plasma", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.PLASMA.get())), 20, MAX_PLAYER_LEVEL, 4, 8, 0, 0, ModItems.PLASMA.get(), "Volatile uncommon crafting residue.");
+        addShopOnlyOffer(offers, "petrified_soul_shard", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.PETRIFIED_SOUL_SHARD.get())), 35, MAX_PLAYER_LEVEL, 2, 5, -5, 5, ModItems.PETRIFIED_SOUL_SHARD.get(), "Rare soulbound remnant.");
+        addShopOnlyOffer(offers, "ruby", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.RUBY.get())), 35, MAX_PLAYER_LEVEL, 2, 5, -5, 5, ModItems.RUBY.get(), "Rare dungeon gemstone.");
+        addShopOnlyOffer(offers, "saphire", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.SAPHIRE.get())), 35, MAX_PLAYER_LEVEL, 2, 5, -5, 5, ModItems.SAPHIRE.get(), "Rare dungeon gemstone.");
+        addShopOnlyOffer(offers, "opal", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.OPAL.get())), 50, MAX_PLAYER_LEVEL, 1, 3, -5, 5, ModItems.OPAL.get(), "Epic dungeon gemstone.");
 
         addShopOnlyOffer(offers, "iron_ingot", 90, 0, MAX_PLAYER_LEVEL, 6, 12, 0, 0, Items.IRON_INGOT, "");
+        addShopOnlyOffer(offers, "arrows", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(Items.ARROW, 32)), 0, MAX_PLAYER_LEVEL, 16, 32, 0, 0, Items.ARROW, "Reliable ammunition stock.");
         addShopOnlyOffer(offers, "golden_apple", 850, 0, MAX_PLAYER_LEVEL, 1, 3, 0, 0, Items.GOLDEN_APPLE, "");
         addShopOnlyOffer(offers, "enchanted_golden_apple", 15000, 40, MAX_PLAYER_LEVEL, 1, 1, 0, 0, Items.ENCHANTED_GOLDEN_APPLE, "");
         addPotionOffer(offers, "healing_potion", 620, 0, MAX_PLAYER_LEVEL, 1, 3, 0, 0, Potions.HEALING, "Healing potion.");
@@ -122,6 +122,12 @@ public record ShopOfferDefinition(
         addOptionalRegistryOffer(offers, "gatewayexpansion:mythril_magnet", 2100, 75, 94, 1, 2, 0, 0, "Dungeon utility magnet.");
         addOptionalRegistryOffer(offers, "gatewayexpansion:arcanium_magnet", 2600, 85, MAX_PLAYER_LEVEL, 1, 2, 0, 0, "Dungeon utility magnet.");
         addOptionalRegistryOffer(offers, "gatewayexpansion:prismatic_steel_magnet", 3200, 95, MAX_PLAYER_LEVEL, 1, 1, 0, 0, "Dungeon utility magnet.");
+        addOptionalRegistryOffer(offers, "premium_mana_steel_magnet_offer", "gatewayexpansion:mana_steel_magnet", 5200, 25, MAX_PLAYER_LEVEL, 1, 1, -5, 10, "Rare permanent utility magnet.");
+        addOptionalRegistryOffer(offers, "premium_astrite_magnet_offer", "gatewayexpansion:astrite_magnet", 6800, 45, MAX_PLAYER_LEVEL, 1, 1, -5, 10, "Rare permanent utility magnet.");
+        addOptionalRegistryOffer(offers, "premium_prismatic_steel_magnet_offer", "gatewayexpansion:prismatic_steel_magnet", 9800, 90, MAX_PLAYER_LEVEL, 1, 1, -5, 10, "Rare permanent utility magnet.");
+        addOptionalRegistryOffer(offers, "premium_lunarium_paxel_offer", "gatewayexpansion:lunarium_paxel", 5600, 45, MAX_PLAYER_LEVEL, 1, 1, -5, 10, "Rare permanent utility paxel.");
+        addOptionalRegistryOffer(offers, "premium_iridium_paxel_offer", "gatewayexpansion:iridium_paxel", 7400, 65, MAX_PLAYER_LEVEL, 1, 1, -5, 10, "Rare permanent utility paxel.");
+        addOptionalRegistryOffer(offers, "premium_prismatic_steel_paxel_offer", "gatewayexpansion:prismatic_steel_paxel", 11000, 90, MAX_PLAYER_LEVEL, 1, 1, -5, 10, "Rare permanent utility paxel.");
         addDungeonRunGearOffers(offers);
 
         appendOptionalRunicOffers(offers);
@@ -254,6 +260,15 @@ public record ShopOfferDefinition(
         }
         ItemLike item = BuiltInRegistries.ITEM.get(id);
         addShopOnlyOffer(offers, id.getPath(), fixedPrice, minLevel, maxLevel, minStock, maxStock, minFluctuation, maxFluctuation, item, description);
+    }
+
+    private static void addOptionalRegistryOffer(List<ShopOfferDefinition> offers, String offerId, String itemId, int fixedPrice, int minLevel, int maxLevel, int minStock, int maxStock, int minFluctuation, int maxFluctuation, String description) {
+        ResourceLocation id = ResourceLocation.tryParse(itemId);
+        if (id == null || !BuiltInRegistries.ITEM.containsKey(id)) {
+            return;
+        }
+        ItemLike item = BuiltInRegistries.ITEM.get(id);
+        addShopOnlyOffer(offers, offerId, fixedPrice, minLevel, maxLevel, minStock, maxStock, minFluctuation, maxFluctuation, item, description);
     }
 
     private static void addAugmentAndCatalystOffers(List<ShopOfferDefinition> offers) {

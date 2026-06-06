@@ -36,6 +36,15 @@ public final class DungeonCommands {
                 .then(Commands.literal("upgrade")
                         .then(Commands.literal("open")
                                 .executes(context -> openUpgrade(context.getSource())))));
+
+        dispatcher.register(Commands.literal("avarice")
+                .requires(source -> source.hasPermission(2))
+                .then(Commands.literal("dungeon")
+                        .then(Commands.literal("end")
+                                .executes(context -> endDungeon(context.getSource()))))
+                .then(Commands.literal("best_wave")
+                        .then(Commands.literal("reset")
+                                .executes(context -> resetBestWave(context.getSource())))));
     }
 
     private static int recover(CommandSourceStack source) {
@@ -77,6 +86,31 @@ public final class DungeonCommands {
             return 0;
         }
         source.sendSuccess(() -> Component.literal("Opened upgrade screen"), false);
+        return 1;
+    }
+
+    private static int resetBestWave(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("Player required"));
+            return 0;
+        }
+        DungeonRunManager.resetBestWave(player);
+        source.sendSuccess(() -> Component.literal("Reset best wave for " + player.getGameProfile().getName()), true);
+        return 1;
+    }
+
+    private static int endDungeon(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("Player required"));
+            return 0;
+        }
+        if (!DungeonRunManager.forceEndRun(player)) {
+            source.sendFailure(Component.literal("No active dungeon run to end"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Ended active dungeon run for " + player.getGameProfile().getName()), true);
         return 1;
     }
 }

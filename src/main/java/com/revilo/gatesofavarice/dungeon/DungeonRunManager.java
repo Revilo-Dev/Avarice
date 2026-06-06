@@ -12,6 +12,7 @@ import com.revilo.gatesofavarice.gateway.pool.EnemyPoolRegistry;
 import com.revilo.gatesofavarice.gateway.pool.EnemyPoolRole;
 import com.revilo.gatesofavarice.gateway.pool.EnemyPoolSet;
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
+import com.revilo.gatesofavarice.entity.MythicCoinOrbEntity;
 import com.revilo.gatesofavarice.item.MythicCoinStackData;
 import com.revilo.gatesofavarice.progression.ProgressionSystem;
 import com.revilo.gatesofavarice.item.data.CrystalTheme;
@@ -20,6 +21,7 @@ import com.revilo.gatesofavarice.network.DungeonCompletePayload;
 import com.revilo.gatesofavarice.network.DungeonWaveHudPayload;
 import com.revilo.gatesofavarice.registry.ModEntities;
 import com.revilo.gatesofavarice.registry.ModItems;
+import com.revilo.gatesofavarice.registry.ModAttachments;
 import com.revilo.gatesofavarice.registry.LoadoutArmorRegistry;
 import com.revilo.gatesofavarice.shop.ShopkeeperManager;
 import java.util.ArrayList;
@@ -77,6 +79,7 @@ import net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.attachment.AttachmentSync;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 public final class DungeonRunManager {
@@ -88,9 +91,9 @@ public final class DungeonRunManager {
     private static final ResourceLocation MOB_HEALTH_MODIFIER_ID = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_wave_health");
     private static final ResourceLocation MOB_DAMAGE_MODIFIER_ID = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_wave_damage");
     private static final ResourceLocation MOB_SPEED_MODIFIER_ID = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_wave_speed");
-    private static final int MAX_REROLLS = 2;
-    private static final int BASE_REROLL_COST = 100;
+    private static final int BASE_REROLL_COST = 1000;
     private static final double BASE_ELITE_CHANCE = 0.03D;
+    private static final float DUNGEON_MAGNET_DROP_CHANCE = 0.04F;
     private static final int LEVEL_POINTS_PER_LOOT_PICKUP = 1;
     private static final int AUTOSAVE_INTERVAL_TICKS = 20 * 30;
     private static final String RUNS_KEY = "runs";
@@ -104,20 +107,23 @@ public final class DungeonRunManager {
             ModItems.GRIMSTONE.get(), ModItems.MYSTIC_ESSENCE.get(), ModItems.SCRAP_METAL.get(), ModItems.MANA_GEMS.get(),
             ModItems.MANA_STEEL_SCRAP.get(), ModItems.MAGNETITE_SCRAP.get(), ModItems.ARCANE_ESSENCE.get(), ModItems.MANASTONES.get(),
             ModItems.ELIXRITE_SCRAP.get(), ModItems.ASTRITE_SCRAP.get(), ModItems.SOLAR_SHARD.get(), ModItems.DARK_ESSENCE.get(),
-            ModItems.RUSTY_COIN.get(), ModItems.HARDENED_FLESH.get()
+            ModItems.RUSTY_COIN.get(), ModItems.HARDENED_FLESH.get(), ModItems.SHATTERED_BONES.get(), ModItems.HEART_FRAGMENT.get(),
+            ModItems.PLASMA.get(), ModItems.PETRIFIED_SOUL_SHARD.get(), ModItems.RUBY.get(), ModItems.SAPHIRE.get(), ModItems.OPAL.get()
     );
     private static final List<Item> COMMON_DROP_POOL = List.of(
             ModItems.GRIMSTONE.get(), ModItems.MYSTIC_ESSENCE.get(), ModItems.SCRAP_METAL.get(), ModItems.MANA_GEMS.get(),
-            ModItems.MAGNETITE_SCRAP.get(), ModItems.ARCANE_ESSENCE.get(), ModItems.MANASTONES.get(), ModItems.RUSTY_COIN.get(), ModItems.HARDENED_FLESH.get()
+            ModItems.MAGNETITE_SCRAP.get(), ModItems.ARCANE_ESSENCE.get(), ModItems.MANASTONES.get(), ModItems.RUSTY_COIN.get(), ModItems.HARDENED_FLESH.get(),
+            ModItems.SHATTERED_BONES.get()
     );
     private static final List<Item> UNCOMMON_DROP_POOL = List.of(
-            ModItems.MANA_STEEL_SCRAP.get(), ModItems.ELIXRITE_SCRAP.get(), ModItems.ASTRITE_SCRAP.get(), ModItems.SOLAR_SHARD.get()
+            ModItems.MANA_STEEL_SCRAP.get(), ModItems.ELIXRITE_SCRAP.get(), ModItems.ASTRITE_SCRAP.get(), ModItems.SOLAR_SHARD.get(),
+            ModItems.HEART_FRAGMENT.get(), ModItems.PLASMA.get()
     );
     private static final List<Item> RARE_DROP_POOL = List.of(
-            ModItems.DARK_ESSENCE.get()
+            ModItems.DARK_ESSENCE.get(), ModItems.PETRIFIED_SOUL_SHARD.get(), ModItems.RUBY.get(), ModItems.SAPHIRE.get()
     );
     private static final List<Item> EPIC_DROP_POOL = List.of(
-            ModItems.PRISMATIC_SHARD.get()
+            ModItems.PRISMATIC_SHARD.get(), ModItems.OPAL.get()
     );
     private static final List<Component> TAROT_ENEMY_LINES = List.of(
             Component.literal("+2 Hoard Mobs"), Component.literal("+3 Hoard Mobs"), Component.literal("+4 Hoard Mobs"),
@@ -247,8 +253,9 @@ public final class DungeonRunManager {
 
         if (buttonId == DungeonWaveMenu.REROLL_BUTTON_ID) {
             if (run.selectingLoadout) return false;
-            if (run.rerollsUsed >= MAX_REROLLS) return false;
-            int cost = BASE_REROLL_COST << run.rerollsUsed;
+            int maxRerolls = maxUpgradeRerollsForLevel(upgradeRerollLevel(run));
+            if (run.rerollsUsed >= maxRerolls) return false;
+            int cost = getUpgradeRerollCostForUse(run.rerollsUsed);
             if (!MythicCoinWallet.spend(serverPlayer, cost)) return false;
             run.rerollsUsed++;
             rollLootOptions(run, serverPlayer.serverLevel().random);
@@ -304,7 +311,7 @@ public final class DungeonRunManager {
 
     public static int getUpgradeRerollsLeft(UUID ownerId) {
         RunState run = RUNS_BY_OWNER.get(ownerId);
-        return run == null ? 0 : Math.max(0, MAX_REROLLS - run.rerollsUsed);
+        return run == null ? 0 : Math.max(0, maxUpgradeRerollsForLevel(upgradeRerollLevel(run)) - run.rerollsUsed);
     }
 
     public static int getUpgradeRerollCost(UUID ownerId) {
@@ -312,24 +319,75 @@ public final class DungeonRunManager {
         if (run == null) {
             return 0;
         }
-        int rerollsLeft = Math.max(0, MAX_REROLLS - run.rerollsUsed);
-        return rerollsLeft <= 0 ? 0 : BASE_REROLL_COST << run.rerollsUsed;
+        int rerollsLeft = Math.max(0, maxUpgradeRerollsForLevel(upgradeRerollLevel(run)) - run.rerollsUsed);
+        return rerollsLeft <= 0 ? 0 : getUpgradeRerollCostForUse(run.rerollsUsed);
     }
 
     public static boolean consumeUpgradeReroll(ServerPlayer player, UUID ownerId) {
         RunState run = RUNS_BY_OWNER.get(ownerId);
-        if (run == null || run.phase != RunPhase.SELECTING_LOOT || run.selectingLoadout) {
+        if (run == null || run.selectingLoadout || run.phase == RunPhase.IN_WAVE || run.phase == RunPhase.WAITING_EXIT) {
             return false;
         }
-        if (run.rerollsUsed >= MAX_REROLLS) {
+        return spendUpgradeReroll(player, run);
+    }
+
+    public static boolean consumeUpgradeCardReroll(ServerPlayer player, UUID ownerId) {
+        RunState run = RUNS_BY_OWNER.get(ownerId);
+        if (run == null || run.selectingLoadout) {
             return false;
         }
-        int cost = BASE_REROLL_COST << run.rerollsUsed;
+        return spendUpgradeReroll(player, run);
+    }
+
+    private static boolean spendUpgradeReroll(ServerPlayer player, RunState run) {
+        int maxRerolls = maxUpgradeRerollsForLevel(upgradeRerollLevel(run));
+        if (run.rerollsUsed >= maxRerolls) {
+            return false;
+        }
+        int cost = getUpgradeRerollCostForUse(run.rerollsUsed);
         if (!MythicCoinWallet.spend(player, cost)) {
             return false;
         }
         run.rerollsUsed++;
         return true;
+    }
+
+    public static boolean forceEndRun(ServerPlayer player) {
+        UUID ownerId = PLAYER_TO_OWNER.get(player.getUUID());
+        if (ownerId == null) {
+            return false;
+        }
+        RunState run = RUNS_BY_OWNER.get(ownerId);
+        if (run == null) {
+            PLAYER_TO_OWNER.remove(player.getUUID());
+            return false;
+        }
+        for (ServerPlayer participant : run.liveParticipants()) {
+            participant.closeContainer();
+        }
+        finishAndCleanup(run);
+        forceCriticalSave(player.server);
+        return true;
+    }
+
+    public static ItemStack rollUpgradeMagnetReward(RandomSource random, int playerLevel) {
+        return pickLeveledMagnet(random, playerLevel);
+    }
+
+    private static int maxUpgradeRerollsForLevel(int playerLevel) {
+        return Math.max(1, 1 + Math.max(0, playerLevel) / 10);
+    }
+
+    private static int getUpgradeRerollCostForUse(int rerollsUsed) {
+        return BASE_REROLL_COST * Math.max(1, rerollsUsed + 1);
+    }
+
+    private static int upgradeRerollLevel(RunState run) {
+        if (run == null) {
+            return 1;
+        }
+        ServerPlayer owner = run.online(run.ownerId);
+        return owner != null ? Math.max(1, getEffectivePlayerLevel(owner)) : Math.max(1, averageParticipantLevel(run));
     }
 
     public static void rollAndBindForActiveRun(ServerPlayer player, ItemStack stack, RandomSource random) {
@@ -721,6 +779,7 @@ public final class DungeonRunManager {
         int lootRolls = computeWaveLootRolls(run, avgLevel, level.random);
         spawnWaveLootBurst(run, level, lootRolls);
         for (ServerPlayer player : run.liveParticipants()) {
+            player.removeAllEffects();
             player.setHealth(player.getMaxHealth());
         }
         ensureShopkeeper(run, level);
@@ -974,8 +1033,8 @@ public final class DungeonRunManager {
             rollArmorPiece(player, feet, definition, EquipmentSlot.FEET, random);
             RunicLoadoutService.applyLoadoutStats(player.serverLevel(), primary, definition.primaryRunicStatPool(), random);
             RunicLoadoutService.applyLoadoutStats(player.serverLevel(), secondary, definition.secondaryRunicStatPool(), random);
-            RunicLoadoutService.applyLoadoutEffects(player.serverLevel(), primary, definition.allowedEffectPool(), random);
-            RunicLoadoutService.applyLoadoutEffects(player.serverLevel(), secondary, definition.allowedEffectPool(), random);
+            RunicLoadoutService.applyLoadoutEffects(player.serverLevel(), primary, definition.weaponEffectPool(), random);
+            RunicLoadoutService.applyLoadoutEffects(player.serverLevel(), secondary, definition.weaponEffectPool(), random);
         }
         DungeonBoundItems.markPrimaryWeapon(primary);
         DungeonBoundItems.markSecondaryWeapon(secondary);
@@ -983,10 +1042,6 @@ public final class DungeonRunManager {
         player.setItemSlot(EquipmentSlot.CHEST, chest);
         player.setItemSlot(EquipmentSlot.LEGS, legs);
         player.setItemSlot(EquipmentSlot.FEET, feet);
-        player.getInventory().armor.set(3, head.copy());
-        player.getInventory().armor.set(2, chest.copy());
-        player.getInventory().armor.set(1, legs.copy());
-        player.getInventory().armor.set(0, feet.copy());
         addRoleAware(player, primary);
         addRoleAware(player, secondary);
         player.getInventory().add(utility);
@@ -1018,7 +1073,7 @@ public final class DungeonRunManager {
     private static void rollArmorPiece(ServerPlayer player, ItemStack stack, LoadoutModels.LoadoutDefinition definition, EquipmentSlot slot, RandomSource random) {
         RunicLoadoutService.tagLoadoutIdentity(stack, definition.id(), definition.armorSet().displayName(), slot.getName());
         RunicLoadoutService.applyLoadoutStats(player.serverLevel(), stack, definition.armorRunicStatPool(), random);
-        RunicLoadoutService.applyLoadoutEffects(player.serverLevel(), stack, definition.allowedEffectPool(), random);
+        RunicLoadoutService.applyLoadoutEffects(player.serverLevel(), stack, definition.armorEffectPool(), random);
         if (com.revilo.gatesofavarice.config.GatewayExpansionConfig.FORCE_BINDING_ON_LOADOUT_ARMOR.get()) {
             net.minecraft.core.Holder.Reference<net.minecraft.world.item.enchantment.Enchantment> binding =
                     player.serverLevel().registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
@@ -1376,11 +1431,22 @@ public final class DungeonRunManager {
         int rolls = Math.max(1, (int) Math.ceil(baseRolls * 0.5D));
         for (int i = 0; i < rolls; i++) {
             Item item = pickScaledDrop(run, avgLevel, level.random);
-            dead.spawnAtLocation(new ItemStack(item, rollDungeonDropCount(item, wave, level.random)));
+            ItemStack drop = new ItemStack(item, rollDungeonDropCount(item, wave, level.random));
+            if (item == ModItems.HEART_FRAGMENT.get()) {
+                DungeonBoundItems.forceMarkDungeonBound(drop);
+            }
+            dead.spawnAtLocation(drop);
         }
         int coinValue = 2 + wave * 2 + avgLevel / 8 + (int) Math.floor(run.quantityBonusModifier * 3.0D);
         for (int i = 0; i < 2 + wave / 5; i++) {
-            dead.spawnAtLocation(new ItemStack(ModItems.MYTHIC_COIN.get(), Math.max(1, coinValue / Math.max(1, 2 + wave / 5))));
+            MythicCoinOrbEntity.spawn((ServerLevel) dead.level(), dead.getX(), dead.getY() + 0.35D, dead.getZ(), Math.max(1, coinValue / Math.max(1, 2 + wave / 5)));
+        }
+        if (level.random.nextFloat() < DUNGEON_MAGNET_DROP_CHANCE) {
+            ItemStack magnet = pickLeveledMagnet(level.random, avgLevel);
+            if (!magnet.isEmpty()) {
+                DungeonBoundItems.forceMarkDungeonBound(magnet);
+                dead.spawnAtLocation(magnet);
+            }
         }
     }
 
@@ -1558,7 +1624,7 @@ public final class DungeonRunManager {
             }
             loadoutViews.add(new DungeonWaveMenu.WaveOptionView(
                     Component.literal("Random Loadout"),
-                    Component.literal("Randomly picks one of the shown loadouts"),
+                    Component.literal("Randomly picks any loadout from the full pool"),
                     100,
                     100,
                     0,
@@ -2076,22 +2142,46 @@ public final class DungeonRunManager {
         return coins;
     }
 
+    public static int getBestWave(ServerPlayer player) {
+        return Math.max(0, player.getData(ModAttachments.BEST_WAVE));
+    }
+
+    public static void setBestWave(ServerPlayer player, int wave) {
+        player.setData(ModAttachments.BEST_WAVE, Math.max(0, wave));
+        AttachmentSync.syncEntityUpdate(player, ModAttachments.BEST_WAVE.get());
+    }
+
+    public static void resetBestWave(ServerPlayer player) {
+        setBestWave(player, 0);
+    }
+
+    private static int recordBestWave(ServerPlayer player, int wave) {
+        int current = getBestWave(player);
+        if (wave > current) {
+            setBestWave(player, wave);
+            return wave;
+        }
+        return current;
+    }
+
     private static void sendCompletionScreen(ServerPlayer player, RunState run, List<ItemStack> rewards, int levelPoints, int cashedOutCoins, boolean survived) {
-        PacketDistributor.sendToPlayer(player, buildCompletionPayload(run, player.serverLevel().getGameTime(), rewards, levelPoints, cashedOutCoins, survived));
+        PacketDistributor.sendToPlayer(player, buildCompletionPayload(run, player, player.serverLevel().getGameTime(), rewards, levelPoints, cashedOutCoins, survived));
     }
 
     private static DungeonCompletePayload createDeathSummary(RunState run, ServerPlayer player) {
-        return buildCompletionPayload(run, player.serverLevel().getGameTime(), List.of(), 0, 0, false);
+        return buildCompletionPayload(run, player, player.serverLevel().getGameTime(), List.of(), 0, 0, false);
     }
 
-    private static DungeonCompletePayload buildCompletionPayload(RunState run, long now, List<ItemStack> rewards, int levelPoints, int cashedOutCoins, boolean survived) {
+    private static DungeonCompletePayload buildCompletionPayload(RunState run, ServerPlayer player, long now, List<ItemStack> rewards, int levelPoints, int cashedOutCoins, boolean survived) {
         long elapsedTicks = run.runStartGameTime < 0L ? 0L : Math.max(0L, now - run.runStartGameTime);
         if (survived) {
             run.experienceEarned += cashedOutCoins;
         }
+        int bestWave = recordBestWave(player, Math.max(0, run.waveNumber));
         return new DungeonCompletePayload(
                 survived,
                 Math.max(0, run.waveNumber),
+                bestWave,
                 elapsedTicks,
                 levelPoints,
                 cashedOutCoins,
@@ -2526,3 +2616,4 @@ public final class DungeonRunManager {
         }
     }
 }
+
