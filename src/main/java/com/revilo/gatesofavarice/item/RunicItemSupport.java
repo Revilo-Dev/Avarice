@@ -4,7 +4,6 @@ import net.minecraft.world.item.ItemStack;
 import net.revilodev.runic.registry.ModDataComponents;
 
 public final class RunicItemSupport {
-
     private RunicItemSupport() {
     }
 

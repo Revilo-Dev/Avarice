@@ -15,6 +15,9 @@ base {
     archivesName = mod_id
 }
 
+def runicJars = fileTree(dir: "runs/client/mods", include: ["runic-*.jar"]).files.sort()
+def runicJar = runicJars ? runicJars.last() : null
+
 // Mojang ships Java 21 for 1.21.1, so we target Java 21
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
@@ -93,8 +96,12 @@ dependencies {
     compileOnly "top.theillusivec4.curios:curios-neoforge:${curios_version}:api"
     localImplementation "dev.shadowsoffire:Placebo:${minecraft_version}-${placebo_version}"
     localImplementation "dev.shadowsoffire:ApothicAttributes:${minecraft_version}-${apothic_attributes_version}"
-    compileOnly files("runs/client/mods/runic-4.1.2.jar")
-    localRuntime files("runs/client/mods/runic-4.1.2.jar")
+    if (runicJar != null && runicJar.exists()) {
+        compileOnly files(runicJar)
+        localRuntime files(runicJar)
+    } else {
+        throw new GradleException("Runic jar not found in runs/client/mods. Expected a file matching runic-*.jar")
+    }
     localRuntime "mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}"
     localRuntime "top.theillusivec4.curios:curios-neoforge:${curios_version}"
     localRuntime "dev.shadowsoffire:Placebo:${minecraft_version}-${placebo_version}"
