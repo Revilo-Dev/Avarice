@@ -243,11 +243,12 @@ public final class DungeonRunManager {
             applyTarot(run, run.tarotOptions.get(buttonId));
             if (run.waveNumber == 0) {
                 rollLoadoutOptions(run, serverPlayer.serverLevel().random);
-            } else {
-                rollLootOptions(run, serverPlayer.serverLevel().random);
+                run.phase = RunPhase.SELECTING_LOOT;
+                openWaveMenu(serverPlayer, run);
+                return true;
             }
-            run.phase = RunPhase.SELECTING_LOOT;
-            openWaveMenu(serverPlayer, run);
+            startWave(run);
+            serverPlayer.closeContainer();
             return true;
         }
 

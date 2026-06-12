@@ -72,8 +72,17 @@ public final class GatewayExpansionNetwork {
                         state.getField("sessionId").set(null, payload.sessionId());
                         state.getField("loadoutName").set(null, payload.loadoutName());
                         state.getField("theme").set(null, payload.theme());
+                        state.getField("categorySelection").setBoolean(null, true);
+                        state.getField("categoryName").set(null, "");
+                        state.getField("cards").set(null, java.util.List.of());
                         Class<?> mc = Class.forName("net.minecraft.client.Minecraft");
                         Object instance = mc.getMethod("getInstance").invoke(null);
+                        Object currentScreen = mc.getField("screen").get(instance);
+                        Class<?> shopScreenClass = Class.forName("com.revilo.gatesofavarice.client.screen.ShopkeeperScreen");
+                        if (currentScreen != null && shopScreenClass.isInstance(currentScreen)) {
+                            shopScreenClass.getMethod("applyUpgradeCategoryState").invoke(currentScreen);
+                            return;
+                        }
                         Class<?> screenClass = Class.forName("com.revilo.gatesofavarice.client.screen.DungeonUpgradeCategoryScreen");
                         Object screen = screenClass.getConstructor().newInstance();
                         mc.getMethod("setScreen", Class.forName("net.minecraft.client.gui.screens.Screen")).invoke(instance, screen);
@@ -86,6 +95,7 @@ public final class GatewayExpansionNetwork {
                     try {
                         Class<?> state = Class.forName("com.revilo.gatesofavarice.client.DungeonUpgradeClientState");
                         state.getField("sessionId").set(null, payload.sessionId());
+                        state.getField("categorySelection").setBoolean(null, false);
                         state.getField("categoryName").set(null, payload.categoryName());
                         state.getField("previewStack").set(null, payload.previewStack());
                         state.getField("rerollsLeft").setInt(null, payload.rerollsLeft());
@@ -93,8 +103,13 @@ public final class GatewayExpansionNetwork {
                         state.getField("cards").set(null, payload.cards());
                         Class<?> mc = Class.forName("net.minecraft.client.Minecraft");
                         Object instance = mc.getMethod("getInstance").invoke(null);
-                        Class<?> screenClass = Class.forName("com.revilo.gatesofavarice.client.screen.DungeonUpgradeCardsScreen");
                         Object currentScreen = mc.getField("screen").get(instance);
+                        Class<?> shopScreenClass = Class.forName("com.revilo.gatesofavarice.client.screen.ShopkeeperScreen");
+                        if (currentScreen != null && shopScreenClass.isInstance(currentScreen)) {
+                            shopScreenClass.getMethod("applyUpgradeCardsState", SyncUpgradeCardsPayload.class).invoke(currentScreen, payload);
+                            return;
+                        }
+                        Class<?> screenClass = Class.forName("com.revilo.gatesofavarice.client.screen.DungeonUpgradeCardsScreen");
                         if (currentScreen != null && screenClass.isInstance(currentScreen)) {
                             screenClass.getMethod("applySyncPayload", SyncUpgradeCardsPayload.class).invoke(currentScreen, payload);
                         } else {

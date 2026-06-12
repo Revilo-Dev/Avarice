@@ -8,6 +8,7 @@ public final class DungeonUpgradeClientState {
     public static String sessionId = "";
     public static String loadoutName = "";
     public static String theme = "";
+    public static boolean categorySelection = true;
     public static String categoryName = "";
     public static ItemStack previewStack = ItemStack.EMPTY;
     public static List<UpgradeCard> cards = List.of();

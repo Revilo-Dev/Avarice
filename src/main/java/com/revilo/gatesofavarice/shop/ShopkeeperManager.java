@@ -126,7 +126,6 @@ public final class ShopkeeperManager {
                 awardedCoins = Math.max(awardedCoins, minimumWaveCoinReward(gate));
                 creditCoins(gate, awardedCoins);
             }
-            spawnGatewayLoot(gate, computeWaveLootRolls(gate, serverLevel.random));
             sendWaveSummary(gate, awardedCoins);
         }
     }
@@ -337,6 +336,11 @@ public final class ShopkeeperManager {
 
     public static int getRerollCount(GatekeeperEntity trader) {
         return Math.max(0, trader.getPersistentData().getInt(REROLL_COUNT_KEY));
+    }
+
+    public static void incrementRerollCount(GatekeeperEntity trader) {
+        int rerollCount = getRerollCount(trader);
+        trader.getPersistentData().putInt(REROLL_COUNT_KEY, Math.min(MAX_REROLLS, rerollCount + 1));
     }
 
     public static int[] getTempOfferIndexes(GatekeeperEntity trader) {

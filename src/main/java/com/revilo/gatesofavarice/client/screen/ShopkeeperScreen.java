@@ -1,18 +1,21 @@
 package com.revilo.gatesofavarice.client.screen;
 
-import com.mojang.math.Axis;
 import com.revilo.gatesofavarice.GatewayExpansion;
+import com.revilo.gatesofavarice.client.DungeonUpgradeClientState;
+import com.revilo.gatesofavarice.dungeon.DungeonBoundItems;
+import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCard;
+import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCategory;
 import com.revilo.gatesofavarice.menu.ShopkeeperMenu;
+import com.revilo.gatesofavarice.network.SyncUpgradeCardsPayload;
 import com.revilo.gatesofavarice.registry.ModItems;
 import com.revilo.gatesofavarice.shop.GatewaySellValues;
-import com.revilo.gatesofavarice.shop.ShopOfferDefinition;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
@@ -22,39 +25,49 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import org.lwjgl.glfw.GLFW;
 
 public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
-
     private static final ResourceLocation BUY_GUI_TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/shop/shop-gui.png");
     private static final ResourceLocation SELL_GUI_TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/shop/shop-sell-gui.png");
     private static final ResourceLocation REROLL_TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/shop/re-roll.png");
     private static final ResourceLocation REROLL_DISABLED_TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/shop/re-roll-disabled.png");
-    private static final ResourceLocation SLOT_TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/shop/slot.png");
-    private static final ResourceLocation UNPURCHASABLE_SLOT_TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/shop/slot-unpurchaseable.png");
-    private static final ResourceLocation LOCKED_SLOT_TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/shop/slot-locked.png");
+    private static final ResourceLocation BACK_BUTTON_TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/shop/back_button.png");
     private static final ResourceLocation TAB_TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/shop/tab.png");
     private static final ResourceLocation TAB_SELECTED_TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/shop/tab_selected.png");
-    private static final int GRID_COLUMNS = 5;
-    private static final int GRID_START_X = 9;
-    private static final int GRID_START_Y = 16;
-    private static final int SLOT_SPACING_X = 25;
-    private static final int SLOT_SPACING_Y = 25;
-    private static final int SLOT_SIZE = 24;
-    private static final int SLOT_ITEM_SIZE = 16;
-    private static final int SELECTED_ITEM_X = 146;
-    private static final int SELECTED_ITEM_Y = 24;
-    private static final int BUY_BUTTON_X = 137;
-    private static final int BUY_BUTTON_Y = 56;
-    private static final int BUY_BUTTON_WIDTH = 34;
-    private static final int BUY_BUTTON_HEIGHT = 17;
-    private static final int BUY_PRICE_X = 148;
-    private static final int BUY_PRICE_Y = 44;
-    private static final int BUY_PRICE_ICON_SHIFT_X = -10;
-    private static final int REROLL_X = 123;
-    private static final int REROLL_Y = 68;
-    private static final int REROLL_RENDER_SIZE = 12;
+    private static final ResourceLocation CATEGORY_CARD = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/dungeon/item-card.png");
+    private static final ResourceLocation CATEGORY_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/dungeon/item-card_hovered.png");
+    private static final ResourceLocation EFFECT_CARD = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/dungeon/effect-card.png");
+    private static final ResourceLocation EFFECT_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/dungeon/effect-card_hovered.png");
+    private static final ResourceLocation DAMAGE_CARD = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/dungeon/damage-card.png");
+    private static final ResourceLocation DAMAGE_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/dungeon/damage-card_hovered.png");
+    private static final ResourceLocation STAT_CARD = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/dungeon/stat-card.png");
+    private static final ResourceLocation STAT_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/dungeon/stat-card_hovered.png");
+    private static final ResourceLocation UPGRADE_CARD = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/dungeon/upgrade-card.png");
+    private static final ResourceLocation UPGRADE_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/dungeon/upgrade-card_hovered.png");
+    private static final ResourceLocation TAROT_CARD = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/dungeon/tarrot-card.png");
+    private static final ResourceLocation TAROT_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/dungeon/tarrot-card-hovered.png");
+    private static final int CARD_W = 76;
+    private static final int CARD_H = 103;
+    private static final int BUY_AREA_LEFT = 7;
+    private static final int BUY_AREA_TOP = 13;
+    private static final int BUY_AREA_RIGHT = 168;
+    private static final int BUY_AREA_BOTTOM = 74;
+    private static final float CATEGORY_CARD_SCALE = 0.44F;
+    private static final int CATEGORY_CARD_GAP = 4;
+    private static final float UPGRADE_CARD_SCALE = 0.372F;
+    private static final int UPGRADE_CARD_GAP = 1;
+    private static final int REROLL_X = 153;
+    private static final int REROLL_Y = 67;
+    private static final int REROLL_RENDER_SIZE = 10;
+    private static final int BACK_BUTTON_X = 133;
+    private static final int BACK_BUTTON_Y = 68;
+    private static final int BACK_BUTTON_W = 18;
+    private static final int BACK_BUTTON_H = 10;
+    private static final float BACK_BUTTON_SCALE = 0.8F;
     private static final int TAB_X = -32;
     private static final int TAB_BUY_Y = 9;
     private static final int TAB_SELL_Y = 37;
@@ -74,16 +87,19 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private static final float SELL_HOLD_TICKS = 20.0F;
     private static final int SELL_COIN_PARTICLE_LIMIT = 24;
     private static final int COIN_TRAIL_SEGMENTS = 4;
+    private static final int DRAW_STAGGER_TICKS = 3;
+    private static final int DRAW_DURATION_TICKS = 8;
+    private static final int DISCARD_DURATION_TICKS = 10;
+    private static final int SELECT_SETTLE_TICKS = 6;
+    private static final float HOVER_SCALE_MULTIPLIER = 1.10F;
     private static final ResourceLocation BUTTON_TEXTURE = ResourceLocation.withDefaultNamespace("widget/button");
     private static final ResourceLocation BUTTON_HIGHLIGHTED_TEXTURE = ResourceLocation.withDefaultNamespace("widget/button_highlighted");
     private static final ResourceLocation BUTTON_DISABLED_TEXTURE = ResourceLocation.withDefaultNamespace("widget/button_disabled");
-    private float selectedItemHoverScale = 1.0F;
 
     private final List<CoinFlight> coinFlights = new ArrayList<>();
     private Button buyButton;
     private Button nextWaveButton;
     private Page activePage = Page.BUY;
-    private int selectedSlot = 0;
     private int lastWalletBalance;
     private int walletPulseTicks;
     private float sellHoldTicks;
@@ -91,6 +107,17 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private boolean coinHoveredLastFrame;
     private double lastMouseX;
     private double lastMouseY;
+    private boolean categorySelection = true;
+    private ItemStack upgradePreviewStack = ItemStack.EMPTY;
+    private List<UpgradeCard> upgradeCards = List.of();
+    private AnimationState animationState = AnimationState.DRAWING;
+    private int animationTick = 0;
+    private int selectedCardIndex = -1;
+    private int pendingButtonId = Integer.MIN_VALUE;
+    private boolean awaitingRerollSync = false;
+    private boolean pendingStateSync = false;
+    private float coinTargetX;
+    private float coinTargetY;
 
     public ShopkeeperScreen(ShopkeeperMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
@@ -104,10 +131,11 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     @Override
     protected void init() {
         super.init();
-        this.selectedSlot = this.findInitialSelection();
-        this.buyButton = this.addRenderableWidget(Button.builder(Component.translatable("screen.gatesofavarice.shopkeeper.buy"), button -> this.buySelectedOffer())
-                .pos(this.leftPos + BUY_BUTTON_X, this.topPos + BUY_BUTTON_Y)
-                .size(BUY_BUTTON_WIDTH, BUY_BUTTON_HEIGHT)
+        this.loadUpgradeState();
+        this.startDrawAnimation();
+        this.buyButton = this.addRenderableWidget(Button.builder(Component.translatable("screen.gatesofavarice.shopkeeper.buy"), button -> {})
+                .pos(0, 0)
+                .size(1, 1)
                 .build());
         this.nextWaveButton = this.addRenderableWidget(Button.builder(Component.literal("Next Wave"), button -> this.startNextWave())
                 .pos(this.leftPos + (this.imageWidth - NEXT_WAVE_BUTTON_WIDTH) / 2, this.topPos + this.imageHeight + 4)
@@ -121,10 +149,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     @Override
     protected void containerTick() {
         super.containerTick();
-        if (this.menu.getOfferDefinition(this.selectedSlot) == null) {
-            this.selectedSlot = this.findInitialSelection();
-        }
-
+        this.tickUpgradeAnimations();
         if (this.walletPulseTicks > 0) {
             this.walletPulseTicks--;
         }
@@ -134,7 +159,6 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             this.walletPulseTicks = 8;
         }
         this.lastWalletBalance = walletBalance;
-        this.selectedItemHoverScale = Mth.lerp(0.25F, this.selectedItemHoverScale, 1.0F);
 
         if (this.activePage == Page.SELL && this.sellHolding) {
             Minecraft minecraft = this.minecraft;
@@ -143,8 +167,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             if (!stillDown || !this.isHoveringSellButton(this.lastMouseX, this.lastMouseY)) {
                 this.sellHolding = false;
                 this.sellHoldTicks = 0.0F;
-            }
-            else {
+            } else {
                 this.sellHoldTicks = Math.min(SELL_HOLD_TICKS, this.sellHoldTicks + 1.0F);
                 if (this.sellHoldTicks >= SELL_HOLD_TICKS) {
                     this.sellHolding = false;
@@ -159,6 +182,20 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         this.updateNextWaveButton();
     }
 
+    public void applyUpgradeCategoryState() {
+        this.loadUpgradeState();
+        this.pendingStateSync = false;
+        this.awaitingRerollSync = false;
+        this.startDrawAnimation();
+    }
+
+    public void applyUpgradeCardsState(SyncUpgradeCardsPayload payload) {
+        this.loadUpgradeState();
+        this.pendingStateSync = false;
+        this.awaitingRerollSync = false;
+        this.startDrawAnimation();
+    }
+
     @Override
     public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         this.lastMouseX = mouseX;
@@ -171,14 +208,12 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         }
         this.renderCoinFlights(guiGraphics, partialTick);
 
-        if (this.activePage == Page.BUY && this.renderOfferTooltip(guiGraphics, mouseX, mouseY)) {
+        if (this.activePage == Page.BUY && this.renderUpgradeTooltip(guiGraphics, mouseX, mouseY)) {
             return;
         }
-
         if (this.renderWalletTooltip(guiGraphics, mouseX, mouseY)) {
             return;
         }
-
         this.renderTooltip(guiGraphics, mouseX, mouseY);
     }
 
@@ -187,19 +222,17 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         guiGraphics.blit(this.activePage == Page.BUY ? BUY_GUI_TEXTURE : SELL_GUI_TEXTURE, this.leftPos, this.topPos, 0, 0, this.imageWidth, this.imageHeight, 256, 256);
         this.renderWallet(guiGraphics);
         if (this.activePage == Page.BUY) {
-            this.renderOfferGrid(guiGraphics, mouseX, mouseY);
-            this.renderSelectedOfferPanel(guiGraphics, mouseX, mouseY, partialTick);
+            this.renderUpgradePanel(guiGraphics, mouseX, mouseY);
             this.renderRerollButton(guiGraphics);
-        }
-        else {
-            this.renderSellPanel(guiGraphics, mouseX, mouseY, partialTick);
+            this.renderBackButton(guiGraphics);
+        } else {
+            this.renderSellPanel(guiGraphics, mouseX, mouseY);
         }
     }
 
     @Override
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         guiGraphics.drawString(this.font, Component.translatable("screen.gatesofavarice.shopkeeper.title"), 6, 4, 0x404040, false);
-        guiGraphics.drawString(this.font, this.playerInventoryTitle, 8, 74, 0x404040, false);
     }
 
     @Override
@@ -208,21 +241,25 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             if (this.clickTab(mouseX, mouseY)) {
                 return true;
             }
-
             if (this.activePage == Page.BUY) {
-                if (this.isHoveringReroll(mouseX, mouseY) && this.minecraft != null && this.minecraft.gameMode != null && this.menu.canAffordReroll()) {
-                    this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, ShopkeeperMenu.REROLL_BUTTON_ID);
+                if (!this.categorySelection && this.isHoveringBackButton(mouseX, mouseY) && this.minecraft != null && this.minecraft.gameMode != null) {
+                    this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, ShopkeeperMenu.BACK_BUTTON_ID);
                     return true;
                 }
-
-                int hoveredSlot = this.getOfferSlotAt(mouseX, mouseY);
-                if (hoveredSlot >= 0 && this.menu.isOfferSlotUnlocked(hoveredSlot) && this.menu.getOfferDefinition(hoveredSlot) != null) {
-                    this.selectedSlot = hoveredSlot;
-                    this.updateBuyButton();
+                if (!this.categorySelection && this.isHoveringReroll(mouseX, mouseY) && this.minecraft != null && this.minecraft.gameMode != null && this.menu.canAffordReroll()) {
+                    if (this.animationState == AnimationState.IDLE) {
+                        this.animationState = AnimationState.REROLLING;
+                        this.animationTick = 0;
+                        this.selectedCardIndex = -1;
+                    }
                     return true;
                 }
-            }
-            else if (this.isHoveringSellButton(mouseX, mouseY) && this.menu.getSellValue() > 0) {
+                int hoveredIndex = this.getUpgradeSelectionIndex(mouseX, mouseY);
+                if (hoveredIndex >= 0) {
+                    this.handleUpgradeClick(hoveredIndex);
+                    return true;
+                }
+            } else if (this.isHoveringSellButton(mouseX, mouseY) && this.menu.getSellValue() > 0) {
                 this.sellHolding = true;
                 this.sellHoldTicks = 0.0F;
                 return true;
@@ -241,48 +278,186 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
-    private void renderOfferGrid(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        for (int slotIndex = 0; slotIndex < ShopkeeperMenu.GRID_SLOT_COUNT; slotIndex++) {
-            int slotX = this.leftPos + GRID_START_X + (slotIndex % GRID_COLUMNS) * SLOT_SPACING_X;
-            int slotY = this.topPos + GRID_START_Y + (slotIndex / GRID_COLUMNS) * SLOT_SPACING_Y;
-            boolean unlocked = this.menu.isOfferSlotUnlocked(slotIndex);
-            ShopOfferDefinition offer = this.menu.getOfferDefinition(slotIndex);
-            boolean outOfStock = offer == null || this.menu.getOfferStock(slotIndex) <= 0;
-            boolean unaffordable = offer != null && !this.menu.canAfford(slotIndex);
+    private void renderUpgradePanel(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        if (this.categorySelection) {
+            this.renderCategoryCards(guiGraphics, mouseX, mouseY);
+            guiGraphics.drawCenteredString(this.font, Component.literal("Pick upgrade deck").withStyle(ChatFormatting.GOLD), this.leftPos + 88, this.topPos + 64, 0xFFF0B8);
+            return;
+        }
 
-            ResourceLocation slotTexture = SLOT_TEXTURE;
-            if (!unlocked) {
-                slotTexture = LOCKED_SLOT_TEXTURE;
+        guiGraphics.drawCenteredString(this.font, this.upgradePreviewStack.getHoverName().copy().withStyle(ChatFormatting.GOLD), this.leftPos + 88, this.topPos + 15, 0xF3D78A);
+        this.renderUpgradeCards(guiGraphics, mouseX, mouseY);
+    }
+
+    private void renderCategoryCards(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        int count = UpgradeCategory.values().length;
+        int totalWidth = Math.round(count * CARD_W * CATEGORY_CARD_SCALE + Math.max(0, count - 1) * CATEGORY_CARD_GAP);
+        int startX = this.leftPos + BUY_AREA_LEFT + (buyAreaWidth() - totalWidth) / 2;
+        int y = this.topPos + BUY_AREA_TOP + 2;
+        guiGraphics.enableScissor(this.leftPos + BUY_AREA_LEFT, this.topPos + BUY_AREA_TOP, this.leftPos + BUY_AREA_RIGHT, this.topPos + BUY_AREA_BOTTOM);
+        for (int i = 0; i < count; i++) {
+            int x = startX + Math.round(i * CARD_W * CATEGORY_CARD_SCALE) + (i * CATEGORY_CARD_GAP);
+            boolean hovered = this.isMouseOverScaledCard(mouseX, mouseY, x, y, CATEGORY_CARD_SCALE);
+            float drawScale = hovered && this.animationState == AnimationState.IDLE ? CATEGORY_CARD_SCALE * HOVER_SCALE_MULTIPLIER : CATEGORY_CARD_SCALE;
+            int drawX = animatedCardX(x, i, startX, CATEGORY_CARD_SCALE);
+            int drawY = animatedCardY(y, i, CATEGORY_CARD_SCALE);
+            this.drawCard(guiGraphics, hovered ? CATEGORY_CARD_HOVERED : CATEGORY_CARD, drawX, drawY, drawScale);
+            this.renderCategoryCardContents(guiGraphics, drawX, drawY, i, drawScale);
+        }
+        guiGraphics.disableScissor();
+    }
+
+    private void renderUpgradeCards(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        int count = Math.min(5, this.upgradeCards.size());
+        int totalWidth = Math.round(count * CARD_W * UPGRADE_CARD_SCALE + Math.max(0, count - 1) * UPGRADE_CARD_GAP);
+        int startX = this.leftPos + BUY_AREA_LEFT + (buyAreaWidth() - totalWidth) / 2;
+        int y = this.topPos + BUY_AREA_TOP + 12;
+        guiGraphics.enableScissor(this.leftPos + BUY_AREA_LEFT, this.topPos + BUY_AREA_TOP, this.leftPos + BUY_AREA_RIGHT, this.topPos + BUY_AREA_BOTTOM);
+        for (int i = 0; i < count; i++) {
+            UpgradeCard card = this.upgradeCards.get(i);
+            int x = startX + Math.round(i * CARD_W * UPGRADE_CARD_SCALE) + (i * UPGRADE_CARD_GAP);
+            boolean hovered = this.isMouseOverScaledCard(mouseX, mouseY, x, y, UPGRADE_CARD_SCALE);
+            float drawScale = hovered && this.animationState == AnimationState.IDLE ? UPGRADE_CARD_SCALE * HOVER_SCALE_MULTIPLIER : UPGRADE_CARD_SCALE;
+            int drawX = animatedCardX(x, i, startX, UPGRADE_CARD_SCALE);
+            int drawY = animatedCardY(y, i, UPGRADE_CARD_SCALE);
+            this.drawCard(guiGraphics, resolveCardTexture(card, hovered), drawX, drawY, drawScale);
+            this.renderUpgradeCardContents(guiGraphics, drawX, drawY, card, drawScale);
+        }
+        guiGraphics.disableScissor();
+    }
+
+    private void renderCategoryCardContents(GuiGraphics guiGraphics, int x, int y, int index, float scale) {
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(x, y, 0.0F);
+        guiGraphics.pose().scale(scale, scale, 1.0F);
+        int center = CARD_W / 2;
+        int rowY = 16;
+        for (String line : wrap(fullCategoryName(index), 12)) {
+            drawScaledCentered(guiGraphics, line, center, rowY, 0.92F, 0xF3D78A);
+            rowY += 10;
+        }
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(center - 12, 43, 0.0F);
+        guiGraphics.pose().scale(1.65F, 1.65F, 1.0F);
+        guiGraphics.renderItem(categoryIcon(index), 0, 0);
+        guiGraphics.pose().popPose();
+        guiGraphics.pose().popPose();
+    }
+
+    private void renderUpgradeCardContents(GuiGraphics guiGraphics, int x, int y, UpgradeCard card, float scale) {
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(x, y, 0.0F);
+        guiGraphics.pose().scale(scale, scale, 1.0F);
+        int center = CARD_W / 2;
+        int rowY = 7;
+        for (String line : wrap(card.title(), 14)) {
+            drawScaledCentered(guiGraphics, line, center, rowY, 0.75F, 0xF3D78A);
+            rowY += 8;
+            if (rowY > 24) {
+                break;
             }
-            else if (outOfStock || unaffordable) {
-                slotTexture = UNPURCHASABLE_SLOT_TEXTURE;
-            }
-
-            guiGraphics.blit(slotTexture, slotX, slotY, 0, 0, SLOT_SIZE, SLOT_SIZE, SLOT_SIZE, SLOT_SIZE);
-
-            if (slotIndex == this.selectedSlot && offer != null) {
-                guiGraphics.fill(slotX + 1, slotY + 1, slotX + SLOT_SIZE - 1, slotY + SLOT_SIZE - 1, 0x55FFFFFF);
-            }
-
-            if (offer == null || !unlocked) {
-                continue;
-            }
-
-            guiGraphics.renderItem(offer.previewStack(), slotX + (SLOT_SIZE - SLOT_ITEM_SIZE) / 2, slotY + 4);
+        }
+        ResourceLocation icon = resolveCardIcon(card);
+        if (icon != null) {
             guiGraphics.pose().pushPose();
-            guiGraphics.pose().translate(slotX + 15, slotY + 15, 220.0F);
-            guiGraphics.pose().scale(0.5F, 0.5F, 1.0F);
-            String stockText = Integer.toString(this.menu.getOfferStock(slotIndex));
-            guiGraphics.drawString(this.font, stockText, -1, 0, 0x101010, false);
-            guiGraphics.drawString(this.font, stockText, 1, 0, 0x101010, false);
-            guiGraphics.drawString(this.font, stockText, 0, -1, 0x101010, false);
-            guiGraphics.drawString(this.font, stockText, 0, 1, 0x101010, false);
-            guiGraphics.drawString(this.font, stockText, 0, 0, 0xFFFFFF, false);
+            guiGraphics.pose().translate(center - 11, 26, 0.0F);
+            guiGraphics.pose().scale(1.35F, 1.35F, 1.0F);
+            guiGraphics.blit(icon, 0, 0, 0, 0, 16, 16, 16, 16);
             guiGraphics.pose().popPose();
+        }
+        int detailY = 50;
+        for (String line : wrap(card.changeLabel(), 16)) {
+            drawScaledCentered(guiGraphics, line, center, detailY, 0.58F, 0xD7F0D9);
+            detailY += 7;
+            if (detailY > 58) {
+                break;
+            }
+        }
+        drawScaledCentered(guiGraphics, card.currentValue(), center, 68, 0.58F, 0xFFD5D5);
+        drawScaledCentered(guiGraphics, card.newValue(), center, 85, 0.62F, 0xFFFFFF);
+        guiGraphics.pose().popPose();
+    }
+
+    private void tickUpgradeAnimations() {
+        if (this.animationState == AnimationState.IDLE) {
+            return;
+        }
+        this.animationTick++;
+        int cardCount = Math.max(1, this.categorySelection ? UpgradeCategory.values().length : Math.min(5, this.upgradeCards.size()));
+        int drawEnd = (cardCount - 1) * DRAW_STAGGER_TICKS + DRAW_DURATION_TICKS;
+        if (this.animationState == AnimationState.DRAWING && this.animationTick > drawEnd) {
+            this.animationState = AnimationState.IDLE;
+            this.animationTick = 0;
+            return;
+        }
+        if (this.animationState == AnimationState.REROLLING && this.animationTick >= DISCARD_DURATION_TICKS) {
+            if (!this.awaitingRerollSync && this.minecraft != null && this.minecraft.gameMode != null) {
+                this.awaitingRerollSync = true;
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, ShopkeeperMenu.REROLL_BUTTON_ID);
+            }
+            return;
+        }
+        if (this.animationState == AnimationState.SELECTING && this.animationTick >= DISCARD_DURATION_TICKS + SELECT_SETTLE_TICKS) {
+            if (this.pendingButtonId != Integer.MIN_VALUE && this.minecraft != null && this.minecraft.gameMode != null) {
+                int toSend = this.pendingButtonId;
+                this.pendingButtonId = Integer.MIN_VALUE;
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, toSend);
+            }
         }
     }
 
-    private void renderSellPanel(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    private void startDrawAnimation() {
+        this.animationState = AnimationState.DRAWING;
+        this.animationTick = 0;
+        this.selectedCardIndex = -1;
+        this.pendingButtonId = Integer.MIN_VALUE;
+        this.coinTargetX = this.leftPos + BUY_AREA_LEFT + buyAreaWidth() / 2.0F;
+        this.coinTargetY = this.topPos + BUY_AREA_TOP + buyAreaHeight() / 2.0F;
+    }
+
+    private int animatedCardX(int baseX, int index, int startX, float scale) {
+        if (this.animationState == AnimationState.DRAWING) {
+            float t = entryProgress(index);
+            int launchX = this.leftPos + BACK_BUTTON_X + 16;
+            return Mth.floor(Mth.lerp(easeOutCubic(t), launchX, baseX));
+        }
+        if (this.animationState == AnimationState.SELECTING && !this.categorySelection) {
+            float t = Mth.clamp(this.animationTick / (float) DISCARD_DURATION_TICKS, 0.0F, 1.0F);
+            if (index == this.selectedCardIndex) {
+                int centerX = this.leftPos + BUY_AREA_LEFT + buyAreaWidth() / 2 - Math.round(CARD_W * scale) / 2;
+                return Mth.floor(Mth.lerp(easeInOutCubic(t), baseX, centerX));
+            }
+        }
+        return baseX;
+    }
+
+    private int animatedCardY(int baseY, int index, float scale) {
+        int cardHeight = Math.round(CARD_H * scale);
+        if (this.animationState == AnimationState.DRAWING) {
+            float t = entryProgress(index);
+            int launchY = this.topPos + BACK_BUTTON_Y + 12;
+            return Mth.floor(Mth.lerp(easeOutCubic(t), launchY, baseY));
+        }
+        if (this.animationState == AnimationState.REROLLING) {
+            float t = Mth.clamp(this.animationTick / (float) DISCARD_DURATION_TICKS, 0.0F, 1.0F);
+            return Mth.floor(Mth.lerp(easeInCubic(t), baseY, this.topPos + BUY_AREA_BOTTOM + cardHeight + 12));
+        }
+        if (this.animationState == AnimationState.SELECTING && !this.categorySelection) {
+            float t = Mth.clamp(this.animationTick / (float) DISCARD_DURATION_TICKS, 0.0F, 1.0F);
+            if (index == this.selectedCardIndex) {
+                int centerY = this.topPos + BUY_AREA_TOP + (buyAreaHeight() - cardHeight) / 2;
+                return Mth.floor(Mth.lerp(easeInOutCubic(t), baseY, centerY));
+            }
+            return Mth.floor(Mth.lerp(easeInCubic(t), baseY, this.topPos + BUY_AREA_BOTTOM + cardHeight + 18));
+        }
+        return baseY;
+    }
+
+    private float entryProgress(int index) {
+        return Mth.clamp((this.animationTick - index * DRAW_STAGGER_TICKS) / (float) DRAW_DURATION_TICKS, 0.0F, 1.0F);
+    }
+
+    private void renderSellPanel(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         boolean coinHovered = this.isHoveringSellCoin(mouseX, mouseY);
         if (coinHovered && !this.coinHoveredLastFrame) {
             this.playDing(1.15F);
@@ -290,13 +465,11 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         this.coinHoveredLastFrame = coinHovered;
 
         float hoverScale = coinHovered ? 1.1F : 1.0F;
-        WorkbenchCrystalRenderer.render(guiGraphics, coinStack(), this.leftPos + SELL_COIN_X, this.topPos + SELL_COIN_Y, partialTick, hoverScale * 0.9F, WorkbenchCrystalRenderer.BASE_SPIN_SPEED);
-
+        WorkbenchCrystalRenderer.render(guiGraphics, coinStack(), this.leftPos + SELL_COIN_X, this.topPos + SELL_COIN_Y, 0.0F, hoverScale * 0.9F, WorkbenchCrystalRenderer.BASE_SPIN_SPEED);
         this.renderCoinPrice(guiGraphics, this.leftPos + SELL_TOTAL_X, this.topPos + SELL_TOTAL_Y, this.menu.getSellValue(), 0.75F, this.menu.getSellValue() > 0 ? 0xB06CFF : 0x7B6A8D, SELL_PRICE_ICON_SHIFT_X);
 
         int buttonLeft = this.leftPos + SELL_BUTTON_X;
         int buttonTop = this.topPos + SELL_BUTTON_Y;
-        int buttonRight = buttonLeft + SELL_BUTTON_WIDTH;
         int buttonBottom = buttonTop + SELL_BUTTON_HEIGHT;
         boolean hovered = this.isHoveringSellButton(mouseX, mouseY);
         boolean enabled = this.menu.getSellValue() > 0;
@@ -330,29 +503,6 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         guiGraphics.pose().popPose();
     }
 
-    private void renderSelectedOfferPanel(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        ShopOfferDefinition offer = this.getSelectedOffer();
-        if (offer == null || !this.menu.isOfferSlotUnlocked(this.selectedSlot)) {
-            return;
-        }
-
-        boolean hovered = this.isHoveringSelectedItem(mouseX, mouseY);
-        float bob = Mth.sin((((this.minecraft != null && this.minecraft.level != null) ? this.minecraft.level.getGameTime() : 0) + partialTick) * 0.15F) * 2.0F;
-        float targetScale = hovered ? 1.1F : 1.0F;
-        this.selectedItemHoverScale = Mth.lerp(0.35F, this.selectedItemHoverScale, targetScale);
-        guiGraphics.pose().pushPose();
-        guiGraphics.pose().translate(this.leftPos + SELECTED_ITEM_X + 8.0F, this.topPos + SELECTED_ITEM_Y + 8.0F + bob, 220.0F);
-        guiGraphics.pose().scale(this.selectedItemHoverScale, this.selectedItemHoverScale, 1.0F);
-        guiGraphics.renderItem(offer.previewStack(), -8, -8);
-        guiGraphics.pose().popPose();
-        int slotPrice = this.menu.getOfferPrice(this.selectedSlot);
-        this.renderCoinPrice(guiGraphics, this.leftPos + BUY_PRICE_X, this.topPos + BUY_PRICE_Y, slotPrice, 0.75F, this.menu.canAfford(this.selectedSlot) ? 0xB06CFF : 0xE07A7A, BUY_PRICE_ICON_SHIFT_X);
-    }
-
-    private void renderCoinPrice(GuiGraphics guiGraphics, int x, int y, int price, float scale, int textColor) {
-        this.renderCoinPrice(guiGraphics, x, y, price, scale, textColor, 0);
-    }
-
     private void renderCoinPrice(GuiGraphics guiGraphics, int x, int y, int price, float scale, int textColor, int iconShiftX) {
         guiGraphics.pose().pushPose();
         guiGraphics.pose().translate(x, y, 200.0F);
@@ -368,14 +518,25 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private void renderRerollButton(GuiGraphics guiGraphics) {
-        boolean active = this.menu.hasRerollsRemaining() && this.menu.canAffordReroll();
-        boolean hovered = this.isHoveringReroll(this.lastMouseX, this.lastMouseY);
-        float scale = hovered ? 1.1F : 1.0F;
-        ResourceLocation texture = active ? REROLL_TEXTURE : REROLL_DISABLED_TEXTURE;
+        if (this.categorySelection) {
+            return;
+        }
+        ResourceLocation texture = this.menu.hasRerollsRemaining() && this.menu.canAffordReroll() ? REROLL_TEXTURE : REROLL_DISABLED_TEXTURE;
         guiGraphics.pose().pushPose();
-        guiGraphics.pose().translate(this.leftPos + REROLL_X + (REROLL_RENDER_SIZE * (1.0F - scale) * 0.5F), this.topPos + REROLL_Y + (REROLL_RENDER_SIZE * (1.0F - scale) * 0.5F), 150.0F);
-        guiGraphics.pose().scale((REROLL_RENDER_SIZE / 16.0F) * scale, (REROLL_RENDER_SIZE / 16.0F) * scale, 1.0F);
+        guiGraphics.pose().translate(this.leftPos + REROLL_X, this.topPos + REROLL_Y, 150.0F);
+        guiGraphics.pose().scale(REROLL_RENDER_SIZE / 16.0F, REROLL_RENDER_SIZE / 16.0F, 1.0F);
         guiGraphics.blit(texture, 0, 0, 0, 0, 16, 16, 16, 16);
+        guiGraphics.pose().popPose();
+    }
+
+    private void renderBackButton(GuiGraphics guiGraphics) {
+        if (this.categorySelection) {
+            return;
+        }
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(this.leftPos + BACK_BUTTON_X, this.topPos + BACK_BUTTON_Y, 150.0F);
+        guiGraphics.pose().scale(BACK_BUTTON_SCALE, BACK_BUTTON_SCALE, 1.0F);
+        guiGraphics.blit(BACK_BUTTON_TEXTURE, 0, 0, 0, 0, BACK_BUTTON_W, BACK_BUTTON_H, BACK_BUTTON_W, BACK_BUTTON_H);
         guiGraphics.pose().popPose();
     }
 
@@ -399,49 +560,39 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         guiGraphics.pose().popPose();
     }
 
-    private boolean renderOfferTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        if (this.isHoveringReroll(mouseX, mouseY)) {
-            guiGraphics.renderComponentTooltip(
-                    this.font,
-                    List.of(
-                            Component.translatable("screen.gatesofavarice.shopkeeper.reroll"),
-                            Component.translatable("screen.gatesofavarice.shopkeeper.reroll_cost", this.menu.getRerollCost()).withStyle(ChatFormatting.LIGHT_PURPLE),
-                            Component.literal("Rerolls Left: " + this.menu.getRemainingRerolls()).withStyle(ChatFormatting.GRAY)
-                    ),
-                    mouseX,
-                    mouseY
-            );
+    private boolean renderUpgradeTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        if (!this.categorySelection && this.isHoveringBackButton(mouseX, mouseY)) {
+            guiGraphics.renderComponentTooltip(this.font, List.of(Component.literal("Back").withStyle(ChatFormatting.GRAY)), mouseX, mouseY);
             return true;
         }
-
-        int hoveredSlot = this.getOfferSlotAt(mouseX, mouseY);
-        if (hoveredSlot >= 0) {
-            if (!this.menu.isOfferSlotUnlocked(hoveredSlot)) {
-                guiGraphics.renderComponentTooltip(
-                        this.font,
-                        List.of(
-                                Component.translatable("screen.gatesofavarice.shopkeeper.locked"),
-                                Component.translatable("screen.gatesofavarice.shopkeeper.unlocks_at", this.menu.getRequiredLevelForSlot(hoveredSlot))
-                        ),
-                        mouseX,
-                        mouseY
-                );
+        if (!this.categorySelection && this.isHoveringReroll(mouseX, mouseY)) {
+            guiGraphics.renderComponentTooltip(this.font, List.of(
+                    Component.translatable("screen.gatesofavarice.shopkeeper.reroll"),
+                    Component.translatable("screen.gatesofavarice.shopkeeper.reroll_cost", this.menu.getRerollCost()).withStyle(ChatFormatting.LIGHT_PURPLE),
+                    Component.literal("Rerolls Left: " + this.menu.getRemainingRerolls()).withStyle(ChatFormatting.GRAY)
+            ), mouseX, mouseY);
+            return true;
+        }
+        int hoveredIndex = this.getUpgradeSelectionIndex(mouseX, mouseY);
+        if (hoveredIndex >= 0) {
+            if (this.categorySelection) {
+                guiGraphics.renderComponentTooltip(this.font, List.of(
+                        Component.literal(fullCategoryName(hoveredIndex)).withStyle(ChatFormatting.GOLD),
+                        Component.literal(categorySummary(hoveredIndex)).withStyle(ChatFormatting.GRAY)
+                ), mouseX, mouseY);
                 return true;
             }
-
-            ShopOfferDefinition hoveredOffer = this.menu.getOfferForSlot(hoveredSlot);
-            if (hoveredOffer != null) {
-                this.renderItemTooltip(guiGraphics, hoveredOffer.previewStack(), mouseX, mouseY, hoveredOffer.description());
+            if (hoveredIndex < this.upgradeCards.size()) {
+                UpgradeCard card = this.upgradeCards.get(hoveredIndex);
+                guiGraphics.renderComponentTooltip(this.font, List.of(
+                        Component.literal(card.title()).withStyle(ChatFormatting.GOLD),
+                        Component.literal(card.changeLabel()).withStyle(ChatFormatting.WHITE),
+                        Component.literal(card.currentValue() + " -> " + card.newValue()).withStyle(ChatFormatting.GRAY),
+                        Component.literal("Cost: " + card.cost() + " Mythic Coins").withStyle(card.cost() > this.menu.getWalletBalance() ? ChatFormatting.RED : ChatFormatting.LIGHT_PURPLE)
+                ), mouseX, mouseY);
                 return true;
             }
         }
-
-        ShopOfferDefinition selectedOffer = this.getSelectedOffer();
-        if (selectedOffer != null && this.isHoveringSelectedItem(mouseX, mouseY)) {
-            this.renderItemTooltip(guiGraphics, selectedOffer.previewStack(), mouseX, mouseY, selectedOffer.description());
-            return true;
-        }
-
         return false;
     }
 
@@ -450,72 +601,56 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         if (!walletLayout.isMouseOver(mouseX, mouseY)) {
             return false;
         }
-
         ItemStack coinStack = coinStack();
-        guiGraphics.renderTooltip(
-                this.font,
-                List.of(
-                        Component.literal(this.menu.usesDungeonTokens() ? "Dungeon Tokens" : "Mythic Coins"),
-                        Component.literal(Integer.toString(this.menu.getWalletBalance())).withStyle(ChatFormatting.LIGHT_PURPLE)
-                ),
-                coinStack.getTooltipImage(),
-                coinStack,
-                mouseX,
-                mouseY);
+        guiGraphics.renderTooltip(this.font, List.of(
+                Component.literal(this.menu.usesDungeonTokens() ? "Dungeon Tokens" : "Mythic Coins"),
+                Component.literal(Integer.toString(this.menu.getWalletBalance())).withStyle(ChatFormatting.LIGHT_PURPLE)
+        ), coinStack.getTooltipImage(), coinStack, mouseX, mouseY);
         return true;
     }
 
-    private void renderItemTooltip(GuiGraphics guiGraphics, ItemStack stack, int mouseX, int mouseY, Component description) {
-        List<Component> tooltip = new ArrayList<>(Screen.getTooltipFromItem(this.minecraft, stack));
-        GatewaySellValues.appendShopRuneSellValueTooltip(stack, tooltip);
-        tooltip.add(Component.empty());
-        tooltip.add(description.copy().withStyle(ChatFormatting.GRAY));
-        guiGraphics.renderTooltip(this.font, tooltip, stack.getTooltipImage(), stack, mouseX, mouseY);
+    private void loadUpgradeState() {
+        this.categorySelection = DungeonUpgradeClientState.categorySelection;
+        this.upgradePreviewStack = DungeonUpgradeClientState.previewStack.copy();
+        this.upgradeCards = List.copyOf(DungeonUpgradeClientState.cards);
+    }
+
+    private void handleUpgradeClick(int index) {
+        if (this.minecraft == null || this.minecraft.gameMode == null) {
+            return;
+        }
+        if (this.animationState != AnimationState.IDLE) {
+            return;
+        }
+        if (this.categorySelection) {
+            if (index >= 0 && index < UpgradeCategory.values().length) {
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, ShopkeeperMenu.CATEGORY_BUTTON_ID_OFFSET + index);
+            }
+            return;
+        }
+        if (index < 0 || index >= this.upgradeCards.size()) {
+            return;
+        }
+        UpgradeCard card = this.upgradeCards.get(index);
+        if (card.cost() > this.menu.getWalletBalance()) {
+            return;
+        }
+        this.coinTargetX = this.leftPos + BUY_AREA_LEFT + buyAreaWidth() / 2.0F;
+        this.coinTargetY = this.topPos + BUY_AREA_TOP + buyAreaHeight() / 2.0F;
+        this.createBuyCoinFlights(card.cost(), 1);
+        this.selectedCardIndex = index;
+        this.pendingButtonId = ShopkeeperMenu.CARD_BUTTON_ID_OFFSET + index;
+        this.animationState = AnimationState.SELECTING;
+        this.animationTick = 0;
     }
 
     private void updateBuyButton() {
         if (this.buyButton == null) {
             return;
         }
-
-        ShopOfferDefinition offer = this.getSelectedOffer();
-        boolean canBuy = offer != null
-                && this.menu.isOfferSlotUnlocked(this.selectedSlot)
-                && this.menu.getOfferStock(this.selectedSlot) > 0
-                && this.menu.canAfford(this.selectedSlot);
-        boolean tooExpensive = offer != null && this.menu.isOfferSlotUnlocked(this.selectedSlot) && this.menu.getOfferStock(this.selectedSlot) > 0 && !this.menu.canAfford(this.selectedSlot);
-        this.buyButton.visible = this.activePage == Page.BUY;
-        this.buyButton.active = this.activePage == Page.BUY && canBuy;
-        this.buyButton.setMessage(tooExpensive
-                ? Component.translatable("screen.gatesofavarice.shopkeeper.buy").setStyle(Style.EMPTY.withColor(0xD05050))
-                : Component.translatable("screen.gatesofavarice.shopkeeper.buy"));
-    }
-
-    private void buySelectedOffer() {
-        ShopOfferDefinition offer = this.getSelectedOffer();
-        if (offer == null
-                || !this.menu.isOfferSlotUnlocked(this.selectedSlot)
-                || this.menu.getOfferStock(this.selectedSlot) <= 0
-                || !this.menu.canAfford(this.selectedSlot)
-                || this.minecraft == null
-                || this.minecraft.gameMode == null) {
-            return;
-        }
-
-        int slotPrice = this.menu.getOfferPrice(this.selectedSlot);
-        if (slotPrice <= 0) {
-            return;
-        }
-
-        int stock = this.menu.getOfferStock(this.selectedSlot);
-        int purchases = hasShiftDown() ? Math.min(stock, this.menu.getWalletBalance() / slotPrice) : 1;
-        if (purchases <= 0) {
-            return;
-        }
-
-        this.createBuyCoinFlights(slotPrice, purchases);
-        int buttonId = hasShiftDown() ? ShopkeeperMenu.BUY_ALL_BUTTON_ID_OFFSET + this.selectedSlot : this.selectedSlot;
-        this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, buttonId);
+        this.buyButton.visible = false;
+        this.buyButton.active = false;
+        this.buyButton.setMessage(Component.translatable("screen.gatesofavarice.shopkeeper.buy").setStyle(Style.EMPTY.withColor(0xD05050)));
     }
 
     private void updateNextWaveButton() {
@@ -538,12 +673,10 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         if (this.minecraft == null || this.minecraft.gameMode == null) {
             return;
         }
-
         int totalValue = this.menu.getSellValue();
         if (totalValue <= 0) {
             return;
         }
-
         this.createCoinFlights();
         this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, ShopkeeperMenu.SELL_BUTTON_ID);
     }
@@ -557,7 +690,6 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             if (stack.isEmpty() || stackValue <= 0) {
                 continue;
             }
-
             Slot slot = this.menu.slots.get(slotIndex);
             int particles = Math.min(SELL_COIN_PARTICLE_LIMIT, Math.max(1, stackValue));
             for (int particleIndex = 0; particleIndex < particles; particleIndex++) {
@@ -569,7 +701,8 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
                         this.getWalletIconX() + 4.0F,
                         this.topPos + 10.0F,
                         totalParticles + particleIndex,
-                        particleIndex == particles - 1 && slotIndex == this.findLastSellSlot()));
+                        particleIndex == particles - 1 && slotIndex == this.findLastSellSlot()
+                ));
             }
             totalParticles += particles;
         }
@@ -581,8 +714,8 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         int particles = Math.min(SELL_COIN_PARTICLE_LIMIT, Math.max(1, totalCost));
         float startX = this.getWalletIconX() + 4.0F;
         float startY = this.topPos + 10.0F;
-        float endX = this.leftPos + SELECTED_ITEM_X + 8.0F;
-        float endY = this.topPos + SELECTED_ITEM_Y + 8.0F;
+        float endX = this.coinTargetX;
+        float endY = this.coinTargetY;
         for (int index = 0; index < particles; index++) {
             this.coinFlights.add(new CoinFlight(startX, startY, endX, endY, existing + index, false));
         }
@@ -658,56 +791,56 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             if (stack.isEmpty() || GatewaySellValues.isSellable(stack)) {
                 continue;
             }
-
             guiGraphics.fill(this.leftPos + slot.x, this.topPos + slot.y, this.leftPos + slot.x + 16, this.topPos + slot.y + 16, 0xCC303030);
         }
     }
 
-    private ShopOfferDefinition getSelectedOffer() {
-        return this.menu.getOfferForSlot(this.selectedSlot);
-    }
-
-    private int findInitialSelection() {
-        for (int slotIndex = 0; slotIndex < ShopkeeperMenu.GRID_SLOT_COUNT; slotIndex++) {
-            if (this.menu.isOfferSlotUnlocked(slotIndex) && this.menu.getOfferDefinition(slotIndex) != null) {
-                return slotIndex;
+    private int getUpgradeSelectionIndex(double mouseX, double mouseY) {
+        if (this.categorySelection) {
+            int count = UpgradeCategory.values().length;
+            int totalWidth = Math.round(count * CARD_W * CATEGORY_CARD_SCALE + Math.max(0, count - 1) * CATEGORY_CARD_GAP);
+            int startX = this.leftPos + BUY_AREA_LEFT + (buyAreaWidth() - totalWidth) / 2;
+            int y = this.topPos + BUY_AREA_TOP + 2;
+            for (int i = 0; i < count; i++) {
+                int x = startX + Math.round(i * CARD_W * CATEGORY_CARD_SCALE) + (i * CATEGORY_CARD_GAP);
+                if (this.isMouseOverScaledCard(mouseX, mouseY, x, y, CATEGORY_CARD_SCALE)) {
+                    return i;
+                }
             }
-        }
-        return 0;
-    }
-
-    private int getOfferSlotAt(double mouseX, double mouseY) {
-        int localX = Mth.floor(mouseX) - this.leftPos;
-        int localY = Mth.floor(mouseY) - this.topPos;
-        int gridEndX = GRID_START_X + ((GRID_COLUMNS - 1) * SLOT_SPACING_X) + SLOT_SIZE;
-        int gridEndY = GRID_START_Y + SLOT_SPACING_Y + SLOT_SIZE;
-        if (localX < GRID_START_X || localY < GRID_START_Y || localX > gridEndX || localY > gridEndY) {
             return -1;
         }
 
-        for (int slotIndex = 0; slotIndex < ShopkeeperMenu.GRID_SLOT_COUNT; slotIndex++) {
-            int slotX = GRID_START_X + (slotIndex % GRID_COLUMNS) * SLOT_SPACING_X;
-            int slotY = GRID_START_Y + (slotIndex / GRID_COLUMNS) * SLOT_SPACING_Y;
-            if (localX >= slotX && localX < slotX + SLOT_SIZE && localY >= slotY && localY < slotY + SLOT_SIZE) {
-                return slotIndex;
+        int count = Math.min(5, this.upgradeCards.size());
+        int totalWidth = Math.round(count * CARD_W * UPGRADE_CARD_SCALE + Math.max(0, count - 1) * UPGRADE_CARD_GAP);
+        int startX = this.leftPos + BUY_AREA_LEFT + (buyAreaWidth() - totalWidth) / 2;
+        int y = this.topPos + BUY_AREA_TOP + 12;
+        for (int i = 0; i < count; i++) {
+            int x = startX + Math.round(i * CARD_W * UPGRADE_CARD_SCALE) + (i * UPGRADE_CARD_GAP);
+            if (this.isMouseOverScaledCard(mouseX, mouseY, x, y, UPGRADE_CARD_SCALE)) {
+                return i;
             }
         }
-
         return -1;
     }
 
-    private boolean isHoveringSelectedItem(double mouseX, double mouseY) {
-        int x = this.leftPos + SELECTED_ITEM_X;
-        int y = this.topPos + SELECTED_ITEM_Y;
-        return mouseX >= x && mouseX < x + 16 && mouseY >= y && mouseY < y + 16;
+    private boolean isMouseOverScaledCard(double mouseX, double mouseY, int x, int y, float scale) {
+        int width = Math.round(CARD_W * scale);
+        int height = Math.round(CARD_H * scale);
+        return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
     }
 
     private boolean isHoveringReroll(double mouseX, double mouseY) {
         int x = this.leftPos + REROLL_X;
         int y = this.topPos + REROLL_Y;
-        int expandedSize = Math.round(REROLL_RENDER_SIZE * 1.1F);
-        int offset = (expandedSize - REROLL_RENDER_SIZE) / 2;
-        return mouseX >= x - offset && mouseX < x - offset + expandedSize && mouseY >= y - offset && mouseY < y - offset + expandedSize;
+        return mouseX >= x && mouseX < x + REROLL_RENDER_SIZE && mouseY >= y && mouseY < y + REROLL_RENDER_SIZE;
+    }
+
+    private boolean isHoveringBackButton(double mouseX, double mouseY) {
+        int x = this.leftPos + BACK_BUTTON_X;
+        int y = this.topPos + BACK_BUTTON_Y;
+        int width = Math.round(BACK_BUTTON_W * BACK_BUTTON_SCALE);
+        int height = Math.round(BACK_BUTTON_H * BACK_BUTTON_SCALE);
+        return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
     }
 
     private boolean isHoveringSellButton(double mouseX, double mouseY) {
@@ -744,7 +877,6 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         if (this.activePage == page) {
             return;
         }
-
         this.activePage = page;
         this.sellHolding = false;
         this.sellHoldTicks = 0.0F;
@@ -756,6 +888,194 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
 
     private void applyPageLayout() {
         this.menu.setSellPageActive(this.activePage == Page.SELL);
+    }
+
+    private static ResourceLocation resolveCardTexture(UpgradeCard card, boolean hovered) {
+        return switch (card.title()) {
+            case "Effect Card" -> hovered ? EFFECT_CARD_HOVERED : EFFECT_CARD;
+            case "Damage Card", "Offence Card" -> hovered ? DAMAGE_CARD_HOVERED : DAMAGE_CARD;
+            case "Stat Card" -> hovered ? STAT_CARD_HOVERED : STAT_CARD;
+            case "Ability Card" -> hovered ? EFFECT_CARD_HOVERED : EFFECT_CARD;
+            case "Restock Card" -> hovered ? STAT_CARD_HOVERED : STAT_CARD;
+            case "Reroll Primary Weapon" -> hovered ? TAROT_CARD_HOVERED : TAROT_CARD;
+            case "Reroll Secondary Weapon" -> hovered ? DAMAGE_CARD_HOVERED : DAMAGE_CARD;
+            default -> hovered ? UPGRADE_CARD_HOVERED : UPGRADE_CARD;
+        };
+    }
+
+    private static ResourceLocation resolveCardIcon(UpgradeCard card) {
+        String iconName = switch (card.changeLabel()) {
+            case "Restock" -> "capacity";
+            case "Magnet", "Arcane Apples + Magnet" -> "movement_speed";
+            case "Primary" -> "attack_damage";
+            case "Secondary" -> "undead_damage";
+            case "Toxic" -> "poison_chance";
+            case "Fire Aspect" -> "flame";
+            case "Withering" -> "withering_chance";
+            case "Bleeding" -> "bleeding_chance";
+            case "Stunning" -> "stun_chance";
+            case "Shocking" -> "shocking_chance";
+            case "Leeching" -> "leeching_chance";
+            case "Freezing" -> "freezing_chance";
+            case "Fangs" -> "fangs";
+            case "Health Boost" -> "health";
+            case "Toughness" -> "toughness";
+            case "Leaping" -> "jump_height";
+            case "Ability Power" -> "power";
+            case "Movement Speed" -> "movement_speed";
+            case "Resistance" -> "resistance";
+            case "Fire Resistance" -> "fire_resistance";
+            case "Projectile Resistance" -> "projectile_resistance";
+            case "Blast Resistance" -> "blast_resistance";
+            case "Attack Damage" -> "attack_damage";
+            case "Undead Damage" -> "undead_damage";
+            case "Attack Range" -> "attack_range";
+            case "Attack Speed" -> "attack_speed";
+            case "Sweeping Range" -> "sweeping_range";
+            case "Aegis" -> "aegis";
+            case "Thorns" -> "health";
+            case "Stone Skin" -> "stone_skin";
+            default -> inferIconName(card.changeLabel());
+        };
+        return ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/dungeon/icons/" + iconName + ".png");
+    }
+
+    private static String inferIconName(String label) {
+        return switch (label) {
+            case "supply" -> "capacity";
+            case "current" -> "power";
+            default -> label.toLowerCase(Locale.ROOT).replace(' ', '_');
+        };
+    }
+
+    private void drawCard(GuiGraphics guiGraphics, ResourceLocation texture, int x, int y, float scale) {
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(x, y, 0.0F);
+        guiGraphics.pose().scale(scale, scale, 1.0F);
+        guiGraphics.blit(texture, 0, 0, 0, 0, CARD_W, CARD_H, CARD_W, CARD_H);
+        guiGraphics.pose().popPose();
+    }
+
+    private void drawScaledCentered(GuiGraphics guiGraphics, String text, int x, int y, float scale, int color) {
+        int width = this.font.width(text);
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(x - (width * scale) / 2.0F, y, 0.0F);
+        guiGraphics.pose().scale(scale, scale, 1.0F);
+        guiGraphics.drawString(this.font, text, 0, 0, color, false);
+        guiGraphics.pose().popPose();
+    }
+
+    private List<String> wrap(String input, int max) {
+        List<String> out = new ArrayList<>();
+        String[] parts = input.split(" ");
+        StringBuilder current = new StringBuilder();
+        for (String part : parts) {
+            if (current.isEmpty()) {
+                current.append(part);
+            } else if (current.length() + 1 + part.length() <= max) {
+                current.append(" ").append(part);
+            } else {
+                out.add(current.toString());
+                current = new StringBuilder(part);
+            }
+        }
+        if (!current.isEmpty()) {
+            out.add(current.toString());
+        }
+        return out;
+    }
+
+    private static String fullCategoryName(int index) {
+        return switch (index) {
+            case 0 -> "Primary Weapon";
+            case 1 -> "Secondary Weapon";
+            case 2 -> "Armor";
+            case 3 -> "Item";
+            default -> "";
+        };
+    }
+
+    private static String categorySummary(int index) {
+        return switch (index) {
+            case 0 -> "Upgrade primary weapon";
+            case 1 -> "Upgrade secondary weapon";
+            case 2 -> "Upgrade armor set";
+            case 3 -> "Utility and rerolls";
+            default -> "";
+        };
+    }
+
+    private ItemStack categoryIcon(int index) {
+        Minecraft minecraft = this.minecraft;
+        if (minecraft != null && minecraft.player != null) {
+            if (index == 0 || index == 1) {
+                String role = index == 0 ? DungeonBoundItems.PRIMARY_WEAPON_ROLE : DungeonBoundItems.SECONDARY_WEAPON_ROLE;
+                ItemStack roleStack = this.findWeaponByRole(role);
+                if (!roleStack.isEmpty()) {
+                    return roleStack;
+                }
+                ItemStack heldFallback = index == 0 ? minecraft.player.getMainHandItem() : minecraft.player.getOffhandItem();
+                if (!heldFallback.isEmpty()) {
+                    return heldFallback;
+                }
+            }
+            if (index == 2) {
+                ItemStack armorStack = this.findArmorIcon();
+                if (!armorStack.isEmpty()) {
+                    return armorStack;
+                }
+            }
+        }
+        return switch (index) {
+            case 0, 1 -> new ItemStack(Items.IRON_SWORD);
+            case 2 -> new ItemStack(Items.IRON_CHESTPLATE);
+            case 3 -> new ItemStack(ModItems.LOOTBOX.get());
+            default -> ItemStack.EMPTY;
+        };
+    }
+
+    private ItemStack findWeaponByRole(String role) {
+        Minecraft minecraft = this.minecraft;
+        if (minecraft == null || minecraft.player == null) {
+            return ItemStack.EMPTY;
+        }
+        for (ItemStack stack : minecraft.player.getInventory().items) {
+            if (!stack.isEmpty() && role.equals(DungeonBoundItems.getWeaponRole(stack))) {
+                return stack;
+            }
+        }
+        for (ItemStack stack : minecraft.player.getInventory().offhand) {
+            if (!stack.isEmpty() && role.equals(DungeonBoundItems.getWeaponRole(stack))) {
+                return stack;
+            }
+        }
+        return ItemStack.EMPTY;
+    }
+
+    private ItemStack findArmorIcon() {
+        Minecraft minecraft = this.minecraft;
+        if (minecraft == null || minecraft.player == null) {
+            return ItemStack.EMPTY;
+        }
+        for (ItemStack stack : minecraft.player.getInventory().armor) {
+            if (!stack.isEmpty() && stack.getItem() instanceof ArmorItem armorItem && armorItem.getType() == ArmorItem.Type.CHESTPLATE) {
+                return stack;
+            }
+        }
+        for (ItemStack stack : minecraft.player.getInventory().armor) {
+            if (!stack.isEmpty()) {
+                return stack;
+            }
+        }
+        return ItemStack.EMPTY;
+    }
+
+    private int buyAreaWidth() {
+        return BUY_AREA_RIGHT - BUY_AREA_LEFT;
+    }
+
+    private int buyAreaHeight() {
+        return BUY_AREA_BOTTOM - BUY_AREA_TOP;
     }
 
     private int getWalletIconX() {
@@ -788,7 +1108,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
 
     private static String trimCompactDecimal(double value, int maxDecimals) {
         String format = "%." + maxDecimals + "f";
-        String text = String.format(java.util.Locale.ROOT, format, value);
+        String text = String.format(Locale.ROOT, format, value);
         while (text.contains(".") && (text.endsWith("0") || text.endsWith("."))) {
             text = text.substring(0, text.length() - 1);
         }
@@ -802,9 +1122,30 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         this.minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.EXPERIENCE_ORB_PICKUP, pitch));
     }
 
+    private static float easeOutCubic(float t) {
+        return 1.0F - (float) Math.pow(1.0F - t, 3.0F);
+    }
+
+    private static float easeInCubic(float t) {
+        return t * t * t;
+    }
+
+    private static float easeInOutCubic(float t) {
+        return t < 0.5F
+                ? 4.0F * t * t * t
+                : 1.0F - (float) Math.pow(-2.0F * t + 2.0F, 3.0F) / 2.0F;
+    }
+
     private enum Page {
         BUY,
         SELL
+    }
+
+    private enum AnimationState {
+        DRAWING,
+        IDLE,
+        REROLLING,
+        SELECTING
     }
 
     private static final class CoinFlight {

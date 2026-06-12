@@ -3,6 +3,8 @@ package com.revilo.gatesofavarice.menu;
 import com.revilo.gatesofavarice.currency.MythicCoinWallet;
 import com.revilo.gatesofavarice.dungeon.DungeonBoundItems;
 import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
+import com.revilo.gatesofavarice.dungeon.DungeonUpgradeManager;
+import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCategory;
 import com.revilo.gatesofavarice.entity.GatekeeperEntity;
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
 import com.revilo.gatesofavarice.progression.ProgressionSystem;
@@ -30,6 +32,9 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
     public static final int REROLL_BUTTON_ID = 100;
     public static final int SELL_BUTTON_ID = 101;
     public static final int START_NEXT_WAVE_BUTTON_ID = 102;
+    public static final int BACK_BUTTON_ID = 103;
+    public static final int CATEGORY_BUTTON_ID_OFFSET = 1000;
+    public static final int CARD_BUTTON_ID_OFFSET = 1100;
     public static final int BUY_ALL_BUTTON_ID_OFFSET = 200;
     public static final int SELL_SLOT_COUNT = 18;
     private static final int TEMP_OFFER_COUNT = GRID_SLOT_COUNT;
@@ -63,6 +68,9 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
         this.addDataSlots(this.syncedData);
         this.clearSyncedData();
         this.syncFromTrader();
+        if (!inventory.player.level().isClientSide && inventory.player instanceof ServerPlayer serverPlayer) {
+            DungeonUpgradeManager.openShopUpgradeScreen(serverPlayer);
+        }
     }
 
     @Override
@@ -118,7 +126,7 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
         }
 
         if (id == REROLL_BUTTON_ID) {
-            boolean rerolled = ShopkeeperManager.rerollOffersWithWallet(serverPlayer, trader, false);
+            boolean rerolled = this.rerollUpgradeCards(serverPlayer, trader);
             if (rerolled) {
                 this.syncFromTrader();
                 this.broadcastChanges();
@@ -141,6 +149,22 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
         }
         if (id == START_NEXT_WAVE_BUTTON_ID) {
             return DungeonRunManager.startNextWaveFromShop(serverPlayer, this.shopkeeperId);
+        }
+        if (id == BACK_BUTTON_ID) {
+            return DungeonUpgradeManager.openShopUpgradeScreen(serverPlayer);
+        }
+
+        if (id >= CATEGORY_BUTTON_ID_OFFSET && id < CATEGORY_BUTTON_ID_OFFSET + UpgradeCategory.values().length) {
+            int categoryOrdinal = id - CATEGORY_BUTTON_ID_OFFSET;
+            UpgradeCategory[] values = UpgradeCategory.values();
+            if (categoryOrdinal < 0 || categoryOrdinal >= values.length) {
+                return false;
+            }
+            return DungeonUpgradeManager.selectShopCategory(serverPlayer, values[categoryOrdinal], this.getRemainingRerolls(), this.getRerollCost());
+        }
+
+        if (id >= CARD_BUTTON_ID_OFFSET && id < CARD_BUTTON_ID_OFFSET + 8) {
+            return DungeonUpgradeManager.selectShopCard(serverPlayer, id - CARD_BUTTON_ID_OFFSET);
         }
 
         if (id >= BUY_ALL_BUTTON_ID_OFFSET && id < BUY_ALL_BUTTON_ID_OFFSET + GRID_SLOT_COUNT) {
@@ -308,6 +332,13 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
         return false;
     }
 
+    public String getUpgradeSessionId() {
+        if (!(this.player instanceof ServerPlayer serverPlayer)) {
+            return "";
+        }
+        return DungeonUpgradeManager.getActiveSessionId(serverPlayer);
+    }
+
     public int getSellValue() {
         int total = 0;
         for (int slotIndex = 0; slotIndex < SELL_SLOT_COUNT; slotIndex++) {
@@ -448,6 +479,18 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
 
     private boolean spendCurrency(ServerPlayer player, int amount) {
         return MythicCoinWallet.spend(player, amount);
+    }
+
+    private boolean rerollUpgradeCards(ServerPlayer player, GatekeeperEntity trader) {
+        if (this.getRemainingRerolls() <= 0) {
+            return false;
+        }
+        int rerollCost = this.getRerollCost();
+        if (rerollCost <= 0 || !this.spendCurrency(player, rerollCost)) {
+            return false;
+        }
+        ShopkeeperManager.incrementRerollCount(trader);
+        return DungeonUpgradeManager.rerollShopCategory(player, this.getRemainingRerolls(), this.getRerollCost());
     }
 
     private void grantPurchasedReward(ServerPlayer player, ShopOfferDefinition offer) {

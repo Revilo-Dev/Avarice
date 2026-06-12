@@ -8,6 +8,7 @@ import com.revilo.gatesofavarice.catalyst.CatalystDefinition;
 import com.revilo.gatesofavarice.catalyst.CatalystDefinitionPool;
 import com.revilo.gatesofavarice.catalyst.CatalystStackData;
 import com.revilo.gatesofavarice.client.screen.DungeonWaveScreen;
+import com.revilo.gatesofavarice.client.screen.ShopkeeperScreen;
 import com.revilo.gatesofavarice.item.data.AugmentDifficultyTier;
 import com.revilo.gatesofavarice.registry.ModItems;
 import dev.shadowsoffire.gateways.GatewayObjects;
@@ -67,6 +68,12 @@ public final class GatewayExpansionJeiPlugin implements IModPlugin {
         registration.addGuiContainerHandler(DungeonWaveScreen.class, new IGuiContainerHandler<>() {
             @Override
             public List<Rect2i> getGuiExtraAreas(DungeonWaveScreen containerScreen) {
+                return List.of(new Rect2i(-10000, -10000, 20000, 20000));
+            }
+        });
+        registration.addGuiContainerHandler(ShopkeeperScreen.class, new IGuiContainerHandler<>() {
+            @Override
+            public List<Rect2i> getGuiExtraAreas(ShopkeeperScreen containerScreen) {
                 return List.of(new Rect2i(-10000, -10000, 20000, 20000));
             }
         });
