@@ -22,7 +22,6 @@ public final class InventoryWalletOverlay {
     private static final int PLAYER_BOX_CENTER_Y = 66;
     private static final int ICON_SIZE = 16;
     private static final float BASE_TEXT_SCALE = 0.75F;
-    // Keep wallet visuals above the player model but under tooltips.
     private static final float WALLET_Z = 150.0F;
     private static final float TOOLTIP_Z = 500.0F;
 

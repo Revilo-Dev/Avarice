@@ -2,12 +2,14 @@ package com.revilo.gatesofavarice.client;
 
 import com.revilo.gatesofavarice.dungeon.DungeonHudState;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
+import org.lwjgl.glfw.GLFW;
 
 public final class DungeonWaveHudOverlay {
     private static final ResourceLocation BAR_TEXTURE = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/levelbar/bar.png");
@@ -18,6 +20,8 @@ public final class DungeonWaveHudOverlay {
     private static final int WAVE_TEXT_TOP = 12;
     private static final int WAVE_TEXT_RIGHT = 139;
     private static final int WAVE_TEXT_BOTTOM = 18;
+    private static final int SIDEBAR_WIDTH = 158;
+    private static final int SIDEBAR_PADDING = 8;
 
     private DungeonWaveHudOverlay() {
     }
@@ -25,7 +29,15 @@ public final class DungeonWaveHudOverlay {
     @SubscribeEvent
     public static void onRenderGui(RenderGuiEvent.Post event) {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null || minecraft.level == null || minecraft.options.hideGui || !DungeonHudState.active()) {
+        if (minecraft.player == null || minecraft.level == null || minecraft.options.hideGui) {
+            return;
+        }
+
+        if (DungeonHudState.hasRunStats() && isTabDown(minecraft)) {
+            renderStatsSidebar(event.getGuiGraphics(), minecraft);
+        }
+
+        if (!DungeonHudState.active()) {
             return;
         }
 
@@ -54,8 +66,64 @@ public final class DungeonWaveHudOverlay {
         event.getGuiGraphics().drawString(minecraft.font, mobsLabel, x + (BAR_WIDTH - mobsLabelWidth) / 2, y + BAR_HEIGHT + 4, 0xFFFFFF, false);
     }
 
+    private static void renderStatsSidebar(GuiGraphics guiGraphics, Minecraft minecraft) {
+        int screenWidth = minecraft.getWindow().getGuiScaledWidth();
+        int screenHeight = minecraft.getWindow().getGuiScaledHeight();
+        int x = screenWidth - SIDEBAR_WIDTH - 8;
+        int y = 30;
+        int lineHeight = 11;
+        int statCount = Math.max(1, DungeonHudState.statLines().size());
+        int height = Math.min(screenHeight - y - 8, SIDEBAR_PADDING * 2 + 12 + lineHeight * (4 + statCount));
+
+        guiGraphics.fill(x, y, x + SIDEBAR_WIDTH, y + height, 0xD0101010);
+        guiGraphics.fill(x, y, x + SIDEBAR_WIDTH, y + 1, 0x80E0B85A);
+        guiGraphics.fill(x, y + height - 1, x + SIDEBAR_WIDTH, y + height, 0x803F3320);
+
+        int textX = x + SIDEBAR_PADDING;
+        int textY = y + SIDEBAR_PADDING;
+        guiGraphics.drawString(minecraft.font, Component.literal("Play Time: " + formatTime(DungeonHudState.playTimeTicks())), textX, textY, 0xFFFFFF, false);
+        textY += lineHeight;
+        guiGraphics.drawString(minecraft.font, Component.literal("Mob Kills: " + DungeonHudState.mobsKilled()), textX, textY, 0xFFFFFF, false);
+        textY += lineHeight + 4;
+        guiGraphics.drawString(minecraft.font, Component.literal("Modified Stats"), textX, textY, 0xFFE36B, false);
+        textY += lineHeight;
+
+        if (DungeonHudState.statLines().isEmpty()) {
+            guiGraphics.drawString(minecraft.font, Component.literal("No modifiers yet"), textX, textY, 0xA8A8A8, false);
+            return;
+        }
+
+        int bottom = y + height - SIDEBAR_PADDING;
+        for (String statLine : DungeonHudState.statLines()) {
+            if (textY + 9 > bottom) {
+                break;
+            }
+            guiGraphics.drawString(minecraft.font, Component.literal(statLine), textX, textY, statColor(statLine), false);
+            textY += lineHeight;
+        }
+    }
+
+    private static boolean isTabDown(Minecraft minecraft) {
+        return GLFW.glfwGetKey(minecraft.getWindow().getWindow(), GLFW.GLFW_KEY_TAB) == GLFW.GLFW_PRESS;
+    }
+
     @SubscribeEvent
     public static void onClientLogout(ClientPlayerNetworkEvent.LoggingOut event) {
         DungeonHudState.clear();
+    }
+
+    private static String formatTime(long ticks) {
+        long totalSeconds = Math.max(0L, ticks / 20L);
+        long minutes = totalSeconds / 60L;
+        long seconds = totalSeconds % 60L;
+        return minutes + ":" + String.format(java.util.Locale.ROOT, "%02d", seconds);
+    }
+
+    private static int statColor(String statLine) {
+        String normalized = statLine.toLowerCase(java.util.Locale.ROOT);
+        if (normalized.startsWith("mob ") || normalized.startsWith("elite ")) {
+            return 0xFFD5D5;
+        }
+        return 0xD7F0D9;
     }
 }

@@ -31,7 +31,9 @@ import net.revilodev.runic.stat.RuneStats;
 public final class RunicLoadoutService {
     private static final Set<String> ARMOR_ALLOWED_STATS = Set.of(
             "movement_speed", "resistance", "fire_resistance", "blast_resistance", "projectile_resistance",
-            "knockback_resistance", "health", "aegis", "jump_height", "power"
+            "knockback_resistance", "health", "aegis", "jump_height", "power", "ability_power",
+            "attack_damage", "attack_speed", "poison_chance", "flame_chance", "freezing_chance",
+            "shocking_chance", "withering_chance"
     );
     private static final Set<String> WEAPON_ALLOWED_STATS = Set.of(
             "attack_speed", "attack_damage", "attack_range", "movement_speed", "sweeping_range", "durability",
@@ -148,9 +150,22 @@ public final class RunicLoadoutService {
         if (stack.isEmpty() || type == null) return false;
         String id = type.id();
         if (stack.getItem() instanceof ArmorItem) {
-            return ARMOR_ALLOWED_STATS.contains(id);
+            return ARMOR_ALLOWED_STATS.contains(id) && isStatAllowedForArmorPiece(stack, id);
         }
         return WEAPON_ALLOWED_STATS.contains(id);
+    }
+
+    private static boolean isStatAllowedForArmorPiece(ItemStack stack, String statId) {
+        if (!(stack.getItem() instanceof ArmorItem armorItem)) {
+            return false;
+        }
+        if ("movement_speed".equals(statId)) {
+            return armorItem.getEquipmentSlot() == net.minecraft.world.entity.EquipmentSlot.FEET;
+        }
+        if ("jump_height".equals(statId)) {
+            return armorItem.getEquipmentSlot() == net.minecraft.world.entity.EquipmentSlot.LEGS;
+        }
+        return true;
     }
 
     public static List<StatRollRange> filterStatsForStack(ItemStack stack, List<StatRollRange> source) {

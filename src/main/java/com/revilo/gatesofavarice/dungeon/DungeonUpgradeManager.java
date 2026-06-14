@@ -179,6 +179,10 @@ public final class DungeonUpgradeManager {
             return;
         }
         session.cardGenerationNonce++;
+        session.cardsByCategory.remove(session.activeCategory);
+        if (session.activeCategory == UpgradeCategory.ARMOR) {
+            session.activeArmorPiece = chooseArmorPieceForCards(player, session.activeArmorPiece);
+        }
         selectCategory(player, sessionIdRaw, session.activeCategory);
     }
 
@@ -209,25 +213,16 @@ public final class DungeonUpgradeManager {
     }
 
     private static void applySelectedCard(ServerPlayer player, UpgradeSession session, UpgradeCard card, boolean requireRepresentativeTarget) {
-        List<ItemStack> targets = targetStacks(player, session.activeCategory);
+        List<ItemStack> targets = targetStacks(player, session.activeCategory, session.activeArmorPiece);
         ItemStack representativeTarget = targets.isEmpty() ? ItemStack.EMPTY : targets.getFirst();
         if (representativeTarget.isEmpty() && session.activeCategory != UpgradeCategory.ITEM && requireRepresentativeTarget) {
             reject(player, "Missing target item.");
             return;
         }
         UpgradeContext ctx = new UpgradeContext(player.getUUID(), session.instance.instanceId(), 1.0F, 3);
-        if (session.activeCategory == UpgradeCategory.ARMOR) {
-            for (ItemStack target : targets) {
-                applyCard(player, target, card, ctx, session.definition);
-                if (!target.isEmpty()) {
-                    RunicLoadoutService.syncRunicSlots(target);
-                }
-            }
-        } else {
-            applyCard(player, representativeTarget, card, ctx, session.definition);
-            if (!representativeTarget.isEmpty()) {
-                RunicLoadoutService.syncRunicSlots(representativeTarget);
-            }
+        applyCard(player, representativeTarget, card, ctx, session.definition);
+        if (!representativeTarget.isEmpty()) {
+            RunicLoadoutService.syncRunicSlots(representativeTarget);
         }
         player.inventoryMenu.broadcastChanges();
         player.containerMenu.broadcastChanges();
@@ -241,7 +236,11 @@ public final class DungeonUpgradeManager {
     }
 
     private static void syncCategoryCards(ServerPlayer player, UpgradeSession session, UpgradeCategory category, int rerollsLeft, int rerollCost) {
-        ItemStack target = representativeTargetStack(player, category);
+        if (category == UpgradeCategory.ARMOR && !isArmorPieceTargetValid(player, session.activeArmorPiece)) {
+            session.activeArmorPiece = chooseArmorPieceForCards(player, null);
+            session.cardsByCategory.remove(category);
+        }
+        ItemStack target = representativeTargetStack(player, category, session.activeArmorPiece);
         ItemStack preview = category == UpgradeCategory.ITEM
                 ? ItemStack.EMPTY
                 : (target.isEmpty() ? previewStackForCategory(category, player) : target);
@@ -268,7 +267,10 @@ public final class DungeonUpgradeManager {
         }
         List<UpgradeCard> existing = session.cardsByCategory.getOrDefault(category, List.of());
         int remainingSlots = Math.min(existing.size(), remainingShopSelections(session));
-        ItemStack target = representativeTargetStack(player, category);
+        if (category == UpgradeCategory.ARMOR) {
+            session.activeArmorPiece = chooseArmorPieceForCards(player, session.activeArmorPiece);
+        }
+        ItemStack target = representativeTargetStack(player, category, session.activeArmorPiece);
         int waveNumber = session.waveOwnerId == null ? 1 : DungeonRunManager.getUpgradeWaveNumber(session.waveOwnerId);
         session.cardGenerationNonce++;
         List<UpgradeCard> cards = generateShopCards(player, session, category, target, waveNumber, remainingSlots);
@@ -479,17 +481,41 @@ public final class DungeonUpgradeManager {
     }
 
     private static ItemStack representativeTargetStack(ServerPlayer player, UpgradeCategory category) {
-        List<ItemStack> targets = targetStacks(player, category);
+        return representativeTargetStack(player, category, null);
+    }
+
+    private static ItemStack representativeTargetStack(ServerPlayer player, UpgradeCategory category, String armorPiece) {
+        List<ItemStack> targets = targetStacks(player, category, armorPiece);
         return targets.isEmpty() ? ItemStack.EMPTY : targets.getFirst();
     }
 
     private static List<ItemStack> targetStacks(ServerPlayer player, UpgradeCategory category) {
+        return targetStacks(player, category, null);
+    }
+
+    private static List<ItemStack> targetStacks(ServerPlayer player, UpgradeCategory category, String armorPiece) {
         return switch (category) {
             case PRIMARY_WEAPON -> List.of(findWeaponByRole(player, DungeonBoundItems.PRIMARY_WEAPON_ROLE));
             case SECONDARY_WEAPON -> List.of(findWeaponByRole(player, DungeonBoundItems.SECONDARY_WEAPON_ROLE));
-            case ARMOR -> findArmorSetTargets(player);
+            case ARMOR -> findArmorPieceTarget(player, armorPiece);
             case ITEM -> List.of(findFirstSupplyItem(player));
         };
+    }
+
+    private static List<ItemStack> findArmorPieceTarget(ServerPlayer player, String armorPiece) {
+        List<ItemStack> armorTargets = findArmorSetTargets(player);
+        if (armorTargets.isEmpty()) {
+            return List.of();
+        }
+        if (armorPiece == null || armorPiece.isBlank()) {
+            return List.of(armorTargets.getFirst());
+        }
+        for (ItemStack target : armorTargets) {
+            if (armorPiece.equals(armorPieceOf(target))) {
+                return List.of(target);
+            }
+        }
+        return List.of(armorTargets.getFirst());
     }
 
     private static List<ItemStack> findArmorSetTargets(ServerPlayer player) {
@@ -504,6 +530,41 @@ public final class DungeonUpgradeManager {
             }
         }
         return List.copyOf(targets);
+    }
+
+    private static boolean isArmorPieceTargetValid(ServerPlayer player, String armorPiece) {
+        if (armorPiece == null || armorPiece.isBlank()) {
+            return false;
+        }
+        for (ItemStack target : findArmorSetTargets(player)) {
+            if (armorPiece.equals(armorPieceOf(target))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String chooseArmorPieceForCards(ServerPlayer player, String previousPiece) {
+        List<ItemStack> armorTargets = findArmorSetTargets(player);
+        if (armorTargets.isEmpty()) {
+            return "";
+        }
+        java.util.ArrayList<String> pieces = new java.util.ArrayList<>(armorTargets.size());
+        for (ItemStack target : armorTargets) {
+            String piece = armorPieceOf(target);
+            if (!piece.isBlank() && (previousPiece == null || !piece.equals(previousPiece))) {
+                pieces.add(piece);
+            }
+        }
+        if (pieces.isEmpty()) {
+            for (ItemStack target : armorTargets) {
+                String piece = armorPieceOf(target);
+                if (!piece.isBlank()) {
+                    pieces.add(piece);
+                }
+            }
+        }
+        return pieces.isEmpty() ? "" : pieces.get(player.getRandom().nextInt(pieces.size()));
     }
 
     private static ItemStack previewStackForCategory(UpgradeCategory category, ServerPlayer player) {
@@ -562,6 +623,11 @@ public final class DungeonUpgradeManager {
         return root.getString("loadout_id");
     }
 
+    private static String armorPieceOf(ItemStack stack) {
+        CompoundTag root = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag().getCompound(GatewayExpansion.MOD_ID);
+        return root.getString("armor_piece");
+    }
+
     private static float parseNumber(String text) {
         String cleaned = text.replace("+", "").replace("%", "").trim();
         return Float.parseFloat(cleaned);
@@ -590,7 +656,15 @@ public final class DungeonUpgradeManager {
             case "Health Boost" -> RuneStatType.byId("health");
             case "Toughness" -> RuneStatType.byId("toughness");
             case "Leaping" -> RuneStatType.byId("jump_height");
-            case "Ability Power" -> RuneStatType.byId("power");
+            case "Ability Power" -> RuneStatType.byId("ability_power");
+            case "Power" -> RuneStatType.byId("power");
+            case "Strength" -> RuneStatType.byId("attack_damage");
+            case "Rampage" -> RuneStatType.byId("attack_speed");
+            case "Poison" -> RuneStatType.byId("poison_chance");
+            case "Fire" -> RuneStatType.byId("flame_chance");
+            case "Ice" -> RuneStatType.byId("freezing_chance");
+            case "Lightning" -> RuneStatType.byId("shocking_chance");
+            case "Wind" -> RuneStatType.byId("withering_chance");
             case "Movement Speed" -> RuneStatType.byId("movement_speed");
             case "Resistance" -> RuneStatType.byId("resistance");
             case "Fire Resistance" -> RuneStatType.byId("fire_resistance");
@@ -623,6 +697,7 @@ public final class DungeonUpgradeManager {
         private final LoadoutDefinition definition;
         private final UUID waveOwnerId;
         private UpgradeCategory activeCategory;
+        private String activeArmorPiece = "";
         private long cardGenerationNonce = 0L;
         private int purchasedShopCards = 0;
         private final Map<UpgradeCategory, List<UpgradeCard>> cardsByCategory = new HashMap<>();

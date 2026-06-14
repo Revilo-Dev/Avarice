@@ -55,8 +55,8 @@ public final class RunicUpgradeService {
     );
     private static final List<CardSpec> DEFAULT_ARMOR_EFFECT_CARDS = List.of(
             statCard("health", "Effect Card", "Health Boost", 1.0F, 5.0F),
-            bootsOnlyStatCard("jump_height", "Effect Card", "Leaping", 0.05F, 0.12F),
-            statCard("power", "Effect Card", "Ability Power", 0.50F, 2.50F),
+            statCard("jump_height", "Effect Card", "Leaping", 0.05F, 0.12F),
+            statCard("ability_power", "Effect Card", "Ability Power", 0.50F, 2.50F),
             statCard("movement_speed", "Effect Card", "Movement Speed", 0.04F, 0.10F)
     );
     private static final List<CardSpec> DEFAULT_ARMOR_STAT_CARDS = List.of(
@@ -149,9 +149,9 @@ public final class RunicUpgradeService {
             List<CardSpec> armorEffectCards = armorCardsFor(definition, ArmorCardBucket.EFFECT);
             List<CardSpec> armorStatCards = armorCardsFor(definition, ArmorCardBucket.STAT);
             List<CardSpec> armorOffenceCards = armorCardsFor(definition, ArmorCardBucket.OFFENCE);
-            appendCardSpecs(cards, armorEffectCards.isEmpty() ? DEFAULT_ARMOR_EFFECT_CARDS : armorEffectCards, current, category, targetLabel, target, usedIds, random, 2, waveNumber, playerLevel);
-            appendCardSpecs(cards, armorStatCards.isEmpty() ? DEFAULT_ARMOR_STAT_CARDS : armorStatCards, current, category, targetLabel, target, usedIds, random, 2, waveNumber, playerLevel);
-            appendCardSpecs(cards, armorOffenceCards.isEmpty() ? DEFAULT_ARMOR_OFFENCE_CARDS : armorOffenceCards, current, category, targetLabel, target, usedIds, random, 1, waveNumber, playerLevel);
+            appendCardSpecs(cards, weightedForExistingStats(armorEffectCards.isEmpty() ? DEFAULT_ARMOR_EFFECT_CARDS : armorEffectCards, current), current, category, targetLabel, target, usedIds, random, 2, waveNumber, playerLevel);
+            appendCardSpecs(cards, weightedForExistingStats(armorStatCards.isEmpty() ? DEFAULT_ARMOR_STAT_CARDS : armorStatCards, current), current, category, targetLabel, target, usedIds, random, 2, waveNumber, playerLevel);
+            appendCardSpecs(cards, weightedForExistingStats(armorOffenceCards.isEmpty() ? DEFAULT_ARMOR_OFFENCE_CARDS : armorOffenceCards, current), current, category, targetLabel, target, usedIds, random, 1, waveNumber, playerLevel);
         } else {
             appendCardSpecs(cards, WEAPON_EFFECT_CARDS, current, category, targetLabel, target, usedIds, random, 3, waveNumber, playerLevel);
             appendCardSpecs(cards, WEAPON_DAMAGE_CARDS, current, category, targetLabel, target, usedIds, random, 1, waveNumber, playerLevel);
@@ -226,6 +226,25 @@ public final class RunicUpgradeService {
                     : statCard("attack_damage", "Damage Card", "Attack Damage", 1.0F, 3.0F);
         }
         return buildStatCard(fallback, current, category, targetLabel, random, waveNumber, playerLevel);
+    }
+
+    private static List<CardSpec> weightedForExistingStats(List<CardSpec> specs, RuneStats current) {
+        if (specs.isEmpty() || current.isEmpty()) {
+            return specs;
+        }
+        ArrayList<CardSpec> weighted = new ArrayList<>(specs.size() * 2);
+        for (CardSpec spec : specs) {
+            if (spec.statId() == null) {
+                continue;
+            }
+            RuneStatType type = RuneStatType.byId(spec.statId());
+            if (type != null && current.has(type)) {
+                weighted.add(spec);
+                weighted.add(spec);
+            }
+        }
+        weighted.addAll(specs);
+        return List.copyOf(weighted);
     }
 
     private static UpgradeCard buildStatCard(CardSpec spec, RuneStats current, UpgradeCategory category, String targetLabel, RandomSource random, int waveNumber, int playerLevel) {
@@ -382,10 +401,13 @@ public final class RunicUpgradeService {
 
     private static boolean matchesBucket(String statId, ArmorCardBucket bucket) {
         return switch (bucket) {
-            case EFFECT -> statId.equals("health") || statId.equals("movement_speed") || statId.equals("jump_height") || statId.equals("power");
+            case EFFECT -> statId.equals("health") || statId.equals("movement_speed") || statId.equals("jump_height")
+                    || statId.equals("power") || statId.equals("ability_power");
             case STAT -> statId.equals("resistance") || statId.equals("fire_resistance") || statId.equals("projectile_resistance")
                     || statId.equals("blast_resistance") || statId.equals("knockback_resistance");
-            case OFFENCE -> statId.equals("aegis");
+            case OFFENCE -> statId.equals("aegis") || statId.equals("attack_damage") || statId.equals("attack_speed")
+                    || statId.equals("poison_chance") || statId.equals("flame_chance") || statId.equals("freezing_chance")
+                    || statId.equals("shocking_chance") || statId.equals("withering_chance");
         };
     }
 
@@ -396,18 +418,24 @@ public final class RunicUpgradeService {
             case "health" -> "Health Boost";
             case "movement_speed" -> "Movement Speed";
             case "jump_height" -> "Leaping";
-            case "power" -> "Ability Power";
+            case "ability_power" -> "Ability Power";
+            case "power" -> "Power";
             case "resistance" -> "Resistance";
             case "fire_resistance" -> "Fire Resistance";
             case "projectile_resistance" -> "Projectile Resistance";
             case "blast_resistance" -> "Blast Resistance";
             case "knockback_resistance" -> "Knockback Resistance";
             case "aegis" -> "Aegis";
+            case "attack_damage" -> "Strength";
+            case "attack_speed" -> "Rampage";
+            case "poison_chance" -> "Poison";
+            case "flame_chance" -> "Fire";
+            case "freezing_chance" -> "Ice";
+            case "shocking_chance" -> "Lightning";
+            case "withering_chance" -> "Wind";
             default -> id.replace('_', ' ');
         };
-        return "jump_height".equals(id)
-                ? bootsOnlyStatCard(id, title, label, range.min(), range.max())
-                : statCard(id, title, label, range.min(), range.max());
+        return statCard(id, title, label, range.min(), range.max());
     }
 
     private static CardSpec statCard(String statId, String title, String label, float min, float max) {

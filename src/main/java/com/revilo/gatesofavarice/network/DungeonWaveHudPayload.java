@@ -1,12 +1,14 @@
 package com.revilo.gatesofavarice.network;
 
 import com.revilo.gatesofavarice.GatewayExpansion;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
-public record DungeonWaveHudPayload(boolean active, int waveNumber, int mobsRemaining, int totalMobs) implements CustomPacketPayload {
+public record DungeonWaveHudPayload(boolean active, int waveNumber, int mobsRemaining, int totalMobs, long playTimeTicks, int mobsKilled, List<String> statLines) implements CustomPacketPayload {
 
     public static final Type<DungeonWaveHudPayload> TYPE =
             new Type<>(ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "dungeon_wave_hud"));
@@ -18,13 +20,27 @@ public record DungeonWaveHudPayload(boolean active, int waveNumber, int mobsRema
                         buffer.writeVarInt(payload.waveNumber);
                         buffer.writeVarInt(payload.mobsRemaining);
                         buffer.writeVarInt(payload.totalMobs);
+                        buffer.writeVarLong(payload.playTimeTicks);
+                        buffer.writeVarInt(payload.mobsKilled);
+                        buffer.writeVarInt(payload.statLines.size());
+                        for (String statLine : payload.statLines) {
+                            buffer.writeUtf(statLine);
+                        }
                     },
-                    buffer -> new DungeonWaveHudPayload(
-                            buffer.readBoolean(),
-                            buffer.readVarInt(),
-                            buffer.readVarInt(),
-                            buffer.readVarInt()
-                    )
+                    buffer -> {
+                        boolean active = buffer.readBoolean();
+                        int waveNumber = buffer.readVarInt();
+                        int mobsRemaining = buffer.readVarInt();
+                        int totalMobs = buffer.readVarInt();
+                        long playTimeTicks = buffer.readVarLong();
+                        int mobsKilled = buffer.readVarInt();
+                        int statCount = buffer.readVarInt();
+                        ArrayList<String> statLines = new ArrayList<>(statCount);
+                        for (int i = 0; i < statCount; i++) {
+                            statLines.add(buffer.readUtf());
+                        }
+                        return new DungeonWaveHudPayload(active, waveNumber, mobsRemaining, totalMobs, playTimeTicks, mobsKilled, List.copyOf(statLines));
+                    }
             );
 
     @Override

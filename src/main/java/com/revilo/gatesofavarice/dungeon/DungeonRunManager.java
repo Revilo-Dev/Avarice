@@ -199,7 +199,7 @@ public final class DungeonRunManager {
         if (run == null || run.exitPortalId != portal.getId()) return;
         PlayerSnapshot snapshot = run.snapshots.get(player.getUUID());
         if (snapshot == null) return;
-        syncHudToPlayer(player, false, run.waveNumber, 0, 1);
+        clearHudToPlayer(player);
         int levelPoints = awardDungeonExitProgression(player, run);
         List<ItemStack> rewards = collectDungeonRewards(player);
         ItemStack lootbox = createLootboxFromRewards(player, rewards, levelPoints);
@@ -587,7 +587,7 @@ public final class DungeonRunManager {
                 closeOverworldEntryPortals(player.server, run.ownerId);
             }
             clearForDungeon(player);
-            syncHudToPlayer(player, false, run.waveNumber, 0, 1);
+            clearHudToPlayer(player);
             if (run.liveParticipants().isEmpty()) {
                 finishAndCleanup(run);
             } else {
@@ -1662,11 +1662,33 @@ public final class DungeonRunManager {
         return List.copyOf(changes);
     }
 
+    private static List<String> modifiedStatSummary(RunState run) {
+        ArrayList<String> changes = new ArrayList<>();
+        addModifiedStat(changes, "Mob Quantity", Math.max(0.0D, (run.enemyCountMultiplier - 1.0D) * 100.0D));
+        addModifiedStat(changes, "Mob Health", Math.max(0.0D, (run.healthMultiplier - 1.0D) * 100.0D));
+        addModifiedStat(changes, "Mob Damage", Math.max(0.0D, (run.damageMultiplier - 1.0D) * 100.0D));
+        addModifiedStat(changes, "Mob Speed", Math.max(0.0D, (run.speedMultiplier - 1.0D) * 100.0D));
+        addModifiedStat(changes, "Mob Leech", run.mobLeechPercent * 100.0D);
+        addModifiedStat(changes, "Elite Chance", (run.eliteChanceBonus + run.eliteWeightBonus * 0.01D) * 100.0D);
+        addModifiedStat(changes, "Quantity", run.quantityBonusModifier * 100.0D);
+        addModifiedStat(changes, "Rarity", run.rarityBonusModifier * 100.0D);
+        addModifiedStat(changes, "Coins", run.coinBonusModifier * 100.0D);
+        addModifiedStat(changes, "Levels", Math.max(0.0D, (run.levelMultiplier - 1.0D) * 100.0D));
+        return List.copyOf(changes);
+    }
+
     private static void addRunChange(List<Component> changes, String label, double value) {
         if (value <= 0.0D) {
             return;
         }
         changes.add(Component.literal(String.format(java.util.Locale.ROOT, "+%s %.1f%%", label, value)));
+    }
+
+    private static void addModifiedStat(List<String> changes, String label, double value) {
+        if (value <= 0.0D) {
+            return;
+        }
+        changes.add(String.format(java.util.Locale.ROOT, "%s +%.1f%%", label, value));
     }
 
     private static int rollTarotDifficulty(int displayedWave, int avgLevel, RandomSource random) {
@@ -1701,7 +1723,31 @@ public final class DungeonRunManager {
     }
 
     private static void syncHudToPlayer(ServerPlayer player, boolean active, int wave, int remaining, int total) {
-        PacketDistributor.sendToPlayer(player, new DungeonWaveHudPayload(active, wave, remaining, total));
+        RunState run = getRunForPlayer(player);
+        if (run == null) {
+            clearHudToPlayer(player);
+            return;
+        }
+        PacketDistributor.sendToPlayer(player, createHudPayload(run, active, wave, remaining, total));
+    }
+
+    private static void clearHudToPlayer(ServerPlayer player) {
+        PacketDistributor.sendToPlayer(player, new DungeonWaveHudPayload(false, 0, 0, 1, 0L, 0, List.of()));
+    }
+
+    private static DungeonWaveHudPayload createHudPayload(RunState run, boolean active, int wave, int remaining, int total) {
+        return new DungeonWaveHudPayload(active, wave, remaining, total, elapsedRunTicks(run), run.mobsKilled, modifiedStatSummary(run));
+    }
+
+    private static long elapsedRunTicks(RunState run) {
+        if (run == null || run.runStartGameTime < 0L || run.server == null) {
+            return 0L;
+        }
+        ServerLevel dungeon = getDungeonLevel(run);
+        if (dungeon == null) {
+            return 0L;
+        }
+        return Math.max(0L, dungeon.getGameTime() - run.runStartGameTime);
     }
 
     private static void finishAndCleanup(RunState run) {
@@ -2201,7 +2247,7 @@ public final class DungeonRunManager {
     private static void syncHud(RunState run, boolean active) {
         int remaining = Math.max(0, run.toSpawn + run.aliveMobs.size());
         int total = Math.max(1, run.waveTotalMobs);
-        DungeonWaveHudPayload payload = new DungeonWaveHudPayload(active, run.waveNumber, remaining, total);
+        DungeonWaveHudPayload payload = createHudPayload(run, active, run.waveNumber, remaining, total);
         for (ServerPlayer participant : run.liveParticipants()) PacketDistributor.sendToPlayer(participant, payload);
     }
 
