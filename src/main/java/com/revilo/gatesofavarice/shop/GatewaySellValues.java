@@ -96,14 +96,6 @@ public final class GatewaySellValues {
         if (item == ModItems.TIER_3_CRYSTAL.get()) return 0;
         if (item == ModItems.TIER_4_CRYSTAL.get()) return 0;
         if (item == ModItems.TIER_5_CRYSTAL.get()) return 0;
-        if (item == ModItems.EASY_AUGMENT.get()) return 6;
-        if (item == ModItems.MEDIUM_AUGMENT.get()) return 12;
-        if (item == ModItems.HARD_AUGMENT.get()) return 18;
-        if (item == ModItems.EXTREME_AUGMENT.get()) return 54;
-        if (item == ModItems.TIME_CATALYST.get()) return 15;
-        if (item == ModItems.LOOT_CATALYST.get()) return 19;
-        if (item == ModItems.STAT_CATALYST.get()) return 23;
-        if (item == ModItems.HIGHRISK_CATALYST.get()) return 49;
         if (item == ModItems.STABILITY_PEARL.get()) return 520;
         if (item == ModItems.MANA_STEEL_PAXEL.get()) return 980;
         if (item == ModItems.MANA_STEEL_SWORD.get()) return 1320;

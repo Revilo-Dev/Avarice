@@ -1,9 +1,6 @@
 package com.revilo.gatesofavarice.shop;
 
-import com.revilo.gatesofavarice.augment.AugmentStackData;
-import com.revilo.gatesofavarice.catalyst.CatalystStackData;
 import com.revilo.gatesofavarice.integration.ModCompat;
-import com.revilo.gatesofavarice.item.data.AugmentDifficultyTier;
 import com.revilo.gatesofavarice.item.data.CrystalForgeData;
 import com.revilo.gatesofavarice.item.data.CrystalTheme;
 import com.revilo.gatesofavarice.registry.ModItems;
@@ -133,7 +130,6 @@ public record ShopOfferDefinition(
         appendOptionalRunicOffers(offers);
         appendOptionalModdedOffers(offers);
         addCrystalThemeOffers(offers);
-        addAugmentAndCatalystOffers(offers);
         addMaterialOffer(offers, "stability_pearl", "stability_pearl", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.STABILITY_PEARL.get())), 15, MAX_PLAYER_LEVEL, 1, 2, 0, 0, ModItems.STABILITY_PEARL.get());
         return offers;
     }
@@ -269,58 +265,6 @@ public record ShopOfferDefinition(
         }
         ItemLike item = BuiltInRegistries.ITEM.get(id);
         addShopOnlyOffer(offers, offerId, fixedPrice, minLevel, maxLevel, minStock, maxStock, minFluctuation, maxFluctuation, item, description);
-    }
-
-    private static void addAugmentAndCatalystOffers(List<ShopOfferDefinition> offers) {
-        offers.add(augmentOffer("easy_augment", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.EASY_AUGMENT.get())), 0, MAX_PLAYER_LEVEL, ModItems.EASY_AUGMENT.get(), AugmentDifficultyTier.EASY));
-        offers.add(augmentOffer("medium_augment", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.MEDIUM_AUGMENT.get())), 20, MAX_PLAYER_LEVEL, ModItems.MEDIUM_AUGMENT.get(), AugmentDifficultyTier.MEDIUM));
-        offers.add(augmentOffer("hard_augment", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.HARD_AUGMENT.get())), 30, MAX_PLAYER_LEVEL, ModItems.HARD_AUGMENT.get(), AugmentDifficultyTier.HARD));
-        offers.add(augmentOffer("extreme_augment", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.EXTREME_AUGMENT.get())), 50, MAX_PLAYER_LEVEL, ModItems.EXTREME_AUGMENT.get(), AugmentDifficultyTier.EXTREME));
-        offers.add(catalystOffer("time_catalyst", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.TIME_CATALYST.get())), 15, MAX_PLAYER_LEVEL, ModItems.TIME_CATALYST.get()));
-    }
-
-    private static ShopOfferDefinition augmentOffer(String id, int price, int minLevel, int maxLevel, ItemLike item, AugmentDifficultyTier difficultyTier) {
-        return new ShopOfferDefinition(
-                id,
-                price,
-                minLevel,
-                maxLevel,
-                7,
-                13,
-                0,
-                0,
-                false,
-                new ItemStack(item),
-                Component.translatable("shop.gatesofavarice.offer." + id),
-                Component.translatable("shop.gatesofavarice.offer." + id + ".desc"),
-                (random, playerLevel) -> {
-                    ItemStack stack = new ItemStack(item);
-                    AugmentStackData.ensureDefinition(stack, difficultyTier, random, playerLevel);
-                    return stack;
-                }
-        );
-    }
-
-    private static ShopOfferDefinition catalystOffer(String id, int price, int minLevel, int maxLevel, ItemLike item) {
-        return new ShopOfferDefinition(
-                id,
-                price,
-                minLevel,
-                maxLevel,
-                7,
-                13,
-                0,
-                0,
-                false,
-                new ItemStack(item),
-                Component.translatable("shop.gatesofavarice.offer." + id),
-                Component.translatable("shop.gatesofavarice.offer." + id + ".desc"),
-                (random, playerLevel) -> {
-                    ItemStack stack = new ItemStack(item);
-                    CatalystStackData.ensureDefinition(stack, com.revilo.gatesofavarice.catalyst.CatalystArchetype.TIME, random, playerLevel);
-                    return stack;
-                }
-        );
     }
 
     private static void addCrystalThemeOffers(List<ShopOfferDefinition> offers) {

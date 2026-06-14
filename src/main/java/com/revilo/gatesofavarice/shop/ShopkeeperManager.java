@@ -95,6 +95,8 @@ public final class ShopkeeperManager {
             ModItems.PRISMATIC_CORE
     );
     private static final float STABILITY_PEARL_DROP_CHANCE = 0.04F;
+    private static LootMaterialItem[] gatewayDropPoolCache;
+    private static LootMaterialItem[] earlyGatewayDropPoolCache;
 
     private ShopkeeperManager() {
     }
@@ -443,7 +445,7 @@ public final class ShopkeeperManager {
                 case COMMON -> 4 + random.nextInt(5);
                 case UNCOMMON -> 2 + random.nextInt(4);
                 case RARE -> 1 + random.nextInt(2);
-                case EPIC, LEGENDARY, UNIQUE -> 1;
+                case EPIC, LEGENDARY -> 1;
             };
 
             spawnGatewayDrop(gate, new ItemStack(item, stackSize));
@@ -463,7 +465,10 @@ public final class ShopkeeperManager {
 
     private static LootMaterialItem rollGatewayLoot(GatewayEntity gate, RandomSource random) {
         LootMaterialItem[] pool = getDropPoolForGate(gate);
-        int totalWeight = java.util.Arrays.stream(pool).mapToInt(item -> getGatewayDropWeight(item, gate)).sum();
+        int totalWeight = 0;
+        for (LootMaterialItem item : pool) {
+            totalWeight += getGatewayDropWeight(item, gate);
+        }
         if (totalWeight <= 0) {
             return null;
         }
@@ -673,15 +678,25 @@ public final class ShopkeeperManager {
     }
 
     private static LootMaterialItem[] getDropPoolForGate(GatewayEntity gate) {
-        LootMaterialItem[] gatewayDropPool = GATEWAY_DROP_ITEMS.stream().map(DeferredHolder::get).toArray(LootMaterialItem[]::new);
+        LootMaterialItem[] gatewayDropPool = getGatewayDropPool();
         if (gate == null || GatewayForgeService.getGatewayCrystalTier(gate.getGateway()) >= 4) {
             return gatewayDropPool;
         }
 
-        return java.util.Arrays.stream(gatewayDropPool)
-                .filter(item -> item != ModItems.PRISMATIC_CORE.get())
-                .filter(item -> item != ModItems.LUNARIUM_SCRAP.get())
-                .toArray(LootMaterialItem[]::new);
+        if (earlyGatewayDropPoolCache == null) {
+            earlyGatewayDropPoolCache = java.util.Arrays.stream(gatewayDropPool)
+                    .filter(item -> item != ModItems.PRISMATIC_CORE.get())
+                    .filter(item -> item != ModItems.LUNARIUM_SCRAP.get())
+                    .toArray(LootMaterialItem[]::new);
+        }
+        return earlyGatewayDropPoolCache;
+    }
+
+    private static LootMaterialItem[] getGatewayDropPool() {
+        if (gatewayDropPoolCache == null) {
+            gatewayDropPoolCache = GATEWAY_DROP_ITEMS.stream().map(DeferredHolder::get).toArray(LootMaterialItem[]::new);
+        }
+        return gatewayDropPoolCache;
     }
 
     private static int getGatewayDropWeight(LootMaterialItem item, GatewayEntity gate) {
@@ -755,7 +770,7 @@ public final class ShopkeeperManager {
         int levelXp = LevelUpGatewayXpRewards.computeWaveXp(gate);
         String survived = formatElapsedTime(gate.tickCount);
         Component summary = Component.empty()
-                .append(Component.literal("◆ ").withStyle(ChatFormatting.LIGHT_PURPLE))
+                .append(Component.literal("* ").withStyle(ChatFormatting.LIGHT_PURPLE))
                 .append(Component.literal("Coins: " + displayedCoins).withStyle(ChatFormatting.LIGHT_PURPLE))
                 .append(Component.literal(" | ").withStyle(ChatFormatting.DARK_GRAY))
                 .append(Component.literal("Levels: " + levelXp).withStyle(ChatFormatting.AQUA))

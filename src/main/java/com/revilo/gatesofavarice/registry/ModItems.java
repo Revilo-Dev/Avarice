@@ -2,9 +2,6 @@ package com.revilo.gatesofavarice.registry;
 
 import com.revilo.gatesofavarice.GatewayExpansion;
 import com.revilo.gatesofavarice.item.ArcaneAppleItem;
-import com.revilo.gatesofavarice.catalyst.CatalystArchetype;
-import com.revilo.gatesofavarice.item.AugmentItem;
-import com.revilo.gatesofavarice.item.CatalystItem;
 import com.revilo.gatesofavarice.item.CrystalItem;
 import com.revilo.gatesofavarice.item.GatewaySwordItem;
 import com.revilo.gatesofavarice.item.HeartFragmentItem;
@@ -15,7 +12,6 @@ import com.revilo.gatesofavarice.item.PaxelItem;
 import com.revilo.gatesofavarice.item.RarityTintedSmithingTemplateItem;
 import com.revilo.gatesofavarice.item.ShopGatewayPearlItem;
 import com.revilo.gatesofavarice.item.StabilityPearlItem;
-import com.revilo.gatesofavarice.item.data.AugmentDifficultyTier;
 import com.revilo.gatesofavarice.item.data.LootRarity;
 import java.util.List;
 import net.minecraft.ChatFormatting;
@@ -49,23 +45,6 @@ public final class ModItems {
     public static final DeferredHolder<Item, CrystalItem> TIER_5_CRYSTAL = ITEMS.register("tier_5_crystal",
             () -> new CrystalItem(new CrystalItem.CrystalTier(5, 90, 100), new Item.Properties()));
 
-    public static final DeferredHolder<Item, AugmentItem> EASY_AUGMENT = ITEMS.register("easy_augment",
-            () -> new AugmentItem(AugmentDifficultyTier.EASY, new Item.Properties().stacksTo(16)));
-    public static final DeferredHolder<Item, AugmentItem> MEDIUM_AUGMENT = ITEMS.register("medium_augment",
-            () -> new AugmentItem(AugmentDifficultyTier.MEDIUM, new Item.Properties().stacksTo(16)));
-    public static final DeferredHolder<Item, AugmentItem> HARD_AUGMENT = ITEMS.register("hard_augment",
-            () -> new AugmentItem(AugmentDifficultyTier.HARD, new Item.Properties().stacksTo(16)));
-    public static final DeferredHolder<Item, AugmentItem> EXTREME_AUGMENT = ITEMS.register("extreme_augment",
-            () -> new AugmentItem(AugmentDifficultyTier.EXTREME, new Item.Properties().stacksTo(16)));
-
-    public static final DeferredHolder<Item, CatalystItem> TIME_CATALYST = ITEMS.register("time_catalyst",
-            () -> new CatalystItem(CatalystArchetype.TIME, new Item.Properties().stacksTo(16)));
-    public static final DeferredHolder<Item, CatalystItem> STAT_CATALYST = ITEMS.register("stat_catalyst",
-            () -> new CatalystItem(CatalystArchetype.STAT, new Item.Properties().stacksTo(16)));
-    public static final DeferredHolder<Item, CatalystItem> LOOT_CATALYST = ITEMS.register("loot_catalyst",
-            () -> new CatalystItem(CatalystArchetype.LOOT, new Item.Properties().stacksTo(16)));
-    public static final DeferredHolder<Item, CatalystItem> HIGHRISK_CATALYST = ITEMS.register("highrisk_catalyst",
-            () -> new CatalystItem(CatalystArchetype.VOLATILE, new Item.Properties().stacksTo(16)));
     public static final DeferredHolder<Item, MythicCoinItem> MYTHIC_COIN = ITEMS.register("mythic_coin",
             () -> new MythicCoinItem(new Item.Properties().stacksTo(99)));
     public static final DeferredHolder<Item, StabilityPearlItem> STABILITY_PEARL = ITEMS.register("stability_pearl",

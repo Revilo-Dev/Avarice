@@ -8,8 +8,7 @@ public enum LootRarity {
     UNCOMMON("uncommon", ChatFormatting.GREEN, 28),
     RARE("rare", ChatFormatting.AQUA, 12),
     EPIC("epic", ChatFormatting.DARK_PURPLE, 4),
-    LEGENDARY("legendary", ChatFormatting.GOLD, 1),
-    UNIQUE("unique", ChatFormatting.LIGHT_PURPLE, 1);
+    LEGENDARY("legendary", ChatFormatting.GOLD, 1);
 
     private final String id;
     private final ChatFormatting color;

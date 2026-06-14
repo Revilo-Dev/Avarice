@@ -6,10 +6,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.mojang.serialization.JsonOps;
 import com.revilo.gatesofavarice.GatewayExpansion;
-import com.revilo.gatesofavarice.augment.AugmentDefinition;
-import com.revilo.gatesofavarice.augment.AugmentStackData;
-import com.revilo.gatesofavarice.catalyst.CatalystDefinition;
-import com.revilo.gatesofavarice.catalyst.CatalystStackData;
 import com.revilo.gatesofavarice.gateway.GatewayThemeProfile;
 import com.revilo.gatesofavarice.gateway.pool.EnemyPoolRegistry;
 import com.revilo.gatesofavarice.gateway.pool.EnemyPoolRole;
@@ -18,10 +14,7 @@ import com.revilo.gatesofavarice.gateway.roll.ForgeEffect;
 import com.revilo.gatesofavarice.gateway.roll.ForgeEffectType;
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
 import com.revilo.gatesofavarice.integration.ModCompat;
-import com.revilo.gatesofavarice.item.AugmentItem;
-import com.revilo.gatesofavarice.item.CatalystItem;
 import com.revilo.gatesofavarice.item.CrystalItem;
-import com.revilo.gatesofavarice.item.data.AugmentDifficultyTier;
 import com.revilo.gatesofavarice.item.data.CrystalForgeData;
 import com.revilo.gatesofavarice.item.data.CrystalTheme;
 import com.revilo.gatesofavarice.registry.ModItems;
@@ -140,36 +133,6 @@ public final class GatewayForgeService {
                 crystalItem.crystalTier().maxLevel()
         );
         return !LevelUpIntegration.isCrystalOverleveled(player, profile.level());
-    }
-
-    public static GatewayPreview buildPreview(net.minecraft.world.entity.player.Player player, Container container) {
-        ItemStack crystalStack = container.getItem(GatewayWorkbenchSlots.CRYSTAL_SLOT);
-        if (!(crystalStack.getItem() instanceof CrystalItem crystalItem)) {
-            return new GatewayPreview(0, "None", 0, -1, false, 0, 0, "Unavailable", 0, 1.0D, 0, 0, 0, 0, List.of());
-        }
-
-        CrystalForgeData.CrystalProfile profile = CrystalForgeData.getProfile(crystalStack, crystalItem.crystalTier().minLevel(), crystalItem.crystalTier().maxLevel());
-        ForgeState state = buildState(container, crystalItem.crystalTier(), profile);
-        int playerLevel = LevelUpIntegration.getPlayerLevel(player);
-        boolean overleveled = playerLevel >= 0 && profile.level() > playerLevel;
-
-        return new GatewayPreview(
-                crystalItem.crystalTier().tier(),
-                titleCase(profile.theme().name()),
-                profile.level(),
-                playerLevel,
-                overleveled,
-                state.augmentSummary.size(),
-                state.catalystSummary.size(),
-                difficultyLabel(state.difficultyEstimate, profile.level()),
-                percent(state.rewardMultiplier - 1.0D),
-                state.coinRewardMultiplier,
-                percent(state.rarityRewardMultiplier - 1.0D),
-                percent(state.levelXpMultiplier - 1.0D),
-                Math.max(0, state.rareRewardRolls),
-                state.waveCount(),
-                state.negativeSummary
-        );
     }
 
     public static ItemStack forge(ServerPlayer player, Container container) {
@@ -356,34 +319,6 @@ public final class GatewayForgeService {
 
     private static ForgeState buildState(Container container, CrystalItem.CrystalTier tier, CrystalForgeData.CrystalProfile profile) {
         ForgeState state = new ForgeState(tier, profile);
-        for (ItemStack stack : GatewayWorkbenchSlots.collectAugments(container)) {
-            if (stack.getItem() instanceof AugmentItem augmentItem) {
-                AugmentDefinition definition = AugmentStackData.getDefinition(stack, augmentItem.difficultyTier());
-                if (definition != null) {
-                    state.augmentSummary.add(definition.title());
-                    for (ForgeEffect effect : definition.modifierEffects()) {
-                        if (isNegativePreviewEffect(effect)) {
-                            state.negativeSummary.add(effect.description());
-                        }
-                    }
-                    applyEffects(state, definition.modifierEffects(), true);
-                    applyEffects(state, definition.rewardEffects(), true);
-                }
-            }
-        }
-        for (ItemStack stack : GatewayWorkbenchSlots.collectCatalysts(container)) {
-            if (stack.getItem() instanceof CatalystItem catalystItem) {
-                CatalystDefinition definition = CatalystStackData.getDefinition(stack, catalystItem.archetype());
-                if (definition != null) {
-                    state.catalystSummary.add(definition.title());
-                    applyEffect(state, definition.positiveEffect(), false);
-                    if (isNegativePreviewEffect(definition.negativeEffect())) {
-                        state.negativeSummary.add(definition.negativeEffect().description());
-                    }
-                    applyEffect(state, definition.negativeEffect(), false);
-                }
-            }
-        }
         applyThemeIdentity(state);
         state.finish();
         return state;
@@ -455,22 +390,22 @@ public final class GatewayForgeService {
                     default -> ForgeEffect.of(ForgeEffectType.ASSASSIN_PACKS, 1, "Final roll: wild assassin surge");
                 };
             };
-            applyEffect(state, effect, false);
+            applyEffect(state, effect);
             state.finalRollSummary.add(effect.description());
         }
         ForgeEffect rewardRoll = random.nextBoolean()
                 ? ForgeEffect.of(ForgeEffectType.REWARD_MULTIPLIER, 0.08D + Math.min(0.10D, state.profile.level() / 250.0D), "Final roll: enhanced payout")
                 : ForgeEffect.of(ForgeEffectType.EXTRA_FINAL_REWARD_ROLLS, 1, "Final roll: extra final reward");
-        applyEffect(state, rewardRoll, false);
+        applyEffect(state, rewardRoll);
         state.finalRollSummary.add(rewardRoll.description());
         if (state.profile.level() >= 30 && random.nextFloat() < 0.45F) {
             ForgeEffect highRoll = ForgeEffect.of(ForgeEffectType.MINIBOSS_CHANCE, 0.15D, "Final roll: themed miniboss chance");
-            applyEffect(state, highRoll, false);
+            applyEffect(state, highRoll);
             state.finalRollSummary.add(highRoll.description());
         }
         if (state.profile.level() >= 36 && random.nextFloat() < 0.35F) {
             ForgeEffect highRoll = ForgeEffect.ref(ForgeEffectType.MOB_EFFECT, theme.effects().get(random.nextInt(theme.effects().size())), 0, 0.0D, "Final roll: thematic effect");
-            applyEffect(state, highRoll, false);
+            applyEffect(state, highRoll);
             state.finalRollSummary.add(highRoll.description());
         }
     }
@@ -674,8 +609,6 @@ public final class GatewayForgeService {
                 Math.max(1, state.finalRewardRolls),
                 Math.max(0, state.legendaryRewardRolls),
                 finalExperienceReward(state),
-                state.augmentSummary,
-                state.catalystSummary,
                 state.finalRollSummary,
                 debugLines,
                 gateway,
@@ -692,10 +625,6 @@ public final class GatewayForgeService {
         ItemStack themeJunkReward = createThemeJunkRewardStack(state, random, true);
         if (!themeJunkReward.isEmpty()) {
             rewards.add(new Reward.StackReward(themeJunkReward));
-        }
-        rewards.add(new Reward.StackReward(createAugmentRewardStack(state, Math.max(0, state.waveCount() - 1), random)));
-        if (state.crystalTier.tier() >= 3 || state.profile.level() >= 30) {
-            rewards.add(new Reward.StackReward(createAugmentRewardStack(state, state.waveCount(), random)));
         }
         if (state.rewardMultiplier > 1.0D && state.lootTableBonusChance > 0.0D) {
             rewards.add(new Reward.ChancedReward(new Reward.LootTableReward(theme.commonLoot(), 1, theme.finalDescKey()), (float) state.lootTableBonusChance));
@@ -753,8 +682,6 @@ public final class GatewayForgeService {
         for (WaveModifier modifier : globalWaveModifiers(state)) {
             builder.modifier(modifier);
         }
-        builder.reward(new Reward.StackReward(createAugmentRewardStack(state, waveCount - 1, random)));
-        builder.reward(new Reward.StackReward(createCatalystRewardStack(random)));
         builder.reward(new Reward.LootTableReward(theme.rareLoot(), 1, theme.rareDescKey()));
         builder.reward(new Reward.ExperienceReward(waveExperienceReward(state), 5));
         builder.maxWaveTime(Mth.clamp(computeWaveTimeLimit(state, waveCount - 1, waveCount, totalEnemies, totalStrength) + 500, 900, 12000));
@@ -1104,15 +1031,6 @@ public final class GatewayForgeService {
     }
 
     private static void addWaveRewardDrops(Wave.Builder builder, ForgeState state, GatewayThemeProfile theme, int waveIndex, int waveCount, RandomSource random) {
-        float levelBoost = Math.min(0.30F, state.profile.level() * 0.006F);
-        float augmentChance = Math.min(0.98F, 0.40F + state.crystalTier.tier() * 0.09F + waveIndex * 0.08F + levelBoost);
-        if (random.nextFloat() < augmentChance) {
-            builder.reward(new Reward.StackReward(createAugmentRewardStack(state, waveIndex, random)));
-        }
-        if ((state.crystalTier.tier() >= 3 || state.profile.level() >= 25) && random.nextFloat() < Math.min(0.75F, 0.18F + levelBoost * 0.9F + waveIndex * 0.05F)) {
-            builder.reward(new Reward.StackReward(createAugmentRewardStack(state, waveIndex + 1, random)));
-        }
-
         int tierRolls = Math.max(1, state.crystalTier.tier() >= 4 && waveIndex >= waveCount - 2 ? 2 : 1);
         if (state.profile.level() >= 30) {
             tierRolls++;
@@ -1129,49 +1047,6 @@ public final class GatewayForgeService {
         if (!themeJunkReward.isEmpty()) {
             builder.reward(new Reward.StackReward(themeJunkReward));
         }
-        float catalystChance = Math.min(0.97F, 0.22F + state.crystalTier.tier() * 0.07F + waveIndex * 0.06F + (levelBoost * 0.95F));
-        if (random.nextFloat() < catalystChance) {
-            builder.reward(new Reward.StackReward(createCatalystRewardStack(random)));
-        }
-        if (state.profile.level() >= 35 && random.nextFloat() < Math.min(0.62F, 0.10F + levelBoost * 0.75F + waveIndex * 0.035F)) {
-            builder.reward(new Reward.StackReward(createCatalystRewardStack(random)));
-        }
-    }
-
-    private static ItemStack createAugmentRewardStack(ForgeState state, int waveIndex, RandomSource random) {
-        AugmentDifficultyTier tier = selectAugmentTier(state, waveIndex, random);
-        ItemStack stack = new ItemStack(switch (tier) {
-            case EASY -> ModItems.EASY_AUGMENT.get();
-            case MEDIUM -> ModItems.MEDIUM_AUGMENT.get();
-            case HARD -> ModItems.HARD_AUGMENT.get();
-            case EXTREME -> ModItems.EXTREME_AUGMENT.get();
-        });
-        AugmentStackData.ensureDefinition(stack, tier, random);
-        return stack;
-    }
-
-    private static AugmentDifficultyTier selectAugmentTier(ForgeState state, int waveIndex, RandomSource random) {
-        int level = state.profile.level();
-        int rewardScore = state.profile.level() + state.crystalTier.tier() * 8 + waveIndex * 6;
-        if (level >= 50 && rewardScore >= 82) {
-            float extremeChance = Mth.clamp(0.08F + (rewardScore - 82) * 0.0125F + (level - 50) * 0.004F, 0.08F, 0.35F);
-            if (random.nextFloat() < extremeChance) {
-                return AugmentDifficultyTier.EXTREME;
-            }
-        }
-        if (rewardScore >= 42) {
-            return AugmentDifficultyTier.HARD;
-        }
-        if (rewardScore >= 24) {
-            return AugmentDifficultyTier.MEDIUM;
-        }
-        return AugmentDifficultyTier.EASY;
-    }
-
-    private static ItemStack createCatalystRewardStack(RandomSource random) {
-        ItemStack stack = new ItemStack(ModItems.TIME_CATALYST.get());
-        CatalystStackData.ensureDefinition(stack, com.revilo.gatesofavarice.catalyst.CatalystArchetype.TIME, random);
-        return stack;
     }
 
     private static ItemStack createThemeJunkRewardStack(ForgeState state, RandomSource random, boolean finalReward) {
@@ -1695,14 +1570,6 @@ public final class GatewayForgeService {
 
     private static void consumeInputs(Container container) {
         consumeSlot(container, GatewayWorkbenchSlots.CRYSTAL_SLOT);
-        consumeRange(container, GatewayWorkbenchSlots.CATALYST_SLOT_START, GatewayWorkbenchSlots.CATALYST_SLOT_COUNT);
-        consumeRange(container, GatewayWorkbenchSlots.AUGMENT_SLOT_START, GatewayWorkbenchSlots.AUGMENT_SLOT_COUNT);
-    }
-
-    private static void consumeRange(Container container, int start, int count) {
-        for (int index = 0; index < count; index++) {
-            consumeSlot(container, start + index);
-        }
     }
 
     private static void consumeSlot(Container container, int slot) {
@@ -1851,13 +1718,7 @@ public final class GatewayForgeService {
         return "Lv " + state.profile.level() + " Gateway";
     }
 
-    private static void applyEffects(ForgeState state, List<ForgeEffect> effects, boolean augment) {
-        for (ForgeEffect effect : effects) {
-            applyEffect(state, effect, augment);
-        }
-    }
-
-    private static void applyEffect(ForgeState state, ForgeEffect effect, boolean augment) {
+    private static void applyEffect(ForgeState state, ForgeEffect effect) {
         switch (effect.type()) {
             case ADD_MINIONS_PER_WAVE -> state.minionsPerWave += (int) Math.round(effect.value());
             case SUPPORT_PACK_EVERY -> {
@@ -1930,7 +1791,7 @@ public final class GatewayForgeService {
             case BONUS_EXPERIENCE -> state.experienceBonus += (int) Math.round(effect.value());
             case BONUS_LOOT_TABLE_CHANCE -> state.lootTableBonusChance += effect.value();
         }
-        state.difficultyEstimate += augment ? 8 : (effect.value() >= 0 ? 4 : -2);
+        state.difficultyEstimate += effect.value() >= 0 ? 4 : -2;
     }
 
     private static String difficultyLabel(int estimate, int level) {
@@ -2147,8 +2008,6 @@ public final class GatewayForgeService {
     private static final class ForgeState {
         private final CrystalItem.CrystalTier crystalTier;
         private final CrystalForgeData.CrystalProfile profile;
-        private final List<String> augmentSummary = new ArrayList<>();
-        private final List<String> catalystSummary = new ArrayList<>();
         private final List<String> negativeSummary = new ArrayList<>();
         private final List<String> finalRollSummary = new ArrayList<>();
         private final Set<ResourceLocation> mobEffects = new LinkedHashSet<>();

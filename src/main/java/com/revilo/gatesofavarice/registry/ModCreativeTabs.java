@@ -25,11 +25,6 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.TIER_3_CRYSTAL.get());
                         output.accept(ModItems.TIER_4_CRYSTAL.get());
                         output.accept(ModItems.TIER_5_CRYSTAL.get());
-                        output.accept(ModItems.EASY_AUGMENT.get());
-                        output.accept(ModItems.MEDIUM_AUGMENT.get());
-                        output.accept(ModItems.HARD_AUGMENT.get());
-                        output.accept(ModItems.EXTREME_AUGMENT.get());
-                        output.accept(ModItems.TIME_CATALYST.get());
                         output.accept(ModItems.MYTHIC_COIN.get());
                         output.accept(ModItems.STABILITY_PEARL.get());
                         output.accept(ModItems.GRIMSTONE.get());

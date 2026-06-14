@@ -2,8 +2,6 @@ package com.revilo.gatesofavarice.progression;
 
 public final class ProgressionSystem {
 
-    public static final int BASE_WORKBENCH_UNLOCKED_SLOTS = 4;
-    public static final int LEVELS_PER_WORKBENCH_UNLOCK = 5;
     public static final int SHOP_SLOT_LEVEL_STEP = 10;
     public static final double DUNGEON_WAVE_DIFFICULTY_STEP = 0.06D;
     public static final double DUNGEON_LEVEL_DIFFICULTY_STEP = 0.004D;
@@ -13,13 +11,6 @@ public final class ProgressionSystem {
 
     public static int normalizedLevel(int level) {
         return Math.max(1, level);
-    }
-
-    public static int workbenchRequiredLevelForSequence(int sequence) {
-        if (sequence < BASE_WORKBENCH_UNLOCKED_SLOTS) {
-            return 0;
-        }
-        return (sequence - BASE_WORKBENCH_UNLOCKED_SLOTS + 1) * LEVELS_PER_WORKBENCH_UNLOCK;
     }
 
     public static int shopRequiredLevel(int slotIndex, int offerMinLevel) {

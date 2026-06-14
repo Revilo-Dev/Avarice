@@ -27,16 +27,12 @@ public record GatewayBuildResult(
         int epicRewardDrops,
         int legendaryRewardDrops,
         int finalExperienceReward,
-        List<String> augmentSummary,
-        List<String> catalystSummary,
         List<String> finalRollSummary,
         List<String> debugLines,
         NormalGateway gateway,
         String gatewayJson
 ) {
     public GatewayBuildResult {
-        augmentSummary = List.copyOf(augmentSummary);
-        catalystSummary = List.copyOf(catalystSummary);
         finalRollSummary = List.copyOf(finalRollSummary);
         debugLines = List.copyOf(debugLines);
     }
