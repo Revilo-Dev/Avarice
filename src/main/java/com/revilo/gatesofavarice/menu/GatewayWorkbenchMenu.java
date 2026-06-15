@@ -1,6 +1,7 @@
 package com.revilo.gatesofavarice.menu;
 
 import com.revilo.gatesofavarice.item.CrystalItem;
+import com.revilo.gatesofavarice.item.GatewayCardItem;
 import com.revilo.gatesofavarice.registry.ModBlocks;
 import com.revilo.gatesofavarice.registry.ModMenus;
 import com.revilo.gatesofavarice.workbench.GatewayWorkbenchForgeLogic;
@@ -20,6 +21,7 @@ public class GatewayWorkbenchMenu extends AbstractContainerMenu {
     public static final int FORGE_BUTTON_ID = 0;
     public static final int CRYSTAL_SLOT = GatewayWorkbenchSlots.CRYSTAL_SLOT;
     public static final int OUTPUT_SLOT = GatewayWorkbenchSlots.OUTPUT_SLOT;
+    public static final int CARD_SLOT = GatewayWorkbenchSlots.CARD_SLOT;
     public static final int CUSTOM_SLOT_COUNT = GatewayWorkbenchSlots.CUSTOM_SLOT_COUNT;
     private static final int PLAYER_INVENTORY_START = CUSTOM_SLOT_COUNT;
     private static final int PLAYER_INVENTORY_END = PLAYER_INVENTORY_START + 27;
@@ -44,6 +46,7 @@ public class GatewayWorkbenchMenu extends AbstractContainerMenu {
 
         this.addSlot(new FilteredSlot(container, CRYSTAL_SLOT, GatewayWorkbenchSlots.CRYSTAL_X, GatewayWorkbenchSlots.CRYSTAL_Y, stack -> stack.getItem() instanceof CrystalItem));
         this.addSlot(new ResultSlot(container, OUTPUT_SLOT, GatewayWorkbenchSlots.OUTPUT_X, GatewayWorkbenchSlots.OUTPUT_Y));
+        this.addSlot(new FilteredSlot(container, CARD_SLOT, GatewayWorkbenchSlots.CARD_X, GatewayWorkbenchSlots.CARD_Y, stack -> stack.getItem() instanceof GatewayCardItem));
 
         this.addPlayerInventory(playerInventory);
     }
@@ -81,6 +84,10 @@ public class GatewayWorkbenchMenu extends AbstractContainerMenu {
             }
         } else if (stackInSlot.getItem() instanceof CrystalItem) {
             if (!this.moveItemStackTo(stackInSlot, CRYSTAL_SLOT, CRYSTAL_SLOT + 1, false)) {
+                return ItemStack.EMPTY;
+            }
+        } else if (stackInSlot.getItem() instanceof GatewayCardItem) {
+            if (!this.moveItemStackTo(stackInSlot, CARD_SLOT, CARD_SLOT + 1, false)) {
                 return ItemStack.EMPTY;
             }
         } else if (index < PLAYER_INVENTORY_END) {

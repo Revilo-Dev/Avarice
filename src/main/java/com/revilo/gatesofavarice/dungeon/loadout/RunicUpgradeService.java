@@ -32,7 +32,7 @@ import net.revilodev.runic.stat.RuneStatType;
 import net.revilodev.runic.stat.RuneStats;
 
 public final class RunicUpgradeService {
-    private static final int CARD_COUNT = 5;
+    public static final int CARD_COUNT = 5;
     private static final List<CardSpec> WEAPON_EFFECT_CARDS = List.of(
             statCard("poison_chance", "Effect Card", "Toxic", 0.01F, 0.05F),
             statCard("flame_chance", "Effect Card", "Fire Aspect", 0.01F, 0.05F),
@@ -293,7 +293,11 @@ public final class RunicUpgradeService {
     private static List<UpgradeCard> generateItemCards(LoadoutDefinition definition, UpgradeCategory category, RandomSource random) {
         ArrayList<UpgradeCard> cards = new ArrayList<>(5);
         cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REWARD_FOOD, category, "Food Card", definition.displayName(), "Heart Fragment", "0", "+8-16", 1, 0));
-        cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REWARD_RESTOCK, category, "Restock Card", definition.displayName(), "Restock", "5-16 apples", "Apples, arrows, or e-gap", 1, 0));
+        if (random.nextFloat() < 0.18F) {
+            cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REWARD_GATEWAY_CARD, category, "Deck Card", definition.displayName(), "Gateway Card", "0", "+1 random card", 3, 0));
+        } else {
+            cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REWARD_RESTOCK, category, "Restock Card", definition.displayName(), "Restock", "5-16 apples", "Apples, arrows, or e-gap", 1, 0));
+        }
         cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REWARD_ABILITY, category, "Ability Card", definition.displayName(), "Arcane Apples + Magnet", "0", "+1 magnet +1-3 apples", 1, 0));
         cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REROLL_PRIMARY_WEAPON, category, "Reroll Primary Weapon", definition.displayName(), "Primary", "Current", "Same tier or rare +1", 2, 0));
         cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REROLL_SECONDARY_WEAPON, category, "Reroll Secondary Weapon", definition.displayName(), "Secondary", "Current", "Same tier or rare +1", 2, 0));

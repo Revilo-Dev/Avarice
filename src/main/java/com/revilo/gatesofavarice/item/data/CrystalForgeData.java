@@ -6,6 +6,8 @@ import java.util.List;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
 import net.minecraft.network.chat.TextColor;
@@ -22,6 +24,7 @@ public final class CrystalForgeData {
     private static final String LEVEL_KEY = "level";
     private static final String SEED_KEY = "seed";
     private static final String ATTUNED_KEY = "attuned";
+    private static final String CARD_DECK_KEY = "card_deck";
 
     private CrystalForgeData() {
     }
@@ -111,7 +114,64 @@ public final class CrystalForgeData {
             lines.add(Component.translatable("tooltip.gatesofavarice.crystal.level", levelBand(rootTag.getInt(LEVEL_KEY)))
                     .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
         }
+        List<GatewayCardData.CardModifier> cards = readCards(stack);
+        int slots = GatewayCardData.unlockedSlots(rootTag.contains(LEVEL_KEY) ? rootTag.getInt(LEVEL_KEY) : 1);
+        lines.add(Component.literal("Deck: " + cards.size() + "/" + slots + " cards").withStyle(ChatFormatting.AQUA));
+        if (!cards.isEmpty()) {
+            lines.add(Component.literal("Card modifiers next run:").withStyle(ChatFormatting.LIGHT_PURPLE));
+            for (GatewayCardData.CardModifier card : cards) {
+                lines.add(Component.literal("- " + card.summary()).withStyle(card.type().color()));
+            }
+        }
         return lines;
+    }
+
+    public static boolean canAddCard(ItemStack crystal, ItemStack cardStack, int playerLevel) {
+        if (crystal.isEmpty() || cardStack.isEmpty()) {
+            return false;
+        }
+        CompoundTag rootTag = getRootTag(crystal);
+        int crystalLevel = rootTag.contains(LEVEL_KEY) ? rootTag.getInt(LEVEL_KEY) : Math.max(1, playerLevel);
+        return readCards(crystal).size() < GatewayCardData.unlockedSlots(Math.max(crystalLevel, playerLevel));
+    }
+
+    public static boolean addCard(ItemStack crystal, ItemStack cardStack, int playerLevel) {
+        if (!canAddCard(crystal, cardStack, playerLevel)) {
+            return false;
+        }
+        GatewayCardData.CardModifier modifier = GatewayCardData.read(cardStack);
+        CustomData.update(DataComponents.CUSTOM_DATA, crystal, tag -> {
+            CompoundTag root = tag.getCompound(ROOT_KEY);
+            ListTag list = root.getList(CARD_DECK_KEY, Tag.TAG_COMPOUND);
+            CompoundTag entry = new CompoundTag();
+            entry.putString("type", modifier.type().name());
+            entry.putDouble("value", modifier.value());
+            entry.putInt("level", modifier.playerLevel());
+            list.add(entry);
+            root.put(CARD_DECK_KEY, list);
+            tag.put(ROOT_KEY, root);
+        });
+        return true;
+    }
+
+    public static List<GatewayCardData.CardModifier> readCards(ItemStack crystal) {
+        CompoundTag rootTag = getRootTag(crystal);
+        if (!rootTag.contains(CARD_DECK_KEY, Tag.TAG_LIST)) {
+            return List.of();
+        }
+        ListTag list = rootTag.getList(CARD_DECK_KEY, Tag.TAG_COMPOUND);
+        ArrayList<GatewayCardData.CardModifier> cards = new ArrayList<>(list.size());
+        for (int i = 0; i < list.size(); i++) {
+            CompoundTag entry = list.getCompound(i);
+            try {
+                GatewayCardData.CardType type = GatewayCardData.CardType.valueOf(entry.getString("type"));
+                double value = entry.contains("value") ? entry.getDouble("value") : type.minValue();
+                int level = entry.contains("level") ? entry.getInt("level") : 1;
+                cards.add(new GatewayCardData.CardModifier(type, Mth.clamp(value, type.minValue(), type.maxValue()), Math.max(1, level)));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        return List.copyOf(cards);
     }
 
     private static CompoundTag getRootTag(ItemStack stack) {

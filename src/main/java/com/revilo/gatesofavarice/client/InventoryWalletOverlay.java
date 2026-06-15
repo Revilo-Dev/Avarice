@@ -1,5 +1,6 @@
 package com.revilo.gatesofavarice.client;
 
+import com.revilo.gatesofavarice.currency.GoldCoinWallet;
 import com.revilo.gatesofavarice.currency.MythicCoinWallet;
 import com.revilo.gatesofavarice.dungeon.ModDimensions;
 import com.revilo.gatesofavarice.registry.ModItems;
@@ -35,28 +36,35 @@ public final class InventoryWalletOverlay {
         }
 
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player == null || minecraft.player.level().dimension() != ModDimensions.DUNGEON_LEVEL) {
+        if (minecraft.player == null) {
             return;
         }
 
         AbstractContainerScreen<?> screen = (AbstractContainerScreen<?>) event.getScreen();
-        WalletLayout layout = WalletLayout.create(minecraft, screen);
+        boolean inDungeon = minecraft.player.level().dimension() == ModDimensions.DUNGEON_LEVEL;
+        WalletLayout layout = WalletLayout.create(minecraft, screen, inDungeon);
         boolean hovered = layout.isMouseOver(event.getMouseX(), event.getMouseY());
 
-        renderWallet(event.getGuiGraphics(), minecraft, layout, hovered);
+        renderWallet(event.getGuiGraphics(), minecraft, layout, hovered, inDungeon);
 
         if (hovered) {
-            ItemStack coinStack = coinStack();
+            ItemStack coinStack = coinStack(inDungeon);
             event.getGuiGraphics().pose().pushPose();
             event.getGuiGraphics().pose().translate(0.0F, 0.0F, TOOLTIP_Z);
-            event.getGuiGraphics().renderTooltip(
-                    minecraft.font,
-                    List.of(
+            List<Component> tooltip = inDungeon
+                    ? List.of(
                             Component.literal("Mythic Coins"),
                             Component.literal(Integer.toString(MythicCoinWallet.get(minecraft.player))).withStyle(net.minecraft.ChatFormatting.LIGHT_PURPLE),
                             Component.empty(),
                             Component.literal("Multiplier " + MULTIPLIER_FORMAT.format(MythicCoinWallet.getTotalMultiplier(minecraft.player)) + "x")
-                    ),
+                    )
+                    : List.of(
+                            Component.literal("Gold Coins"),
+                            Component.literal(Integer.toString(GoldCoinWallet.get(minecraft.player))).withStyle(net.minecraft.ChatFormatting.GOLD)
+                    );
+            event.getGuiGraphics().renderTooltip(
+                    minecraft.font,
+                    tooltip,
                     coinStack.getTooltipImage(),
                     coinStack,
                     event.getMouseX(),
@@ -65,10 +73,10 @@ public final class InventoryWalletOverlay {
         }
     }
 
-    private static void renderWallet(GuiGraphics guiGraphics, Minecraft minecraft, WalletLayout layout, boolean hovered) {
+    private static void renderWallet(GuiGraphics guiGraphics, Minecraft minecraft, WalletLayout layout, boolean hovered, boolean inDungeon) {
         float hoverScale = hovered ? 1.1F : 1.0F;
 
-        ItemStack coinStack = coinStack();
+        ItemStack coinStack = coinStack(inDungeon);
         guiGraphics.pose().pushPose();
         guiGraphics.pose().translate(layout.iconX(), layout.iconY(), WALLET_Z);
         guiGraphics.pose().scale(hoverScale, hoverScale, 1.0F);
@@ -82,14 +90,14 @@ public final class InventoryWalletOverlay {
         guiGraphics.drawString(minecraft.font, layout.text(), 1, 0, 0x101010, false);
         guiGraphics.drawString(minecraft.font, layout.text(), 0, -1, 0x101010, false);
         guiGraphics.drawString(minecraft.font, layout.text(), 0, 1, 0x101010, false);
-        guiGraphics.drawString(minecraft.font, layout.text(), 0, 0, 0xB06CFF, false);
+        guiGraphics.drawString(minecraft.font, layout.text(), 0, 0, inDungeon ? 0xB06CFF : 0xFFD34D, false);
         guiGraphics.pose().popPose();
     }
 
     private record WalletLayout(String text, float textScale, int iconX, int iconY, float textX, float textY, int hoverLeft, int hoverTop, int hoverRight, int hoverBottom) {
 
-        private static WalletLayout create(Minecraft minecraft, AbstractContainerScreen<?> screen) {
-            String text = formatCompactValue(MythicCoinWallet.get(minecraft.player));
+        private static WalletLayout create(Minecraft minecraft, AbstractContainerScreen<?> screen, boolean inDungeon) {
+            String text = formatCompactValue(inDungeon ? MythicCoinWallet.get(minecraft.player) : GoldCoinWallet.get(minecraft.player));
             int digits = text.length();
             int extraDigits = Math.max(0, digits - 4);
             float textScale = Math.max(0.42F, BASE_TEXT_SCALE - (extraDigits * 0.08F));
@@ -134,7 +142,7 @@ public final class InventoryWalletOverlay {
         return text;
     }
 
-    private static ItemStack coinStack() {
-        return new ItemStack(ModItems.MYTHIC_COIN.get());
+    private static ItemStack coinStack(boolean inDungeon) {
+        return new ItemStack(inDungeon ? ModItems.MYTHIC_COIN.get() : ModItems.GOLD_COIN.get());
     }
 }

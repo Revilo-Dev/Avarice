@@ -12,7 +12,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
-public record SyncUpgradeCardsPayload(String sessionId, String categoryName, ItemStack previewStack, int rerollsLeft, int rerollCost, List<UpgradeCard> cards) implements CustomPacketPayload {
+public record SyncUpgradeCardsPayload(String sessionId, String categoryName, ItemStack previewStack, int rerollsLeft, int rerollCost, int selectedCardCount, int maxCardSelections, List<UpgradeCard> cards) implements CustomPacketPayload {
     public static final Type<SyncUpgradeCardsPayload> TYPE =
             new Type<>(ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "sync_upgrade_cards"));
     public static final StreamCodec<RegistryFriendlyByteBuf, SyncUpgradeCardsPayload> STREAM_CODEC =
@@ -24,6 +24,8 @@ public record SyncUpgradeCardsPayload(String sessionId, String categoryName, Ite
         buffer.writeNbt(payload.previewStack.saveOptional(buffer.registryAccess()));
         buffer.writeVarInt(payload.rerollsLeft);
         buffer.writeVarInt(payload.rerollCost);
+        buffer.writeVarInt(payload.selectedCardCount);
+        buffer.writeVarInt(payload.maxCardSelections);
         buffer.writeVarInt(payload.cards.size());
         for (UpgradeCard card : payload.cards) {
             buffer.writeUtf(card.id());
@@ -45,6 +47,8 @@ public record SyncUpgradeCardsPayload(String sessionId, String categoryName, Ite
         ItemStack stack = ItemStack.parseOptional(buffer.registryAccess(), buffer.readNbt());
         int rerollsLeft = buffer.readVarInt();
         int rerollCost = buffer.readVarInt();
+        int selectedCardCount = buffer.readVarInt();
+        int maxCardSelections = buffer.readVarInt();
         int size = buffer.readVarInt();
         ArrayList<UpgradeCard> cards = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
@@ -61,7 +65,7 @@ public record SyncUpgradeCardsPayload(String sessionId, String categoryName, Ite
                     buffer.readVarInt()
             ));
         }
-        return new SyncUpgradeCardsPayload(sessionId, category, stack, rerollsLeft, rerollCost, List.copyOf(cards));
+        return new SyncUpgradeCardsPayload(sessionId, category, stack, rerollsLeft, rerollCost, selectedCardCount, maxCardSelections, List.copyOf(cards));
     }
 
     @Override

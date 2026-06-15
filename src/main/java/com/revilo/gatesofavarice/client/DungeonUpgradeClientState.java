@@ -14,6 +14,8 @@ public final class DungeonUpgradeClientState {
     public static List<UpgradeCard> cards = List.of();
     public static int rerollsLeft = 0;
     public static int rerollCost = 0;
+    public static int selectedCardCount = 0;
+    public static int maxCardSelections = 5;
 
     private DungeonUpgradeClientState() {}
 }

@@ -100,6 +100,8 @@ public final class GatewayExpansionNetwork {
                         state.getField("previewStack").set(null, payload.previewStack());
                         state.getField("rerollsLeft").setInt(null, payload.rerollsLeft());
                         state.getField("rerollCost").setInt(null, payload.rerollCost());
+                        state.getField("selectedCardCount").setInt(null, payload.selectedCardCount());
+                        state.getField("maxCardSelections").setInt(null, payload.maxCardSelections());
                         state.getField("cards").set(null, payload.cards());
                         Class<?> mc = Class.forName("net.minecraft.client.Minecraft");
                         Object instance = mc.getMethod("getInstance").invoke(null);

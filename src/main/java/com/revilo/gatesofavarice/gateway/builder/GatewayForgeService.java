@@ -16,6 +16,7 @@ import com.revilo.gatesofavarice.integration.LevelUpIntegration;
 import com.revilo.gatesofavarice.integration.ModCompat;
 import com.revilo.gatesofavarice.item.CrystalItem;
 import com.revilo.gatesofavarice.item.data.CrystalForgeData;
+import com.revilo.gatesofavarice.item.data.GatewayCardData;
 import com.revilo.gatesofavarice.item.data.CrystalTheme;
 import com.revilo.gatesofavarice.registry.ModItems;
 import com.revilo.gatesofavarice.workbench.GatewayWorkbenchSlots;
@@ -320,8 +321,45 @@ public final class GatewayForgeService {
     private static ForgeState buildState(Container container, CrystalItem.CrystalTier tier, CrystalForgeData.CrystalProfile profile) {
         ForgeState state = new ForgeState(tier, profile);
         applyThemeIdentity(state);
+        applyCardModifiers(state, container.getItem(GatewayWorkbenchSlots.CRYSTAL_SLOT));
         state.finish();
         return state;
+    }
+
+    private static void applyCardModifiers(ForgeState state, ItemStack crystal) {
+        for (GatewayCardData.CardModifier card : CrystalForgeData.readCards(crystal)) {
+            double value = card.value();
+            switch (card.type()) {
+                case STAT -> {
+                    state.damageMultiplier -= value * 0.45D;
+                    state.speedMultiplier -= value * 0.35D;
+                }
+                case DAMAGE -> {
+                    state.healthMultiplier -= value * 0.60D;
+                    state.damageMultiplier -= value * 0.20D;
+                }
+                case EFFECT -> {
+                    state.damageMultiplier -= value * 0.35D;
+                }
+                case ABILITY -> {
+                    state.healthMultiplier -= value * 0.40D;
+                    state.rewardMultiplier += value * 0.25D;
+                }
+                case RARITY -> {
+                    state.rarityRewardMultiplier *= 1.0D + value;
+                    state.rewardMultiplier += value;
+                }
+                case CHALLENGE -> {
+                    state.mobSpawnMultiplier += value;
+                    state.damageMultiplier += value * 0.55D;
+                    state.healthMultiplier += value * 0.35D;
+                    state.rewardMultiplier += value * 1.35D;
+                    state.rarityRewardMultiplier *= 1.0D + value * 0.75D;
+                    state.difficultyEstimate += Math.max(1, (int) Math.round(value * 100.0D));
+                }
+            }
+            state.finalRollSummary.add("Deck: " + card.summary());
+        }
     }
 
     private static void applyThemeIdentity(ForgeState state) {
@@ -1456,6 +1494,12 @@ public final class GatewayForgeService {
         for (String line : buildRewardSummary(result)) {
             lore.add(Component.literal(line).withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0xF0C24B))));
         }
+        if (!result.finalRollSummary().isEmpty()) {
+            lore.add(Component.literal("Modifiers:").withStyle(ChatFormatting.LIGHT_PURPLE));
+            for (String line : result.finalRollSummary()) {
+                lore.add(Component.literal(line).withStyle(ChatFormatting.GRAY));
+            }
+        }
         pearl.set(DataComponents.LORE, new ItemLore(lore));
         CustomData.update(DataComponents.CUSTOM_DATA, pearl, tag -> {
             CompoundTag root = tag.getCompound(ROOT_KEY);
@@ -1473,6 +1517,11 @@ public final class GatewayForgeService {
             root.putDouble(LEVEL_XP_MULTIPLIER_KEY, result.levelXpMultiplier());
             root.putDouble(EXPERIENCE_REWARD_MULTIPLIER_KEY, result.experienceRewardMultiplier());
             root.putDouble(THORNS_DAMAGE_KEY, result.thornsDamage());
+            ListTag summary = new ListTag();
+            for (String line : result.finalRollSummary()) {
+                summary.add(net.minecraft.nbt.StringTag.valueOf(line));
+            }
+            root.put(SUMMARY_KEY, summary);
             tag.put(ROOT_KEY, root);
         });
         return pearl;

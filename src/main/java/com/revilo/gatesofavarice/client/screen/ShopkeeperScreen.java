@@ -110,6 +110,8 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private boolean categorySelection = true;
     private ItemStack upgradePreviewStack = ItemStack.EMPTY;
     private List<UpgradeCard> upgradeCards = List.of();
+    private int selectedCardCount = 0;
+    private int maxCardSelections = 5;
     private AnimationState animationState = AnimationState.DRAWING;
     private int animationTick = 0;
     private int selectedCardIndex = -1;
@@ -281,12 +283,20 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private void renderUpgradePanel(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         if (this.categorySelection) {
             this.renderCategoryCards(guiGraphics, mouseX, mouseY);
+            this.renderSelectionCounter(guiGraphics);
             guiGraphics.drawCenteredString(this.font, Component.literal("Pick upgrade deck").withStyle(ChatFormatting.GOLD), this.leftPos + 88, this.topPos + 64, 0xFFF0B8);
             return;
         }
 
+        this.renderSelectionCounter(guiGraphics);
         guiGraphics.drawCenteredString(this.font, this.upgradePreviewStack.getHoverName().copy().withStyle(ChatFormatting.GOLD), this.leftPos + 88, this.topPos + 15, 0xF3D78A);
         this.renderUpgradeCards(guiGraphics, mouseX, mouseY);
+    }
+
+    private void renderSelectionCounter(GuiGraphics guiGraphics) {
+        int remaining = Math.max(0, this.maxCardSelections - this.selectedCardCount);
+        Component label = Component.literal("Select " + remaining + " Cards").withStyle(remaining > 0 ? ChatFormatting.LIGHT_PURPLE : ChatFormatting.RED);
+        guiGraphics.drawCenteredString(this.font, label, this.leftPos + 88, this.topPos + 4, 0xFFFFFF);
     }
 
     private void renderCategoryCards(GuiGraphics guiGraphics, int mouseX, int mouseY) {
@@ -613,6 +623,8 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         this.categorySelection = DungeonUpgradeClientState.categorySelection;
         this.upgradePreviewStack = DungeonUpgradeClientState.previewStack.copy();
         this.upgradeCards = List.copyOf(DungeonUpgradeClientState.cards);
+        this.selectedCardCount = DungeonUpgradeClientState.selectedCardCount;
+        this.maxCardSelections = Math.max(0, DungeonUpgradeClientState.maxCardSelections);
     }
 
     private void handleUpgradeClick(int index) {
@@ -629,6 +641,9 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             return;
         }
         if (index < 0 || index >= this.upgradeCards.size()) {
+            return;
+        }
+        if (this.selectedCardCount >= this.maxCardSelections) {
             return;
         }
         UpgradeCard card = this.upgradeCards.get(index);

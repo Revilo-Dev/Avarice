@@ -26,7 +26,9 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.TIER_4_CRYSTAL.get());
                         output.accept(ModItems.TIER_5_CRYSTAL.get());
                         output.accept(ModItems.MYTHIC_COIN.get());
+                        output.accept(ModItems.GOLD_COIN.get());
                         output.accept(ModItems.STABILITY_PEARL.get());
+                        output.accept(ModItems.GATEWAY_CARD.get());
                         output.accept(ModItems.GRIMSTONE.get());
                         output.accept(ModItems.MYSTIC_ESSENCE.get());
                         output.accept(ModItems.HARDENED_FLESH.get());

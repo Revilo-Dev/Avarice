@@ -27,6 +27,8 @@ public final class GatewaySellValues {
 
         Item item = stack.getItem();
         if (item == Items.ROTTEN_FLESH) return 2;
+        if (item == Items.BONE) return 2;
+        if (item == Items.COAL) return 2;
         if (item == Items.SLIME_BALL) return 3;
         if (item == Items.SPIDER_EYE) return 2;
         if (item == Items.STRING) return 1;

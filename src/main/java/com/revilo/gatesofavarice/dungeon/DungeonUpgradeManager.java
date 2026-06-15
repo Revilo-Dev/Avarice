@@ -103,6 +103,10 @@ public final class DungeonUpgradeManager {
             return false;
         }
         UpgradeCard card = cards.get(cardIndex);
+        if (session.purchasedShopCards >= maxShopSelections(player)) {
+            reject(player, "You have selected all available cards.");
+            return false;
+        }
         if (!trySpendForCard(player, session, card)) {
             reject(player, "You do not have enough Mythic Coins.");
             return false;
@@ -139,14 +143,19 @@ public final class DungeonUpgradeManager {
     }
 
     private static UpgradeSession getOrCreateShopSession(ServerPlayer player) {
+        int shopWaveNumber = DungeonRunManager.getShopUpgradeWaveNumber(player);
         UpgradeSession existing = SESSIONS.get(player.getUUID());
         if (existing != null && existing.waveOwnerId == null) {
             String loadoutId = resolveLoadoutId(player);
-            if (loadoutId != null && !loadoutId.isBlank() && existing.definition.id().equals(loadoutId)) {
+            if (loadoutId != null && !loadoutId.isBlank() && existing.definition.id().equals(loadoutId) && existing.shopWaveNumber == shopWaveNumber) {
                 return existing;
             }
         }
-        return createSession(player, null);
+        UpgradeSession session = createSession(player, null);
+        if (session != null) {
+            session.shopWaveNumber = shopWaveNumber;
+        }
+        return session;
     }
 
     public static void selectCategory(ServerPlayer player, String sessionIdRaw, UpgradeCategory category) {
@@ -244,19 +253,23 @@ public final class DungeonUpgradeManager {
         ItemStack preview = category == UpgradeCategory.ITEM
                 ? ItemStack.EMPTY
                 : (target.isEmpty() ? previewStackForCategory(category, player) : target);
-        int waveNumber = session.waveOwnerId == null ? 1 : DungeonRunManager.getUpgradeWaveNumber(session.waveOwnerId);
+        int waveNumber = getSessionWaveNumber(session);
         session.activeCategory = category;
-        int availableSlots = remainingShopSelections(session);
         List<UpgradeCard> cards = session.cardsByCategory.get(category);
         if (cards == null) {
-            cards = generateShopCards(player, session, category, target, waveNumber, availableSlots);
-            session.cardsByCategory.put(category, cards);
-        } else if (cards.size() > availableSlots) {
-            cards = List.copyOf(cards.subList(0, availableSlots));
+            cards = generateShopCards(player, session, category, target, waveNumber, RunicUpgradeService.CARD_COUNT);
             session.cardsByCategory.put(category, cards);
         }
         rebuildShopCardIndex(session);
-        PacketDistributor.sendToPlayer(player, new SyncUpgradeCardsPayload(session.sessionId.toString(), category.name(), preview.copy(), rerollsLeft, rerollCost, cards));
+        PacketDistributor.sendToPlayer(player, new SyncUpgradeCardsPayload(
+                session.sessionId.toString(),
+                category.name(),
+                preview.copy(),
+                rerollsLeft,
+                rerollCost,
+                session.purchasedShopCards,
+                maxShopSelections(player),
+                cards));
     }
 
     private static void rerollExistingShopCards(ServerPlayer player, UpgradeSession session, int rerollsLeft, int rerollCost) {
@@ -266,12 +279,12 @@ public final class DungeonUpgradeManager {
             return;
         }
         List<UpgradeCard> existing = session.cardsByCategory.getOrDefault(category, List.of());
-        int remainingSlots = Math.min(existing.size(), remainingShopSelections(session));
+        int remainingSlots = existing.size();
         if (category == UpgradeCategory.ARMOR) {
             session.activeArmorPiece = chooseArmorPieceForCards(player, session.activeArmorPiece);
         }
         ItemStack target = representativeTargetStack(player, category, session.activeArmorPiece);
-        int waveNumber = session.waveOwnerId == null ? 1 : DungeonRunManager.getUpgradeWaveNumber(session.waveOwnerId);
+        int waveNumber = getSessionWaveNumber(session);
         session.cardGenerationNonce++;
         List<UpgradeCard> cards = generateShopCards(player, session, category, target, waveNumber, remainingSlots);
         session.cardsByCategory.put(category, cards);
@@ -279,7 +292,15 @@ public final class DungeonUpgradeManager {
         ItemStack preview = category == UpgradeCategory.ITEM
                 ? ItemStack.EMPTY
                 : (target.isEmpty() ? previewStackForCategory(category, player) : target);
-        PacketDistributor.sendToPlayer(player, new SyncUpgradeCardsPayload(session.sessionId.toString(), category.name(), preview.copy(), rerollsLeft, rerollCost, cards));
+        PacketDistributor.sendToPlayer(player, new SyncUpgradeCardsPayload(
+                session.sessionId.toString(),
+                category.name(),
+                preview.copy(),
+                rerollsLeft,
+                rerollCost,
+                session.purchasedShopCards,
+                maxShopSelections(player),
+                cards));
     }
 
     private static void removePurchasedShopCard(ServerPlayer player, UpgradeSession session, UpgradeCard card, UpgradeCategory category) {
@@ -298,13 +319,6 @@ public final class DungeonUpgradeManager {
         }
         session.purchasedShopCards++;
         session.cardsByCategory.put(category, List.copyOf(remaining));
-        for (Map.Entry<UpgradeCategory, List<UpgradeCard>> entry : new java.util.ArrayList<>(session.cardsByCategory.entrySet())) {
-            List<UpgradeCard> cards = entry.getValue();
-            int cap = remainingShopSelections(session);
-            if (cards.size() > cap) {
-                session.cardsByCategory.put(entry.getKey(), List.copyOf(cards.subList(0, cap)));
-            }
-        }
         rebuildShopCardIndex(session);
         int rerollsLeft = session.waveOwnerId == null ? 0 : DungeonRunManager.getUpgradeRerollsLeft(session.waveOwnerId);
         int rerollCost = session.waveOwnerId == null ? 0 : DungeonRunManager.getUpgradeRerollCost(session.waveOwnerId);
@@ -322,8 +336,13 @@ public final class DungeonUpgradeManager {
         return List.copyOf(generated.subList(0, count));
     }
 
-    private static int remainingShopSelections(UpgradeSession session) {
-        return Math.max(0, 5 - session.purchasedShopCards);
+    private static int maxShopSelections(ServerPlayer player) {
+        int playerLevel = Math.max(0, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player));
+        return 5 + playerLevel / 5;
+    }
+
+    private static int getSessionWaveNumber(UpgradeSession session) {
+        return session.waveOwnerId == null ? Math.max(1, session.shopWaveNumber) : DungeonRunManager.getUpgradeWaveNumber(session.waveOwnerId);
     }
 
     private static void rebuildShopCardIndex(UpgradeSession session) {
@@ -360,6 +379,7 @@ public final class DungeonUpgradeManager {
             case ADD_OR_UPGRADE_EFFECT -> 90;
             case ITEM_REROLL_PRIMARY_WEAPON, ITEM_REROLL_SECONDARY_WEAPON -> 120;
             case ITEM_REWARD_ABILITY -> 80;
+            case ITEM_REWARD_GATEWAY_CARD -> 260;
             case ITEM_REWARD_FOOD, ITEM_REWARD_RESTOCK, UPGRADE_ITEM_SUPPLY -> 30;
             default -> 0;
         };
@@ -385,7 +405,7 @@ public final class DungeonUpgradeManager {
     private static void applyCard(ServerPlayer player, ItemStack target, UpgradeCard card, UpgradeContext ctx, LoadoutDefinition definition) {
         try {
             switch (card.type()) {
-                case ITEM_REWARD_FOOD, ITEM_REWARD_RESTOCK, ITEM_REWARD_ABILITY, ITEM_REROLL_PRIMARY_WEAPON, ITEM_REROLL_SECONDARY_WEAPON, UPGRADE_ITEM_SUPPLY -> {
+                case ITEM_REWARD_FOOD, ITEM_REWARD_RESTOCK, ITEM_REWARD_ABILITY, ITEM_REWARD_GATEWAY_CARD, ITEM_REROLL_PRIMARY_WEAPON, ITEM_REROLL_SECONDARY_WEAPON, UPGRADE_ITEM_SUPPLY -> {
                     applyItemUpgrade(player, definition, card.type());
                     return;
                 }
@@ -430,6 +450,7 @@ public final class DungeonUpgradeManager {
                 giveBoundStack(player, new ItemStack(com.revilo.gatesofavarice.registry.ModItems.ARCANE_APPLE.get(), 1 + random.nextInt(3)));
                 giveBoundStack(player, DungeonRunManager.rollUpgradeMagnetReward(random, Math.max(1, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player))));
             }
+            case ITEM_REWARD_GATEWAY_CARD -> giveBoundStack(player, DungeonRunManager.rollGatewayCard(random, Math.max(1, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player))));
             case ITEM_REROLL_PRIMARY_WEAPON -> rerollWeapon(player, definition, true, random);
             case ITEM_REROLL_SECONDARY_WEAPON -> rerollWeapon(player, definition, false, random);
             default -> {
@@ -586,12 +607,13 @@ public final class DungeonUpgradeManager {
     }
 
     private static ItemStack findWeaponByRole(ServerPlayer player, String role) {
-        for (ItemStack stack : player.getInventory().items) {
-            if (role.equals(DungeonBoundItems.getWeaponRole(stack))) {
-                return stack;
-            }
+        if (role.equals(DungeonBoundItems.getWeaponRole(player.getMainHandItem()))) {
+            return player.getMainHandItem();
         }
-        for (ItemStack stack : player.getInventory().offhand) {
+        if (role.equals(DungeonBoundItems.getWeaponRole(player.getOffhandItem()))) {
+            return player.getOffhandItem();
+        }
+        for (ItemStack stack : allInventoryStacks(player)) {
             if (role.equals(DungeonBoundItems.getWeaponRole(stack))) {
                 return stack;
             }
@@ -599,8 +621,19 @@ public final class DungeonUpgradeManager {
         return ItemStack.EMPTY;
     }
 
+    private static List<ItemStack> allInventoryStacks(ServerPlayer player) {
+        java.util.ArrayList<ItemStack> stacks = new java.util.ArrayList<>(
+                player.getInventory().items.size()
+                        + player.getInventory().offhand.size()
+                        + player.getInventory().armor.size());
+        stacks.addAll(player.getInventory().items);
+        stacks.addAll(player.getInventory().offhand);
+        stacks.addAll(player.getInventory().armor);
+        return stacks;
+    }
+
     private static ItemStack findFirstSupplyItem(ServerPlayer player) {
-        for (ItemStack stack : player.getInventory().items) {
+        for (ItemStack stack : allInventoryStacks(player)) {
             if (stack.isEmpty()) continue;
             if (stack.is(Items.ARROW) || stack.is(Items.GOLDEN_APPLE) || stack.is(Items.COOKED_BEEF) || stack.is(com.revilo.gatesofavarice.registry.ModItems.ARCANE_APPLE.get())) {
                 return stack;
@@ -698,6 +731,7 @@ public final class DungeonUpgradeManager {
         private final UUID waveOwnerId;
         private UpgradeCategory activeCategory;
         private String activeArmorPiece = "";
+        private int shopWaveNumber = 1;
         private long cardGenerationNonce = 0L;
         private int purchasedShopCards = 0;
         private final Map<UpgradeCategory, List<UpgradeCard>> cardsByCategory = new HashMap<>();

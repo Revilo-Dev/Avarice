@@ -83,6 +83,15 @@ public final class DungeonBoundItems {
                 return true;
             }
         }
+        for (int i = 0; i < inv.offhand.size(); i++) {
+            ItemStack existing = inv.offhand.get(i);
+            if (role.equals(getWeaponRole(existing))) {
+                inv.offhand.set(i, stack);
+                player.inventoryMenu.broadcastChanges();
+                player.containerMenu.broadcastChanges();
+                return true;
+            }
+        }
         return false;
     }
 

@@ -40,6 +40,8 @@ public class DungeonUpgradeCardsScreen extends Screen {
     private String categoryName = "";
     private int rerollsLeft = 0;
     private int rerollCost = 0;
+    private int selectedCardCount = 0;
+    private int maxCardSelections = 5;
     private Button rerollButton;
     private int centerX;
     private int top;
@@ -77,6 +79,7 @@ public class DungeonUpgradeCardsScreen extends Screen {
         this.renderBackground(gg, mouseX, mouseY, partialTick);
         super.render(gg, mouseX, mouseY, partialTick);
         gg.drawCenteredString(this.font, Component.literal("UPGRADE - " + formatCategoryName(this.categoryName)).withStyle(ChatFormatting.BOLD, ChatFormatting.YELLOW), this.centerX, this.top + 4, 0xFFFFFF);
+        gg.drawCenteredString(this.font, Component.literal("Select " + Math.max(0, this.maxCardSelections - this.selectedCardCount) + " Cards").withStyle(ChatFormatting.LIGHT_PURPLE), this.centerX, this.top + 16, 0xFFFFFF);
         if (!this.previewStack.isEmpty()) {
             gg.drawCenteredString(this.font, this.previewStack.getHoverName().copy().withStyle(ChatFormatting.GOLD), this.centerX, this.top + 62, 0xF3D78A);
             int itemX = this.centerX;
@@ -188,6 +191,8 @@ public class DungeonUpgradeCardsScreen extends Screen {
         this.cards = List.copyOf(DungeonUpgradeClientState.cards);
         this.rerollsLeft = DungeonUpgradeClientState.rerollsLeft;
         this.rerollCost = DungeonUpgradeClientState.rerollCost;
+        this.selectedCardCount = DungeonUpgradeClientState.selectedCardCount;
+        this.maxCardSelections = Math.max(0, DungeonUpgradeClientState.maxCardSelections);
     }
 
     private void rebuildCardWidgets() {

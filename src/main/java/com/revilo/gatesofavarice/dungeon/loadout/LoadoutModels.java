@@ -64,6 +64,7 @@ public final class LoadoutModels {
         ITEM_REWARD_FOOD,
         ITEM_REWARD_RESTOCK,
         ITEM_REWARD_ABILITY,
+        ITEM_REWARD_GATEWAY_CARD,
         ITEM_REROLL_PRIMARY_WEAPON,
         ITEM_REROLL_SECONDARY_WEAPON
     }

@@ -1,6 +1,7 @@
 package com.revilo.gatesofavarice.dungeon;
 
 import com.revilo.gatesofavarice.currency.MythicCoinWallet;
+import com.revilo.gatesofavarice.currency.GoldCoinWallet;
 import com.revilo.gatesofavarice.dungeon.DungeonUpgradeManager;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCategory;
@@ -16,6 +17,7 @@ import com.revilo.gatesofavarice.entity.MythicCoinOrbEntity;
 import com.revilo.gatesofavarice.item.MythicCoinStackData;
 import com.revilo.gatesofavarice.progression.ProgressionSystem;
 import com.revilo.gatesofavarice.item.data.CrystalTheme;
+import com.revilo.gatesofavarice.item.data.GatewayCardData;
 import com.revilo.gatesofavarice.menu.DungeonWaveMenu;
 import com.revilo.gatesofavarice.network.DungeonCompletePayload;
 import com.revilo.gatesofavarice.network.DungeonWaveHudPayload;
@@ -46,6 +48,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.SimpleMenuProvider;
@@ -202,7 +205,7 @@ public final class DungeonRunManager {
         clearHudToPlayer(player);
         int levelPoints = awardDungeonExitProgression(player, run);
         List<ItemStack> rewards = collectDungeonRewards(player);
-        ItemStack lootbox = createLootboxFromRewards(player, rewards, levelPoints);
+        ItemStack lootbox = createLootboxFromRewards(player, run, rewards, levelPoints);
         restoreSnapshot(player, snapshot);
         if (player.getUUID().equals(run.ownerId)) {
             closeOverworldEntryPortals(player.server, run.ownerId);
@@ -308,6 +311,18 @@ public final class DungeonRunManager {
     public static int getUpgradeWaveNumber(UUID ownerId) {
         RunState run = RUNS_BY_OWNER.get(ownerId);
         return run == null ? 1 : Math.max(1, run.waveNumber + 1);
+    }
+
+    public static int getShopUpgradeWaveNumber(ServerPlayer player) {
+        UUID ownerId = PLAYER_TO_OWNER.get(player.getUUID());
+        if (ownerId == null) {
+            return 1;
+        }
+        RunState run = RUNS_BY_OWNER.get(ownerId);
+        if (run == null) {
+            return 1;
+        }
+        return Math.max(1, run.waveNumber + 1);
     }
 
     public static int getUpgradeRerollsLeft(UUID ownerId) {
@@ -1842,7 +1857,7 @@ public final class DungeonRunManager {
         }
     }
 
-    private static ItemStack createLootboxFromRewards(ServerPlayer player, List<ItemStack> rewards, int levelOrbs) {
+    private static ItemStack createLootboxFromRewards(ServerPlayer player, RunState run, List<ItemStack> rewards, int levelOrbs) {
         ItemStack lootbox = new ItemStack(ModItems.LOOTBOX.get());
         net.minecraft.nbt.ListTag list = new net.minecraft.nbt.ListTag();
         for (ItemStack stack : rewards) {
@@ -1850,6 +1865,7 @@ public final class DungeonRunManager {
                 list.add(stack.saveOptional(player.registryAccess()));
             }
         }
+        addCompletionCards(player, run, list);
         if (list.isEmpty() && levelOrbs <= 0) return ItemStack.EMPTY;
         net.minecraft.nbt.CompoundTag all = lootbox.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
         net.minecraft.nbt.CompoundTag root = all.getCompound("gatesofavarice");
@@ -1858,6 +1874,25 @@ public final class DungeonRunManager {
         all.put("gatesofavarice", root);
         lootbox.set(DataComponents.CUSTOM_DATA, CustomData.of(all));
         return lootbox;
+    }
+
+    private static void addCompletionCards(ServerPlayer player, RunState run, net.minecraft.nbt.ListTag list) {
+        RandomSource random = player.serverLevel().random;
+        int playerLevel = Math.max(1, getEffectivePlayerLevel(player));
+        int guaranteed = Math.max(0, run.waveNumber / 5);
+        int extra = random.nextFloat() < Mth.clamp(playerLevel / 140.0F + run.waveNumber * 0.01F, 0.05F, 0.65F) ? 1 : 0;
+        for (int i = 0; i < guaranteed + extra; i++) {
+            ItemStack card = rollGatewayCard(random, playerLevel);
+            if (!card.isEmpty()) {
+                list.add(card.saveOptional(player.registryAccess()));
+            }
+        }
+    }
+
+    public static ItemStack rollGatewayCard(RandomSource random, int playerLevel) {
+        GatewayCardData.CardType[] values = GatewayCardData.CardType.values();
+        GatewayCardData.CardType type = values[random.nextInt(values.length)];
+        return GatewayCardData.create(ModItems.GATEWAY_CARD.get(), type, playerLevel, random);
     }
 
     private static void restoreSnapshot(ServerPlayer player, PlayerSnapshot snapshot) {
@@ -2185,6 +2220,11 @@ public final class DungeonRunManager {
 
     private static int cashoutRemainingCoinsOnDungeonExit(ServerPlayer player) {
         int coins = MythicCoinWallet.get(player);
+        int goldCoins = coins / 1000;
+        GoldCoinWallet.add(player, goldCoins);
+        if (goldCoins > 0) {
+            player.sendSystemMessage(Component.translatable("message.gatesofavarice.gold_coins_earned", coins, goldCoins));
+        }
         MythicCoinWallet.set(player, 0);
         return coins;
     }

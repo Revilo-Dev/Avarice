@@ -3,7 +3,9 @@ package com.revilo.gatesofavarice.registry;
 import com.revilo.gatesofavarice.GatewayExpansion;
 import com.revilo.gatesofavarice.item.ArcaneAppleItem;
 import com.revilo.gatesofavarice.item.CrystalItem;
+import com.revilo.gatesofavarice.item.GatewayCardItem;
 import com.revilo.gatesofavarice.item.GatewaySwordItem;
+import com.revilo.gatesofavarice.item.GoldCoinItem;
 import com.revilo.gatesofavarice.item.HeartFragmentItem;
 import com.revilo.gatesofavarice.item.LootMaterialItem;
 import com.revilo.gatesofavarice.item.MagnetItem;
@@ -47,8 +49,12 @@ public final class ModItems {
 
     public static final DeferredHolder<Item, MythicCoinItem> MYTHIC_COIN = ITEMS.register("mythic_coin",
             () -> new MythicCoinItem(new Item.Properties().stacksTo(99)));
+    public static final DeferredHolder<Item, GoldCoinItem> GOLD_COIN = ITEMS.register("gold_coin",
+            () -> new GoldCoinItem(new Item.Properties().stacksTo(99).rarity(Rarity.UNCOMMON)));
     public static final DeferredHolder<Item, StabilityPearlItem> STABILITY_PEARL = ITEMS.register("stability_pearl",
             () -> new StabilityPearlItem(new Item.Properties().stacksTo(16).rarity(Rarity.RARE)));
+    public static final DeferredHolder<Item, GatewayCardItem> GATEWAY_CARD = ITEMS.register("gateway_card",
+            () -> new GatewayCardItem(new Item.Properties().stacksTo(16).rarity(Rarity.UNCOMMON)));
     public static final DeferredHolder<Item, LootMaterialItem> GRIMSTONE = ITEMS.register("grimstone",
             () -> new LootMaterialItem(LootRarity.COMMON, new Item.Properties().stacksTo(64)));
     public static final DeferredHolder<Item, LootMaterialItem> MYSTIC_ESSENCE = ITEMS.register("mystic_essence",
