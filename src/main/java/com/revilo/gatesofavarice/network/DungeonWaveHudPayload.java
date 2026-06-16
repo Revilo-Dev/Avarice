@@ -8,7 +8,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
-public record DungeonWaveHudPayload(boolean active, int waveNumber, int mobsRemaining, int totalMobs, long playTimeTicks, int mobsKilled, List<String> statLines) implements CustomPacketPayload {
+public record DungeonWaveHudPayload(boolean active, boolean upgradePhase, int waveNumber, int mobsRemaining, int totalMobs, long playTimeTicks, int mobsKilled, List<String> statLines) implements CustomPacketPayload {
 
     public static final Type<DungeonWaveHudPayload> TYPE =
             new Type<>(ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "dungeon_wave_hud"));
@@ -17,6 +17,7 @@ public record DungeonWaveHudPayload(boolean active, int waveNumber, int mobsRema
             StreamCodec.of(
                     (buffer, payload) -> {
                         buffer.writeBoolean(payload.active);
+                        buffer.writeBoolean(payload.upgradePhase);
                         buffer.writeVarInt(payload.waveNumber);
                         buffer.writeVarInt(payload.mobsRemaining);
                         buffer.writeVarInt(payload.totalMobs);
@@ -29,6 +30,7 @@ public record DungeonWaveHudPayload(boolean active, int waveNumber, int mobsRema
                     },
                     buffer -> {
                         boolean active = buffer.readBoolean();
+                        boolean upgradePhase = buffer.readBoolean();
                         int waveNumber = buffer.readVarInt();
                         int mobsRemaining = buffer.readVarInt();
                         int totalMobs = buffer.readVarInt();
@@ -39,7 +41,7 @@ public record DungeonWaveHudPayload(boolean active, int waveNumber, int mobsRema
                         for (int i = 0; i < statCount; i++) {
                             statLines.add(buffer.readUtf());
                         }
-                        return new DungeonWaveHudPayload(active, waveNumber, mobsRemaining, totalMobs, playTimeTicks, mobsKilled, List.copyOf(statLines));
+                        return new DungeonWaveHudPayload(active, upgradePhase, waveNumber, mobsRemaining, totalMobs, playTimeTicks, mobsKilled, List.copyOf(statLines));
                     }
             );
 

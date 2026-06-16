@@ -137,6 +137,9 @@ public final class GatewaySellValues {
     }
 
     public static void appendSellValueTooltip(ItemStack stack, List<Component> tooltipComponents) {
+        if (!showSellValuesFromItemTooltips()) {
+            return;
+        }
         int value = getUnitValue(stack);
         if (value <= 0) {
             return;
@@ -151,6 +154,19 @@ public final class GatewaySellValues {
             return;
         }
         appendSellValueTooltip(stack, tooltipComponents);
+    }
+
+    public static void appendDungeonSellValueTooltip(ItemStack stack, List<Component> tooltipComponents) {
+        int value = getUnitValue(stack);
+        if (value <= 0) {
+            return;
+        }
+
+        tooltipComponents.add(Component.literal("Sell Value: " + value).withStyle(ChatFormatting.LIGHT_PURPLE));
+    }
+
+    private static boolean showSellValuesFromItemTooltips() {
+        return false;
     }
 
     private static int getRunicUnitValue(Item item) {

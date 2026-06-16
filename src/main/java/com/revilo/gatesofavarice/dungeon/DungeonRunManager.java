@@ -6,6 +6,7 @@ import com.revilo.gatesofavarice.dungeon.DungeonUpgradeManager;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCategory;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutPresetRegistry;
+import com.revilo.gatesofavarice.dungeon.loadout.AuraAttributeSupport;
 import com.revilo.gatesofavarice.dungeon.loadout.RunicLoadoutService;
 import com.revilo.gatesofavarice.entity.GatekeeperEntity;
 import com.revilo.gatesofavarice.entity.GatewayCrystalEntity;
@@ -622,6 +623,10 @@ public final class DungeonRunManager {
 
     @SubscribeEvent
     public static void onLivingDrops(LivingDropsEvent event) {
+        if (event.getEntity() instanceof GatekeeperEntity) {
+            event.getDrops().clear();
+            return;
+        }
         if (event.getEntity() instanceof ServerPlayer player && PENDING_SNAPSHOT_RESTORES.containsKey(player.getUUID())) {
             event.getDrops().clear();
             return;
@@ -761,9 +766,6 @@ public final class DungeonRunManager {
         run.toSpawn = Math.max(4, (int) Math.round(baseCount * run.enemyCountMultiplier * progressionDifficulty));
         run.waveTotalMobs = run.toSpawn;
         run.currentWavePools = buildWavePools(run);
-        for (ServerPlayer participant : run.liveParticipants()) {
-            participant.displayClientMessage(Component.literal("Wave " + run.waveNumber).withStyle(ChatFormatting.GOLD), false);
-        }
         syncHud(run, true);
     }
 
@@ -1089,6 +1091,7 @@ public final class DungeonRunManager {
     private static void rollArmorPiece(ServerPlayer player, ItemStack stack, LoadoutModels.LoadoutDefinition definition, EquipmentSlot slot, RandomSource random) {
         RunicLoadoutService.tagLoadoutIdentity(stack, definition.id(), definition.armorSet().displayName(), slot.getName());
         RunicLoadoutService.applyLoadoutStats(player.serverLevel(), stack, definition.armorRunicStatPool(), random);
+        AuraAttributeSupport.applyLoadoutBonuses(stack, definition.id(), slot, definition.armorRunicStatPool());
         RunicLoadoutService.applyLoadoutEffects(player.serverLevel(), stack, definition.armorEffectPool(), random);
         if (com.revilo.gatesofavarice.config.GatewayExpansionConfig.FORCE_BINDING_ON_LOADOUT_ARMOR.get()) {
             net.minecraft.core.Holder.Reference<net.minecraft.world.item.enchantment.Enchantment> binding =
@@ -1747,11 +1750,15 @@ public final class DungeonRunManager {
     }
 
     private static void clearHudToPlayer(ServerPlayer player) {
-        PacketDistributor.sendToPlayer(player, new DungeonWaveHudPayload(false, 0, 0, 1, 0L, 0, List.of()));
+        PacketDistributor.sendToPlayer(player, new DungeonWaveHudPayload(false, false, 0, 0, 1, 0L, 0, List.of()));
     }
 
     private static DungeonWaveHudPayload createHudPayload(RunState run, boolean active, int wave, int remaining, int total) {
-        return new DungeonWaveHudPayload(active, wave, remaining, total, elapsedRunTicks(run), run.mobsKilled, modifiedStatSummary(run));
+        boolean upgradePhase = run != null && run.phase == RunPhase.SHOP;
+        boolean displayActive = active || upgradePhase;
+        int displayRemaining = upgradePhase ? 1 : remaining;
+        int displayTotal = upgradePhase ? 1 : total;
+        return new DungeonWaveHudPayload(displayActive, upgradePhase, wave, displayRemaining, displayTotal, elapsedRunTicks(run), run.mobsKilled, modifiedStatSummary(run));
     }
 
     private static long elapsedRunTicks(RunState run) {

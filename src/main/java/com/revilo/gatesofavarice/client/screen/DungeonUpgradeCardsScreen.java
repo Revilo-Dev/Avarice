@@ -79,7 +79,6 @@ public class DungeonUpgradeCardsScreen extends Screen {
         this.renderBackground(gg, mouseX, mouseY, partialTick);
         super.render(gg, mouseX, mouseY, partialTick);
         gg.drawCenteredString(this.font, Component.literal("UPGRADE - " + formatCategoryName(this.categoryName)).withStyle(ChatFormatting.BOLD, ChatFormatting.YELLOW), this.centerX, this.top + 4, 0xFFFFFF);
-        gg.drawCenteredString(this.font, Component.literal("Select " + Math.max(0, this.maxCardSelections - this.selectedCardCount) + " Cards").withStyle(ChatFormatting.LIGHT_PURPLE), this.centerX, this.top + 16, 0xFFFFFF);
         if (!this.previewStack.isEmpty()) {
             gg.drawCenteredString(this.font, this.previewStack.getHoverName().copy().withStyle(ChatFormatting.GOLD), this.centerX, this.top + 62, 0xF3D78A);
             int itemX = this.centerX;
@@ -104,6 +103,13 @@ public class DungeonUpgradeCardsScreen extends Screen {
             drawCard(gg, texture, drawX, drawY, scale);
             renderCardContents(gg, drawX, drawY, card, scale);
         }
+        renderSelectionCounter(gg);
+    }
+
+    private void renderSelectionCounter(GuiGraphics gg) {
+        int remaining = Math.max(0, this.maxCardSelections - this.selectedCardCount);
+        Component label = Component.literal("Select " + remaining + " Cards").withStyle(remaining > 0 ? ChatFormatting.LIGHT_PURPLE : ChatFormatting.RED);
+        gg.drawCenteredString(this.font, label, this.centerX, this.top + 194, 0xFFFFFF);
     }
 
     @Override
@@ -302,6 +308,7 @@ public class DungeonUpgradeCardsScreen extends Screen {
             case "Damage Card", "Offence Card" -> hovered ? DAMAGE_CARD_HOVERED : DAMAGE_CARD;
             case "Stat Card" -> hovered ? STAT_CARD_HOVERED : STAT_CARD;
             case "Ability Card" -> hovered ? EFFECT_CARD_HOVERED : EFFECT_CARD;
+            case "Skill Card" -> hovered ? STAT_CARD_HOVERED : STAT_CARD;
             case "Restock Card" -> hovered ? STAT_CARD_HOVERED : STAT_CARD;
             case "Reroll Primary Weapon" -> hovered ? ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/tarrot-card-hovered.png") : ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/tarrot-card.png");
             case "Reroll Secondary Weapon" -> hovered ? DAMAGE_CARD_HOVERED : DAMAGE_CARD;
@@ -328,6 +335,17 @@ public class DungeonUpgradeCardsScreen extends Screen {
             case "Toughness" -> "toughness";
             case "Leaping" -> "jump_height";
             case "Ability Power" -> "power";
+            case "Rampage" -> "attack_speed";
+            case "Strength" -> "attack_damage";
+            case "Agility" -> "movement_speed";
+            case "Poison" -> "poison_chance";
+            case "Fire" -> "flame";
+            case "Ice" -> "freezing_chance";
+            case "Lightning" -> "shocking_chance";
+            case "Force" -> "aegis";
+            case "Wind" -> "withering_chance";
+            case "Magic" -> "power";
+            case "Power" -> "power";
             case "Movement Speed" -> "movement_speed";
             case "Resistance" -> "resistance";
             case "Fire Resistance" -> "fire_resistance";

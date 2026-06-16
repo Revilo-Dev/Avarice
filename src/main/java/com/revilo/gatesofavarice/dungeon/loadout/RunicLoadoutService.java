@@ -55,6 +55,9 @@ public final class RunicLoadoutService {
     public static ItemStack applyLoadoutStats(ServerLevel level, ItemStack stack, List<StatRollRange> stats, RandomSource random) {
         RuneStats merged = RuneStats.get(stack);
         for (StatRollRange spec : stats) {
+            if (AuraAttributeSupport.isAuraAttributeStatId(spec.statId())) {
+                continue;
+            }
             RuneStatType type = RuneStatType.byId(spec.statId());
             if (type == null) {
                 GatewayExpansion.LOGGER.warn("Unknown rune stat id in loadout preset: {}", spec.statId());
@@ -172,6 +175,10 @@ public final class RunicLoadoutService {
         ArrayList<StatRollRange> out = new ArrayList<>(source.size());
         Set<String> seen = new HashSet<>();
         for (StatRollRange range : source) {
+            if (AuraAttributeSupport.isAuraAttributeStatId(range.statId())) {
+                out.add(range);
+                continue;
+            }
             RuneStatType type = RuneStatType.byId(range.statId());
             if (type == null || !isStatAllowedForStack(stack, type)) continue;
             if (seen.add(range.statId())) {

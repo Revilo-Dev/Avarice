@@ -8,6 +8,7 @@ import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCardType;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCategory;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeContext;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutPresetRegistry;
+import com.revilo.gatesofavarice.dungeon.loadout.AuraAttributeSupport;
 import com.revilo.gatesofavarice.dungeon.loadout.RunicLoadoutService;
 import com.revilo.gatesofavarice.dungeon.loadout.RunicUpgradeService;
 import com.revilo.gatesofavarice.network.OpenUpgradeCategoryPayload;
@@ -25,6 +26,7 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.item.component.CustomData;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -422,9 +424,18 @@ public final class DungeonUpgradeManager {
                     }
                 }
                 case ADD_NEW_RUNE_STAT, INCREASE_EXISTING_STAT_PERCENT, INCREASE_EXISTING_STAT_FLAT, ADD_IMPLICIT, UPGRADE_ARMOR_BASE_STAT -> {
+                    if (AuraAttributeSupport.addCardBonus(target, card.title(), card.changeLabel(), parseNumber(card.newValue()))) {
+                        return;
+                    }
+                    if ("Ability Card".equals(card.title()) || "Skill Card".equals(card.title())) {
+                        return;
+                    }
                     RuneStatType type = resolveCardStatType(card);
                     if (type == null && card.type() == UpgradeCardType.ADD_IMPLICIT) {
                         type = RuneStatType.ATTACK_DAMAGE;
+                    }
+                    if (type != null && "flame_chance".equals(type.id()) && target.getItem() instanceof SwordItem) {
+                        return;
                     }
                     if (type != null && RunicLoadoutService.isStatAllowedForStack(target, type)) {
                         float delta = clampDisplayedStatDelta(type, card.newValue());

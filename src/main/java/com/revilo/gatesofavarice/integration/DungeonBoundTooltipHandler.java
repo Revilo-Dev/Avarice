@@ -1,6 +1,8 @@
 package com.revilo.gatesofavarice.integration;
 
 import com.revilo.gatesofavarice.dungeon.DungeonBoundItems;
+import com.revilo.gatesofavarice.dungeon.ModDimensions;
+import com.revilo.gatesofavarice.shop.GatewaySellValues;
 import java.util.List;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -14,6 +16,9 @@ public final class DungeonBoundTooltipHandler {
 
     @SubscribeEvent
     public static void onItemTooltip(ItemTooltipEvent event) {
+        if (event.getEntity() != null && event.getEntity().level().dimension().equals(ModDimensions.DUNGEON_LEVEL)) {
+            GatewaySellValues.appendDungeonSellValueTooltip(event.getItemStack(), event.getToolTip());
+        }
         if (!DungeonBoundItems.isDungeonBound(event.getItemStack())) {
             return;
         }

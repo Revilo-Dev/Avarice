@@ -56,14 +56,18 @@ public final class DungeonWaveHudOverlay {
             event.getGuiGraphics().disableScissor();
         }
 
-        Component waveLabel = Component.literal("Wave " + DungeonHudState.waveNumber());
+        Component waveLabel = DungeonHudState.upgradePhase()
+                ? Component.literal("Upgrade phase")
+                : Component.literal("Wave " + DungeonHudState.waveNumber());
         int waveTextAreaWidth = WAVE_TEXT_RIGHT - WAVE_TEXT_LEFT;
         int waveTextX = x + WAVE_TEXT_LEFT + (waveTextAreaWidth - minecraft.font.width(waveLabel)) / 2;
         event.getGuiGraphics().drawString(minecraft.font, waveLabel, waveTextX, y + WAVE_TEXT_TOP, 0xFFFFFF, false);
 
-        Component mobsLabel = Component.literal(remaining + " mobs remaining");
-        int mobsLabelWidth = minecraft.font.width(mobsLabel);
-        event.getGuiGraphics().drawString(minecraft.font, mobsLabel, x + (BAR_WIDTH - mobsLabelWidth) / 2, y + BAR_HEIGHT + 4, 0xFFFFFF, false);
+        if (!DungeonHudState.upgradePhase()) {
+            Component mobsLabel = Component.literal(remaining + " mobs remaining");
+            int mobsLabelWidth = minecraft.font.width(mobsLabel);
+            event.getGuiGraphics().drawString(minecraft.font, mobsLabel, x + (BAR_WIDTH - mobsLabelWidth) / 2, y + BAR_HEIGHT + 4, 0xFFFFFF, false);
+        }
     }
 
     private static void renderStatsSidebar(GuiGraphics guiGraphics, Minecraft minecraft) {

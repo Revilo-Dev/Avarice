@@ -6,6 +6,7 @@ import java.util.List;
 public final class DungeonHudState {
 
     private static volatile boolean active;
+    private static volatile boolean upgradePhase;
     private static volatile int waveNumber;
     private static volatile int mobsRemaining;
     private static volatile int totalMobs;
@@ -19,6 +20,7 @@ public final class DungeonHudState {
 
     public static void apply(DungeonWaveHudPayload payload) {
         active = payload.active();
+        upgradePhase = payload.upgradePhase();
         waveNumber = payload.waveNumber();
         mobsRemaining = payload.mobsRemaining();
         totalMobs = payload.totalMobs();
@@ -30,6 +32,7 @@ public final class DungeonHudState {
 
     public static void clear() {
         active = false;
+        upgradePhase = false;
         waveNumber = 0;
         mobsRemaining = 0;
         totalMobs = 0;
@@ -41,6 +44,10 @@ public final class DungeonHudState {
 
     public static boolean active() {
         return active;
+    }
+
+    public static boolean upgradePhase() {
+        return upgradePhase;
     }
 
     public static int waveNumber() {

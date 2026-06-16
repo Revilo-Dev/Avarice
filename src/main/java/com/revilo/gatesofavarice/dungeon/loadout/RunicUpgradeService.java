@@ -24,6 +24,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.revilodev.runic.item.custom.RuneItem;
@@ -35,36 +36,54 @@ public final class RunicUpgradeService {
     public static final int CARD_COUNT = 5;
     private static final List<CardSpec> WEAPON_EFFECT_CARDS = List.of(
             statCard("poison_chance", "Effect Card", "Toxic", 0.01F, 0.05F),
-            statCard("flame_chance", "Effect Card", "Fire Aspect", 0.01F, 0.05F),
+            statCard("flame_chance", "Effect Card", "Fire Aspect", 0.01F, 0.04F),
             statCard("withering_chance", "Effect Card", "Withering", 0.01F, 0.05F),
             statCard("bleeding_chance", "Effect Card", "Bleeding", 0.01F, 0.06F),
             statCard("stun_chance", "Effect Card", "Stunning", 0.01F, 0.05F),
             statCard("shocking_chance", "Effect Card", "Shocking", 0.01F, 0.05F),
-            statCard("leeching_chance", "Effect Card", "Leeching", 0.01F, 0.05F),
+            statCard("leeching_chance", "Effect Card", "Leeching", 0.005F, 0.02F),
             statCard("freezing_chance", "Effect Card", "Freezing", 0.01F, 0.05F),
             statCard("fangs", "Effect Card", "Fangs", 1.0F, 4.0F)
     );
     private static final List<CardSpec> WEAPON_DAMAGE_CARDS = List.of(
-            statCard("attack_damage", "Damage Card", "Attack Damage", 1.0F, 4.0F),
+            statCard("attack_damage", "Damage Card", "Attack Damage", 0.6F, 2.4F),
             statCard("undead_damage", "Damage Card", "Undead Damage", 1.0F, 4.0F)
     );
     private static final List<CardSpec> WEAPON_STAT_CARDS = List.of(
             statCard("attack_range", "Stat Card", "Attack Range", 0.10F, 0.20F),
-            statCard("attack_speed", "Stat Card", "Attack Speed", 0.05F, 0.12F),
+            statCard("attack_speed", "Stat Card", "Attack Speed", 0.03F, 0.07F),
             statCard("sweeping_range", "Stat Card", "Sweeping Range", 0.10F, 0.18F)
     );
     private static final List<CardSpec> DEFAULT_ARMOR_EFFECT_CARDS = List.of(
-            statCard("health", "Effect Card", "Health Boost", 1.0F, 5.0F),
+            statCard("health", "Effect Card", "Health Boost", 1.0F, 3.0F),
             statCard("jump_height", "Effect Card", "Leaping", 0.05F, 0.12F),
             statCard("ability_power", "Effect Card", "Ability Power", 0.50F, 2.50F),
-            statCard("movement_speed", "Effect Card", "Movement Speed", 0.04F, 0.10F)
+            statCard("movement_speed", "Effect Card", "Movement Speed", 0.04F, 0.10F),
+            statCard("aura:ability_power", "Ability Card", "Ability Power", 0.10F, 0.35F),
+            statCard("aura:ability_fire_bonus", "Ability Card", "Fire", 1.0F, 1.0F),
+            statCard("aura:ability_ice_bonus", "Ability Card", "Ice", 1.0F, 1.0F),
+            statCard("aura:ability_lightning_bonus", "Ability Card", "Lightning", 1.0F, 1.0F),
+            statCard("aura:ability_poison_bonus", "Ability Card", "Poison", 1.0F, 1.0F),
+            statCard("aura:ability_force_bonus", "Ability Card", "Force", 1.0F, 1.0F),
+            statCard("aura:ability_magic_bonus", "Ability Card", "Magic", 1.0F, 1.0F),
+            statCard("aura:ability_wind_bonus", "Ability Card", "Wind", 1.0F, 1.0F)
+    );
+    private static final List<CardSpec> AURA_MASTERY_CARDS = List.of(
+            statCard("aura:ability_power", "Ability Card", "Ability Power", 0.10F, 0.35F),
+            statCard("aura:ability_fire_bonus", "Ability Card", "Fire", 1.0F, 1.0F),
+            statCard("aura:ability_ice_bonus", "Ability Card", "Ice", 1.0F, 1.0F),
+            statCard("aura:ability_lightning_bonus", "Ability Card", "Lightning", 1.0F, 1.0F),
+            statCard("aura:ability_poison_bonus", "Ability Card", "Poison", 1.0F, 1.0F),
+            statCard("aura:ability_force_bonus", "Ability Card", "Force", 1.0F, 1.0F),
+            statCard("aura:ability_magic_bonus", "Ability Card", "Magic", 1.0F, 1.0F),
+            statCard("aura:ability_wind_bonus", "Ability Card", "Wind", 1.0F, 1.0F)
     );
     private static final List<CardSpec> DEFAULT_ARMOR_STAT_CARDS = List.of(
-            statCard("resistance", "Stat Card", "Resistance", 0.04F, 0.08F),
-            statCard("fire_resistance", "Stat Card", "Fire Resistance", 0.04F, 0.08F),
-            statCard("projectile_resistance", "Stat Card", "Projectile Resistance", 0.04F, 0.08F),
-            statCard("blast_resistance", "Stat Card", "Blast Resistance", 0.04F, 0.08F),
-            statCard("knockback_resistance", "Stat Card", "Knockback Resistance", 0.04F, 0.08F)
+            statCard("resistance", "Stat Card", "Resistance", 0.02F, 0.05F),
+            statCard("fire_resistance", "Stat Card", "Fire Resistance", 0.02F, 0.05F),
+            statCard("projectile_resistance", "Stat Card", "Projectile Resistance", 0.02F, 0.05F),
+            statCard("blast_resistance", "Stat Card", "Blast Resistance", 0.02F, 0.05F),
+            statCard("knockback_resistance", "Stat Card", "Knockback Resistance", 0.02F, 0.05F)
     );
     private static final List<CardSpec> DEFAULT_ARMOR_OFFENCE_CARDS = List.of(
             effectCard("minecraft:thorns", "Offence Card", "Thorns", 1),
@@ -196,7 +215,7 @@ public final class RunicUpgradeService {
             if (!isCardSpecAllowed(spec, target) || !usedIds.add(spec.uniqueId())) {
                 continue;
             }
-            cards.add(buildStatCard(spec, current, category, targetLabel, random, waveNumber, playerLevel));
+            cards.add(buildStatCard(spec, current, category, targetLabel, target, random, waveNumber, playerLevel));
             maxToAdd--;
         }
     }
@@ -222,10 +241,10 @@ public final class RunicUpgradeService {
         }
         if (fallback == null) {
             fallback = category == UpgradeCategory.ARMOR
-                    ? statCard("resistance", "Stat Card", "Resistance", 0.05F, 0.20F)
-                    : statCard("attack_damage", "Damage Card", "Attack Damage", 1.0F, 3.0F);
+                    ? statCard("resistance", "Stat Card", "Resistance", 0.02F, 0.08F)
+                    : statCard("attack_damage", "Damage Card", "Attack Damage", 0.5F, 2.0F);
         }
-        return buildStatCard(fallback, current, category, targetLabel, random, waveNumber, playerLevel);
+        return buildStatCard(fallback, current, category, targetLabel, ItemStack.EMPTY, random, waveNumber, playerLevel);
     }
 
     private static List<CardSpec> weightedForExistingStats(List<CardSpec> specs, RuneStats current) {
@@ -247,7 +266,7 @@ public final class RunicUpgradeService {
         return List.copyOf(weighted);
     }
 
-    private static UpgradeCard buildStatCard(CardSpec spec, RuneStats current, UpgradeCategory category, String targetLabel, RandomSource random, int waveNumber, int playerLevel) {
+    private static UpgradeCard buildStatCard(CardSpec spec, RuneStats current, UpgradeCategory category, String targetLabel, ItemStack target, RandomSource random, int waveNumber, int playerLevel) {
         if (spec.effectId() != null) {
             boolean alreadyHasEffect = false;
             String currentValue = "-";
@@ -261,6 +280,21 @@ public final class RunicUpgradeService {
                     currentValue,
                     "Lv " + spec.effectLevel(),
                     alreadyHasEffect ? 1 : 2,
+                    0
+            );
+        }
+        if (AuraAttributeSupport.isAuraAttributeStatId(spec.statId())) {
+            float roll = scaledAuraRoll(spec, random, waveNumber, playerLevel);
+            return new UpgradeCard(
+                    UUID.randomUUID().toString(),
+                    UpgradeCardType.ADD_IMPLICIT,
+                    category,
+                    AuraAttributeSupport.titleFor(spec.statId()),
+                    targetLabel,
+                    spec.label(),
+                    target.isEmpty() ? "-" : AuraAttributeSupport.currentCardValue(target, spec.statId()),
+                    AuraAttributeSupport.formatDelta(roll),
+                    2,
                     0
             );
         }
@@ -317,6 +351,9 @@ public final class RunicUpgradeService {
 
     private static String formatCurrentValue(RuneStatType type, float value) {
         if (isPercentLike(type)) {
+            if ("leeching_chance".equals(type.id())) {
+                return String.format(Locale.ROOT, "%.1f%%", normalizedStoredValue(type, value));
+            }
             return String.format(Locale.ROOT, "%.0f%%", normalizedStoredValue(type, value));
         }
         return formatDecimal(normalizedStoredValue(type, value));
@@ -324,6 +361,9 @@ public final class RunicUpgradeService {
 
     private static String formatFlatValue(RuneStatType type, float value) {
         if (isPercentLike(type)) {
+            if ("leeching_chance".equals(type.id())) {
+                return String.format(Locale.ROOT, "+%.1f%%", Math.max(0.5F, quantizeValue(value, 0.1F)));
+            }
             return String.format(Locale.ROOT, "+%.0f%%", quantizePercentRoll(value));
         }
         return "+" + formatDecimal(Math.max(0.1F, value));
@@ -331,6 +371,17 @@ public final class RunicUpgradeService {
 
     private static float scaledRoll(CardSpec spec, RuneStatType type, RandomSource random, int waveNumber, int playerLevel) {
         float base = spec.min() + random.nextFloat() * Math.max(0.01F, spec.max() - spec.min());
+        String id = type.id();
+        if ("leeching_chance".equals(id)) {
+            return quantizeValue(base * 100.0F, 0.1F);
+        }
+        if ("attack_damage".equals(id)) {
+            base *= 0.75F;
+        } else if ("attack_speed".equals(id)) {
+            base *= 0.70F;
+        } else if (id.contains("resistance")) {
+            base *= 0.70F;
+        }
         float waveScale = 1.0F + Math.max(0, waveNumber - 1) * 0.11F;
         float levelScale = 1.0F + Math.max(0, playerLevel - 1) * 0.0125F;
         float scaled = base * waveScale * levelScale;
@@ -338,6 +389,19 @@ public final class RunicUpgradeService {
             return scaled * 100.0F;
         }
         return quantizeValue(scaled, 0.1F);
+    }
+
+    private static float scaledAuraRoll(CardSpec spec, RandomSource random, int waveNumber, int playerLevel) {
+        float base = spec.min() + random.nextFloat() * Math.max(0.0F, spec.max() - spec.min());
+        if (spec.statId().startsWith("aura:ability_") && !spec.statId().equals("aura:ability_power")) {
+            return Math.max(1.0F, quantizeValue(base, 1.0F));
+        }
+        if (spec.statId().startsWith("aura:skill_")) {
+            return Math.max(1.0F, quantizeValue(base, 1.0F));
+        }
+        float waveScale = 1.0F + Math.max(0, waveNumber - 1) * 0.04F;
+        float levelScale = 1.0F + Math.max(0, playerLevel - 1) * 0.004F;
+        return quantizeValue(base * waveScale * levelScale, 0.05F);
     }
 
     private static String formatDecimal(float value) {
@@ -377,6 +441,12 @@ public final class RunicUpgradeService {
             }
             return true;
         }
+        if (AuraAttributeSupport.isAuraAttributeStatId(spec.statId())) {
+            return true;
+        }
+        if ("flame_chance".equals(spec.statId()) && stack.getItem() instanceof SwordItem) {
+            return false;
+        }
         RuneStatType type = RuneStatType.byId(spec.statId());
         if (type == null || !RunicLoadoutService.isStatAllowedForStack(stack, type)) {
             return false;
@@ -397,6 +467,13 @@ public final class RunicUpgradeService {
             }
             cards.add(cardSpecForArmorStat(range));
         }
+        if (bucket == ArmorCardBucket.EFFECT) {
+            for (CardSpec card : AURA_MASTERY_CARDS) {
+                if (seen.add(card.statId())) {
+                    cards.add(card);
+                }
+            }
+        }
         if (bucket == ArmorCardBucket.OFFENCE) {
             cards.add(0, effectCard("minecraft:thorns", "Offence Card", "Thorns", 1));
         }
@@ -404,6 +481,9 @@ public final class RunicUpgradeService {
     }
 
     private static boolean matchesBucket(String statId, ArmorCardBucket bucket) {
+        if (AuraAttributeSupport.isAuraAttributeStatId(statId)) {
+            return bucket == ArmorCardBucket.EFFECT;
+        }
         return switch (bucket) {
             case EFFECT -> statId.equals("health") || statId.equals("movement_speed") || statId.equals("jump_height")
                     || statId.equals("power") || statId.equals("ability_power");
@@ -417,7 +497,9 @@ public final class RunicUpgradeService {
 
     private static CardSpec cardSpecForArmorStat(StatRollRange range) {
         String id = range.statId();
-        String title = matchesBucket(id, ArmorCardBucket.STAT) ? "Stat Card" : (matchesBucket(id, ArmorCardBucket.OFFENCE) ? "Offence Card" : "Effect Card");
+        String title = AuraAttributeSupport.isAuraAttributeStatId(id)
+                ? AuraAttributeSupport.titleFor(id)
+                : matchesBucket(id, ArmorCardBucket.STAT) ? "Stat Card" : (matchesBucket(id, ArmorCardBucket.OFFENCE) ? "Offence Card" : "Effect Card");
         String label = switch (id) {
             case "health" -> "Health Boost";
             case "movement_speed" -> "Movement Speed";
@@ -437,8 +519,14 @@ public final class RunicUpgradeService {
             case "freezing_chance" -> "Ice";
             case "shocking_chance" -> "Lightning";
             case "withering_chance" -> "Wind";
-            default -> id.replace('_', ' ');
+            default -> AuraAttributeSupport.isAuraAttributeStatId(id) ? AuraAttributeSupport.labelFor(id) : id.replace('_', ' ');
         };
+        if ("health".equals(id)) {
+            return statCard(id, title, label, 1.0F, 3.0F);
+        }
+        if ("aura:ability_power".equals(id)) {
+            return statCard(id, title, label, Math.max(0.10F, range.min()), Math.max(0.10F, range.max()));
+        }
         return statCard(id, title, label, range.min(), range.max());
     }
 

@@ -67,7 +67,7 @@ public final class ShopkeeperManager {
     private static final String SHOP_GATEWAY_TRADER_SPAWNED = "gatesofavarice.shop_gateway_trader_spawned";
     private static final String SHOP_GATEWAY_ENTITY_ID = "gatesofavarice.shop_gateway_entity";
     private static final int MAX_REROLLS = 3;
-    private static final int BASE_REROLL_COST = 100;
+    private static final int BASE_REROLL_COST = 1000;
     private static final int SHOP_GATEWAY_ANIMATION_TICKS = 50;
     private static final double COIN_ATTRACTION_RANGE = 14.0D;
     private static final double COIN_ATTRACTION_FORCE = 0.105D;

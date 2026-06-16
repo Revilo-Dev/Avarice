@@ -283,20 +283,19 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private void renderUpgradePanel(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         if (this.categorySelection) {
             this.renderCategoryCards(guiGraphics, mouseX, mouseY);
-            this.renderSelectionCounter(guiGraphics);
             guiGraphics.drawCenteredString(this.font, Component.literal("Pick upgrade deck").withStyle(ChatFormatting.GOLD), this.leftPos + 88, this.topPos + 64, 0xFFF0B8);
             return;
         }
 
-        this.renderSelectionCounter(guiGraphics);
         guiGraphics.drawCenteredString(this.font, this.upgradePreviewStack.getHoverName().copy().withStyle(ChatFormatting.GOLD), this.leftPos + 88, this.topPos + 15, 0xF3D78A);
         this.renderUpgradeCards(guiGraphics, mouseX, mouseY);
+        this.renderSelectionCounter(guiGraphics);
     }
 
     private void renderSelectionCounter(GuiGraphics guiGraphics) {
         int remaining = Math.max(0, this.maxCardSelections - this.selectedCardCount);
         Component label = Component.literal("Select " + remaining + " Cards").withStyle(remaining > 0 ? ChatFormatting.LIGHT_PURPLE : ChatFormatting.RED);
-        guiGraphics.drawCenteredString(this.font, label, this.leftPos + 88, this.topPos + 4, 0xFFFFFF);
+        guiGraphics.drawCenteredString(this.font, label, this.leftPos + BUY_AREA_LEFT + buyAreaWidth() / 2, this.topPos + BUY_AREA_BOTTOM - 10, 0xFFFFFF);
     }
 
     private void renderCategoryCards(GuiGraphics guiGraphics, int mouseX, int mouseY) {
@@ -911,6 +910,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             case "Damage Card", "Offence Card" -> hovered ? DAMAGE_CARD_HOVERED : DAMAGE_CARD;
             case "Stat Card" -> hovered ? STAT_CARD_HOVERED : STAT_CARD;
             case "Ability Card" -> hovered ? EFFECT_CARD_HOVERED : EFFECT_CARD;
+            case "Skill Card" -> hovered ? STAT_CARD_HOVERED : STAT_CARD;
             case "Restock Card" -> hovered ? STAT_CARD_HOVERED : STAT_CARD;
             case "Reroll Primary Weapon" -> hovered ? TAROT_CARD_HOVERED : TAROT_CARD;
             case "Reroll Secondary Weapon" -> hovered ? DAMAGE_CARD_HOVERED : DAMAGE_CARD;
@@ -937,6 +937,17 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             case "Toughness" -> "toughness";
             case "Leaping" -> "jump_height";
             case "Ability Power" -> "power";
+            case "Rampage" -> "attack_speed";
+            case "Strength" -> "attack_damage";
+            case "Agility" -> "movement_speed";
+            case "Poison" -> "poison_chance";
+            case "Fire" -> "flame";
+            case "Ice" -> "freezing_chance";
+            case "Lightning" -> "shocking_chance";
+            case "Force" -> "aegis";
+            case "Wind" -> "withering_chance";
+            case "Magic" -> "power";
+            case "Power" -> "power";
             case "Movement Speed" -> "movement_speed";
             case "Resistance" -> "resistance";
             case "Fire Resistance" -> "fire_resistance";

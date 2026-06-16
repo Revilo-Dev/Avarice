@@ -1,0 +1,44 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "gatesofavarice:item/cards/stat_card"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "custom_model_data": 1
+      },
+      "model": "gatesofavarice:item/gateway_card_stat"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 2
+      },
+      "model": "gatesofavarice:item/gateway_card_damage"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 3
+      },
+      "model": "gatesofavarice:item/gateway_card_effect"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 4
+      },
+      "model": "gatesofavarice:item/gateway_card_ability"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 5
+      },
+      "model": "gatesofavarice:item/gateway_card_rarity"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 6
+      },
+      "model": "gatesofavarice:item/gateway_card_challenge"
+    }
+  ]
+}
