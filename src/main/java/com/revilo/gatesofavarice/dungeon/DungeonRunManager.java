@@ -25,7 +25,6 @@ import com.revilo.gatesofavarice.network.DungeonWaveHudPayload;
 import com.revilo.gatesofavarice.registry.ModEntities;
 import com.revilo.gatesofavarice.registry.ModItems;
 import com.revilo.gatesofavarice.registry.ModAttachments;
-import com.revilo.gatesofavarice.registry.LoadoutArmorRegistry;
 import com.revilo.gatesofavarice.shop.ShopkeeperManager;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -71,7 +70,6 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.component.CustomData;
-import net.minecraft.world.item.ArmorItem.Type;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.phys.AABB;
@@ -81,6 +79,7 @@ import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
 import net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.attachment.AttachmentSync;
@@ -102,6 +101,7 @@ public final class DungeonRunManager {
     private static final int AUTOSAVE_INTERVAL_TICKS = 20 * 30;
     private static final String RUNS_KEY = "runs";
     private static final String PENDING_RESTORES_KEY = "pending_restores";
+    private static final String DUNGEON_SHOPKEEPER_OWNER_KEY = "gatesofavarice.dungeon_shopkeeper_owner";
 
     private static boolean persistedStateLoaded = false;
     private static boolean persistedStateDirty = false;
@@ -653,6 +653,20 @@ public final class DungeonRunManager {
     }
 
     @SubscribeEvent
+    public static void onDungeonBlockBreak(BlockEvent.BreakEvent event) {
+        if (event.getLevel() instanceof ServerLevel level && level.dimension() == ModDimensions.DUNGEON_LEVEL) {
+            event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onDungeonBlockPlace(BlockEvent.EntityPlaceEvent event) {
+        if (event.getLevel() instanceof ServerLevel level && level.dimension() == ModDimensions.DUNGEON_LEVEL) {
+            event.setCanceled(true);
+        }
+    }
+
+    @SubscribeEvent
     public static void onPlayerClone(PlayerEvent.Clone event) {
         if (!event.isWasDeath() || !(event.getEntity() instanceof ServerPlayer player)) {
             return;
@@ -819,7 +833,7 @@ public final class DungeonRunManager {
     private static boolean ensureShopkeeper(RunState run, ServerLevel level) {
         GatekeeperEntity existingShopkeeper = findRunShopkeeper(run, level);
         if (existingShopkeeper != null) {
-            existingShopkeeper.setInvulnerable(true);
+            markDungeonShopkeeper(existingShopkeeper, run.ownerId);
             run.shopkeeperId = existingShopkeeper.getId();
             return true;
         }
@@ -831,7 +845,7 @@ public final class DungeonRunManager {
             run.shopkeeperId = -1;
             return false;
         }
-        shop.setInvulnerable(true);
+        markDungeonShopkeeper(shop, run.ownerId);
         run.shopkeeperId = shop.getId();
         return true;
     }
@@ -842,7 +856,8 @@ public final class DungeonRunManager {
             return false;
         }
         Entity entity = dungeon.getEntity(shopkeeperEntityId);
-        if (entity instanceof GatekeeperEntity trader && trader.isAlive() && ShopkeeperManager.isShopkeeper(trader) && isWithinRunShopArea(run, trader)) {
+        if (entity instanceof GatekeeperEntity trader && trader.isAlive() && isDungeonShopkeeperForRun(run, trader) && isWithinRunShopArea(run, trader)) {
+            markDungeonShopkeeper(trader, run.ownerId);
             run.shopkeeperId = trader.getId();
             return true;
         }
@@ -860,7 +875,8 @@ public final class DungeonRunManager {
     private static GatekeeperEntity findRunShopkeeper(RunState run, ServerLevel level) {
         if (run.shopkeeperId >= 0) {
             Entity existing = level.getEntity(run.shopkeeperId);
-            if (existing instanceof GatekeeperEntity trader && existing.isAlive() && ShopkeeperManager.isShopkeeper(trader)) {
+            if (existing instanceof GatekeeperEntity trader && existing.isAlive() && isDungeonShopkeeperForRun(run, trader) && isWithinRunShopArea(run, trader)) {
+                markDungeonShopkeeper(trader, run.ownerId);
                 return trader;
             }
             run.shopkeeperId = -1;
@@ -877,17 +893,31 @@ public final class DungeonRunManager {
         List<GatekeeperEntity> matches = level.getEntitiesOfClass(
                 GatekeeperEntity.class,
                 searchBox,
-                trader -> trader.isAlive() && ShopkeeperManager.isShopkeeper(trader));
+                trader -> trader.isAlive() && isDungeonShopkeeperForRun(run, trader));
         if (matches.isEmpty()) {
             return null;
         }
 
         GatekeeperEntity keeper = matches.getFirst();
+        markDungeonShopkeeper(keeper, run.ownerId);
         for (int index = 1; index < matches.size(); index++) {
             matches.get(index).discard();
         }
         run.shopkeeperId = keeper.getId();
         return keeper;
+    }
+
+    private static void markDungeonShopkeeper(GatekeeperEntity trader, UUID ownerId) {
+        trader.setInvulnerable(true);
+        trader.getPersistentData().putUUID(DUNGEON_SHOPKEEPER_OWNER_KEY, ownerId);
+    }
+
+    private static boolean isDungeonShopkeeperForRun(RunState run, GatekeeperEntity trader) {
+        if (!ShopkeeperManager.isShopkeeper(trader)) {
+            return false;
+        }
+        CompoundTag data = trader.getPersistentData();
+        return !data.hasUUID(DUNGEON_SHOPKEEPER_OWNER_KEY) || data.getUUID(DUNGEON_SHOPKEEPER_OWNER_KEY).equals(run.ownerId);
     }
 
     private static void discardRunShopkeeper(RunState run) {
@@ -977,15 +1007,14 @@ public final class DungeonRunManager {
     private static LoadoutOption buildLoadoutOptionFromDefinition(LoadoutModels.LoadoutDefinition definition, int avgLevel, RandomSource random) {
         ItemStack primary = new ItemStack(pickLoadoutWeapon(random, avgLevel, definition.primaryWeaponKind()));
         ItemStack secondary = new ItemStack(pickLoadoutWeapon(random, avgLevel, definition.secondaryWeaponKind()));
-        String setId = definition.armorSet().setId();
         return new LoadoutOption(
                 definition.id(),
                 Component.literal(definition.displayName() + " loadout"),
                 Component.literal("Armor: " + definition.armorSet().displayName() + "\nTheme: " + definition.theme().name().toLowerCase(java.util.Locale.ROOT) + "\nRunic-enabled preset"),
-                new ItemStack(LoadoutArmorRegistry.get(setId, Type.HELMET)),
-                new ItemStack(LoadoutArmorRegistry.get(setId, Type.CHESTPLATE)),
-                new ItemStack(LoadoutArmorRegistry.get(setId, Type.LEGGINGS)),
-                new ItemStack(LoadoutArmorRegistry.get(setId, Type.BOOTS)),
+                new ItemStack(Items.NETHERITE_HELMET),
+                new ItemStack(Items.NETHERITE_CHESTPLATE),
+                new ItemStack(Items.NETHERITE_LEGGINGS),
+                new ItemStack(Items.NETHERITE_BOOTS),
                 primary,
                 secondary,
                 pickLeveledMagnet(random, avgLevel),

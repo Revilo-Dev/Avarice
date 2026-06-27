@@ -79,7 +79,9 @@ public class DungeonUpgradeCardsScreen extends Screen {
         this.renderBackground(gg, mouseX, mouseY, partialTick);
         super.render(gg, mouseX, mouseY, partialTick);
         gg.drawCenteredString(this.font, Component.literal("UPGRADE - " + formatCategoryName(this.categoryName)).withStyle(ChatFormatting.BOLD, ChatFormatting.YELLOW), this.centerX, this.top + 4, 0xFFFFFF);
-        if (!this.previewStack.isEmpty()) {
+        if (this.categoryName.equalsIgnoreCase("ITEM")) {
+            gg.drawCenteredString(this.font, Component.literal("Item").withStyle(ChatFormatting.GOLD), this.centerX, this.top + 62, 0xF3D78A);
+        } else if (!this.previewStack.isEmpty()) {
             gg.drawCenteredString(this.font, this.previewStack.getHoverName().copy().withStyle(ChatFormatting.GOLD), this.centerX, this.top + 62, 0xF3D78A);
             int itemX = this.centerX;
             int itemY = this.top + 36;
@@ -320,6 +322,7 @@ public class DungeonUpgradeCardsScreen extends Screen {
         String iconName = switch (card.changeLabel()) {
             case "Restock" -> "capacity";
             case "Magnet", "Arcane Apples + Magnet" -> "movement_speed";
+            case "Food", "Heart Fragment", "Heart Fragments" -> "health";
             case "Primary" -> "attack_damage";
             case "Secondary" -> "undead_damage";
             case "Toxic" -> "poison_chance";
@@ -359,7 +362,7 @@ public class DungeonUpgradeCardsScreen extends Screen {
             case "Aegis" -> "aegis";
             case "Thorns" -> "health";
             case "Stone Skin" -> "stone_skin";
-            default -> card.title().equals("Food Card") ? "health" : inferIconName(card.changeLabel());
+            default -> card.title().equals("Food Card") || card.title().equals("Heart Fragment Card") ? "health" : inferIconName(card.changeLabel());
         };
         return ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/icons/" + iconName + ".png");
     }

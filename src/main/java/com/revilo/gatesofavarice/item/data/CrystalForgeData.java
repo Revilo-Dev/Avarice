@@ -1,6 +1,7 @@
 package com.revilo.gatesofavarice.item.data;
 
 import com.revilo.gatesofavarice.GatewayExpansion;
+import com.revilo.gatesofavarice.item.CrystalItem;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.ChatFormatting;
@@ -115,7 +116,7 @@ public final class CrystalForgeData {
                     .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
         }
         List<GatewayCardData.CardModifier> cards = readCards(stack);
-        int slots = GatewayCardData.unlockedSlots(rootTag.contains(LEVEL_KEY) ? rootTag.getInt(LEVEL_KEY) : 1);
+        int slots = maxCardsForCrystal(stack);
         lines.add(Component.literal("Deck: " + cards.size() + "/" + slots + " cards").withStyle(ChatFormatting.AQUA));
         if (!cards.isEmpty()) {
             lines.add(Component.literal("Card modifiers next run:").withStyle(ChatFormatting.LIGHT_PURPLE));
@@ -130,9 +131,7 @@ public final class CrystalForgeData {
         if (crystal.isEmpty() || cardStack.isEmpty()) {
             return false;
         }
-        CompoundTag rootTag = getRootTag(crystal);
-        int crystalLevel = rootTag.contains(LEVEL_KEY) ? rootTag.getInt(LEVEL_KEY) : Math.max(1, playerLevel);
-        return readCards(crystal).size() < GatewayCardData.unlockedSlots(Math.max(crystalLevel, playerLevel));
+        return readCards(crystal).size() < maxCardsForCrystal(crystal);
     }
 
     public static boolean addCard(ItemStack crystal, ItemStack cardStack, int playerLevel) {
@@ -172,6 +171,23 @@ public final class CrystalForgeData {
             }
         }
         return List.copyOf(cards);
+    }
+
+    public static int maxCardsForCrystal(ItemStack crystal) {
+        if (crystal.getItem() instanceof CrystalItem crystalItem) {
+            return cardSlotsForTier(crystalItem.crystalTier().tier());
+        }
+        return 0;
+    }
+
+    public static int cardSlotsForTier(int tier) {
+        return switch (Mth.clamp(tier, 1, 5)) {
+            case 1 -> 3;
+            case 2 -> 6;
+            case 3 -> 9;
+            case 4 -> 12;
+            default -> 16;
+        };
     }
 
     private static CompoundTag getRootTag(ItemStack stack) {

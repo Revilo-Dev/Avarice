@@ -17,6 +17,7 @@ import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 
 public class GatekeeperEntity extends PathfinderMob {
 
@@ -53,6 +54,30 @@ public class GatekeeperEntity extends PathfinderMob {
     @Override
     public boolean shouldDropExperience() {
         return false;
+    }
+
+    @Override
+    public boolean isPushable() {
+        return false;
+    }
+
+    @Override
+    public void push(double x, double y, double z) {
+    }
+
+    @Override
+    public void push(net.minecraft.world.entity.Entity entity) {
+    }
+
+    @Override
+    public void travel(Vec3 travelVector) {
+        this.setDeltaMovement(Vec3.ZERO);
+    }
+
+    @Override
+    public void aiStep() {
+        super.aiStep();
+        this.setDeltaMovement(Vec3.ZERO);
     }
 
     @Override

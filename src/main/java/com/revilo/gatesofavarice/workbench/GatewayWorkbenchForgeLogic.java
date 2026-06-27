@@ -1,10 +1,11 @@
 package com.revilo.gatesofavarice.workbench;
 
 import com.revilo.gatesofavarice.gateway.builder.GatewayForgeService;
-import com.revilo.gatesofavarice.integration.LevelUpIntegration;
 import com.revilo.gatesofavarice.item.CrystalItem;
 import com.revilo.gatesofavarice.item.GatewayCardItem;
 import com.revilo.gatesofavarice.item.data.CrystalForgeData;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -19,10 +20,13 @@ public final class GatewayWorkbenchForgeLogic {
             return false;
         }
         ItemStack crystal = container.getItem(GatewayWorkbenchSlots.CRYSTAL_SLOT);
-        ItemStack card = container.getItem(GatewayWorkbenchSlots.CARD_SLOT);
-        if (card.getItem() instanceof GatewayCardItem) {
-            int playerLevel = player == null ? 1 : Math.max(1, LevelUpIntegration.getEffectiveLevel(player));
-            return crystal.getItem() instanceof CrystalItem && CrystalForgeData.canAddCard(crystal, card, playerLevel);
+        List<Integer> cardSlots = filledCardSlots(container);
+        if (!cardSlots.isEmpty()) {
+            if (!(crystal.getItem() instanceof CrystalItem)) {
+                return false;
+            }
+            int existingCards = CrystalForgeData.readCards(crystal).size();
+            return existingCards + cardSlots.size() <= CrystalForgeData.maxCardsForCrystal(crystal);
         }
         return GatewayForgeService.canForge(player, container);
     }
@@ -31,15 +35,20 @@ public final class GatewayWorkbenchForgeLogic {
         if (!canForge(player, container)) {
             return false;
         }
-        ItemStack card = container.getItem(GatewayWorkbenchSlots.CARD_SLOT);
-        if (card.getItem() instanceof GatewayCardItem) {
-            int playerLevel = player == null ? 1 : Math.max(1, LevelUpIntegration.getEffectiveLevel(player));
+        List<Integer> cardSlots = filledCardSlots(container);
+        if (!cardSlots.isEmpty()) {
             ItemStack crystal = container.getItem(GatewayWorkbenchSlots.CRYSTAL_SLOT);
-            if (!CrystalForgeData.addCard(crystal, card, playerLevel)) {
-                return false;
+            for (int slot : cardSlots) {
+                ItemStack card = container.getItem(slot);
+                if (!CrystalForgeData.addCard(crystal, card, 1)) {
+                    return false;
+                }
             }
-            card.shrink(1);
-            container.setItem(GatewayWorkbenchSlots.CARD_SLOT, card.isEmpty() ? ItemStack.EMPTY : card);
+            for (int slot : cardSlots) {
+                ItemStack card = container.getItem(slot);
+                card.shrink(1);
+                container.setItem(slot, card.isEmpty() ? ItemStack.EMPTY : card);
+            }
             container.setChanged();
             return true;
         }
@@ -48,5 +57,15 @@ public final class GatewayWorkbenchForgeLogic {
             return true;
         }
         return false;
+    }
+
+    private static List<Integer> filledCardSlots(Container container) {
+        ArrayList<Integer> slots = new ArrayList<>();
+        for (int slot = GatewayWorkbenchSlots.FIRST_CARD_SLOT; slot < GatewayWorkbenchSlots.FIRST_CARD_SLOT + GatewayWorkbenchSlots.CARD_SLOT_COUNT; slot++) {
+            if (container.getItem(slot).getItem() instanceof GatewayCardItem) {
+                slots.add(slot);
+            }
+        }
+        return slots;
     }
 }

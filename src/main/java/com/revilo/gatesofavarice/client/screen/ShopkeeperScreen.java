@@ -922,6 +922,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         String iconName = switch (card.changeLabel()) {
             case "Restock" -> "capacity";
             case "Magnet", "Arcane Apples + Magnet" -> "movement_speed";
+            case "Food", "Heart Fragment", "Heart Fragments" -> "health";
             case "Primary" -> "attack_damage";
             case "Secondary" -> "undead_damage";
             case "Toxic" -> "poison_chance";
@@ -961,7 +962,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             case "Aegis" -> "aegis";
             case "Thorns" -> "health";
             case "Stone Skin" -> "stone_skin";
-            default -> inferIconName(card.changeLabel());
+            default -> card.title().equals("Food Card") || card.title().equals("Heart Fragment Card") ? "health" : inferIconName(card.changeLabel());
         };
         return ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/dungeon/icons/" + iconName + ".png");
     }

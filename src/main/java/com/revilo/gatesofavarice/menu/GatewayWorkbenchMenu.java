@@ -22,6 +22,8 @@ public class GatewayWorkbenchMenu extends AbstractContainerMenu {
     public static final int CRYSTAL_SLOT = GatewayWorkbenchSlots.CRYSTAL_SLOT;
     public static final int OUTPUT_SLOT = GatewayWorkbenchSlots.OUTPUT_SLOT;
     public static final int CARD_SLOT = GatewayWorkbenchSlots.CARD_SLOT;
+    public static final int FIRST_CARD_SLOT = GatewayWorkbenchSlots.FIRST_CARD_SLOT;
+    public static final int CARD_SLOT_COUNT = GatewayWorkbenchSlots.CARD_SLOT_COUNT;
     public static final int CUSTOM_SLOT_COUNT = GatewayWorkbenchSlots.CUSTOM_SLOT_COUNT;
     private static final int PLAYER_INVENTORY_START = CUSTOM_SLOT_COUNT;
     private static final int PLAYER_INVENTORY_END = PLAYER_INVENTORY_START + 27;
@@ -46,7 +48,9 @@ public class GatewayWorkbenchMenu extends AbstractContainerMenu {
 
         this.addSlot(new FilteredSlot(container, CRYSTAL_SLOT, GatewayWorkbenchSlots.CRYSTAL_X, GatewayWorkbenchSlots.CRYSTAL_Y, stack -> stack.getItem() instanceof CrystalItem));
         this.addSlot(new ResultSlot(container, OUTPUT_SLOT, GatewayWorkbenchSlots.OUTPUT_X, GatewayWorkbenchSlots.OUTPUT_Y));
-        this.addSlot(new FilteredSlot(container, CARD_SLOT, GatewayWorkbenchSlots.CARD_X, GatewayWorkbenchSlots.CARD_Y, stack -> stack.getItem() instanceof GatewayCardItem));
+        for (int cardIndex = 0; cardIndex < CARD_SLOT_COUNT; cardIndex++) {
+            this.addSlot(new FilteredSlot(container, FIRST_CARD_SLOT + cardIndex, GatewayWorkbenchSlots.cardSlotX(cardIndex), GatewayWorkbenchSlots.cardSlotY(cardIndex), stack -> stack.getItem() instanceof GatewayCardItem));
+        }
 
         this.addPlayerInventory(playerInventory);
     }
@@ -87,7 +91,7 @@ public class GatewayWorkbenchMenu extends AbstractContainerMenu {
                 return ItemStack.EMPTY;
             }
         } else if (stackInSlot.getItem() instanceof GatewayCardItem) {
-            if (!this.moveItemStackTo(stackInSlot, CARD_SLOT, CARD_SLOT + 1, false)) {
+            if (!this.moveItemStackTo(stackInSlot, FIRST_CARD_SLOT, FIRST_CARD_SLOT + CARD_SLOT_COUNT, false)) {
                 return ItemStack.EMPTY;
             }
         } else if (index < PLAYER_INVENTORY_END) {

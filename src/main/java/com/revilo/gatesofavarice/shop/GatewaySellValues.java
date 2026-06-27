@@ -26,6 +26,9 @@ public final class GatewaySellValues {
         }
 
         Item item = stack.getItem();
+        ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(item);
+        if (ResourceLocation.fromNamespaceAndPath("architects_palette", "withered_bone").equals(itemId)) return 1;
+        if (ResourceLocation.fromNamespaceAndPath("architects_pallet", "withered_bone").equals(itemId)) return 1;
         if (item == Items.ROTTEN_FLESH) return 2;
         if (item == Items.BONE) return 2;
         if (item == Items.COAL) return 2;
