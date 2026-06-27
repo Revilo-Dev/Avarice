@@ -809,10 +809,10 @@ public final class DungeonRunManager {
         if (run.exitPortalId >= 0) return;
         GatewayCrystalEntity portal = ModEntities.GATEWAY_CRYSTAL.get().create(level);
         if (portal == null) return;
-        BlockPos center = DungeonInstanceManager.instanceCenter(run.ownerId);
+        net.minecraft.world.phys.Vec3 portalPos = DungeonInstanceManager.exitPortalPosition(run.ownerId);
         portal.setOwnerId(run.ownerId);
         portal.setReturnPortal(true);
-        portal.moveTo(center.getX() + 0.5D, center.getY() + 1.0D, center.getZ() + 23.5D, 0.0F, 0.0F);
+        portal.moveTo(portalPos.x(), portalPos.y(), portalPos.z(), 0.0F, 0.0F);
         if (level.addFreshEntity(portal)) run.exitPortalId = portal.getId();
     }
 
@@ -823,10 +823,10 @@ public final class DungeonRunManager {
             run.shopkeeperId = existingShopkeeper.getId();
             return true;
         }
-        BlockPos center = DungeonInstanceManager.instanceCenter(run.ownerId);
+        net.minecraft.world.phys.Vec3 shopPos = DungeonInstanceManager.shopkeeperPosition(run.ownerId);
         ServerPlayer owner = run.online(run.ownerId);
         Player summoner = owner;
-        var shop = ShopkeeperManager.spawnShopkeeper(level, center.getX() + 0.5D, center.getY() + 1.0D, center.getZ() + 0.5D, summoner);
+        var shop = ShopkeeperManager.spawnShopkeeper(level, shopPos.x(), shopPos.y(), shopPos.z(), summoner);
         if (shop == null) {
             run.shopkeeperId = -1;
             return false;
@@ -851,10 +851,10 @@ public final class DungeonRunManager {
     }
 
     private static boolean isWithinRunShopArea(RunState run, GatekeeperEntity trader) {
-        BlockPos center = DungeonInstanceManager.instanceCenter(run.ownerId);
-        return Math.abs(trader.getX() - (center.getX() + 0.5D)) <= 8.0D
-                && Math.abs(trader.getY() - (center.getY() + 1.0D)) <= 6.0D
-                && Math.abs(trader.getZ() - (center.getZ() + 0.5D)) <= 8.0D;
+        net.minecraft.world.phys.Vec3 shopPos = DungeonInstanceManager.shopkeeperPosition(run.ownerId);
+        return Math.abs(trader.getX() - shopPos.x()) <= 8.0D
+                && Math.abs(trader.getY() - shopPos.y()) <= 6.0D
+                && Math.abs(trader.getZ() - shopPos.z()) <= 8.0D;
     }
 
     private static GatekeeperEntity findRunShopkeeper(RunState run, ServerLevel level) {
@@ -866,14 +866,14 @@ public final class DungeonRunManager {
             run.shopkeeperId = -1;
         }
 
-        BlockPos center = DungeonInstanceManager.instanceCenter(run.ownerId);
+        net.minecraft.world.phys.Vec3 shopPos = DungeonInstanceManager.shopkeeperPosition(run.ownerId);
         AABB searchBox = new AABB(
-                center.getX() - 8.0D,
-                center.getY() - 4.0D,
-                center.getZ() - 8.0D,
-                center.getX() + 8.0D,
-                center.getY() + 6.0D,
-                center.getZ() + 8.0D);
+                shopPos.x() - 8.0D,
+                shopPos.y() - 4.0D,
+                shopPos.z() - 8.0D,
+                shopPos.x() + 8.0D,
+                shopPos.y() + 6.0D,
+                shopPos.z() + 8.0D);
         List<GatekeeperEntity> matches = level.getEntitiesOfClass(
                 GatekeeperEntity.class,
                 searchBox,
@@ -924,10 +924,10 @@ public final class DungeonRunManager {
         if (type == null) return;
         Entity entity = type.create(level);
         if (!(entity instanceof LivingEntity mob)) return;
-        BlockPos center = DungeonInstanceManager.instanceCenter(run.ownerId);
-        double x = center.getX() + 0.5D + (level.random.nextDouble() * 24.0D - 12.0D);
-        double z = center.getZ() + 0.5D + (level.random.nextDouble() * 24.0D - 12.0D);
-        double y = center.getY() + 1.0D;
+        net.minecraft.world.phys.Vec3 spawnPos = DungeonInstanceManager.randomMobSpawnPosition(run.ownerId, level.random);
+        double x = spawnPos.x();
+        double y = spawnPos.y();
+        double z = spawnPos.z();
         mob.moveTo(x, y, z, level.random.nextFloat() * 360.0F, 0.0F);
         if (mob instanceof Mob aiMob) aiMob.finalizeSpawn(level, level.getCurrentDifficultyAt(BlockPos.containing(x, y, z)), MobSpawnType.EVENT, (SpawnGroupData) null);
         mob.getPersistentData().putBoolean(DUNGEON_WAVE_SPAWN_KEY, true);

@@ -5,6 +5,8 @@ import com.revilo.gatesofavarice.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.NonNullList;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.particles.BlockParticleOption;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -14,6 +16,7 @@ import net.minecraft.world.Containers;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
@@ -71,6 +74,7 @@ public class LootboxBlockEntity extends BlockEntity {
     }
 
     public void burstLoot(ServerLevel level, BlockPos pos, ServerPlayer player) {
+        spawnOpenParticles(level, pos);
         for (ItemStack stack : this.loot) {
             if (!stack.isEmpty()) {
                 Containers.dropItemStack(level, pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D, stack.copy());
@@ -83,5 +87,19 @@ public class LootboxBlockEntity extends BlockEntity {
         this.loot.clear();
         this.storedLevelOrbs = 0;
         setChanged();
+    }
+
+    private static void spawnOpenParticles(ServerLevel level, BlockPos pos) {
+        level.sendParticles(
+                new BlockParticleOption(ParticleTypes.BLOCK, Blocks.SPRUCE_PLANKS.defaultBlockState()).setPos(pos),
+                pos.getX() + 0.5D,
+                pos.getY() + 0.7D,
+                pos.getZ() + 0.5D,
+                48,
+                0.45D,
+                0.35D,
+                0.45D,
+                0.18D
+        );
     }
 }
