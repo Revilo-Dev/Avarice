@@ -3,14 +3,11 @@ package com.revilo.gatesofavarice.network;
 import com.revilo.gatesofavarice.GatewayExpansion;
 import java.util.ArrayList;
 import java.util.List;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 public record DungeonCompletePayload(
         boolean survived,
@@ -83,22 +80,14 @@ public record DungeonCompletePayload(
 
     private static void writeStack(RegistryFriendlyByteBuf buffer, ItemStack stack) {
         if (stack == null || stack.isEmpty()) {
-            buffer.writeResourceLocation(ResourceLocation.withDefaultNamespace("air"));
-            buffer.writeVarInt(0);
+            buffer.writeNbt(ItemStack.EMPTY.saveOptional(buffer.registryAccess()));
             return;
         }
-        buffer.writeResourceLocation(BuiltInRegistries.ITEM.getKey(stack.getItem()));
-        buffer.writeVarInt(stack.getCount());
+        buffer.writeNbt(stack.saveOptional(buffer.registryAccess()));
     }
 
     private static ItemStack readStack(RegistryFriendlyByteBuf buffer) {
-        ResourceLocation id = buffer.readResourceLocation();
-        int count = buffer.readVarInt();
-        Item item = BuiltInRegistries.ITEM.get(id);
-        if (item == Items.AIR || count <= 0) {
-            return ItemStack.EMPTY;
-        }
-        return new ItemStack(item, count);
+        return ItemStack.parseOptional(buffer.registryAccess(), buffer.readNbt());
     }
 
     @Override

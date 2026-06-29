@@ -13,6 +13,6 @@ public class StabilityDrainEffect extends MobEffect {
 
     public StabilityDrainEffect() {
         super(MobEffectCategory.HARMFUL, 0x3A203F);
-        this.addAttributeModifier(Attributes.MAX_HEALTH, HEALTH_MODIFIER_ID, -0.1D, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL);
+        this.addAttributeModifier(Attributes.MAX_HEALTH, HEALTH_MODIFIER_ID, -0.05D, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL);
     }
 }

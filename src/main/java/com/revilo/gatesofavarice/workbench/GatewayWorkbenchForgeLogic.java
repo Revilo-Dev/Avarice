@@ -1,6 +1,5 @@
 package com.revilo.gatesofavarice.workbench;
 
-import com.revilo.gatesofavarice.gateway.builder.GatewayForgeService;
 import com.revilo.gatesofavarice.item.CrystalItem;
 import com.revilo.gatesofavarice.item.GatewayCardItem;
 import com.revilo.gatesofavarice.item.data.CrystalForgeData;
@@ -20,15 +19,15 @@ public final class GatewayWorkbenchForgeLogic {
             return false;
         }
         ItemStack crystal = container.getItem(GatewayWorkbenchSlots.CRYSTAL_SLOT);
+        if (!(crystal.getItem() instanceof CrystalItem)) {
+            return false;
+        }
         List<Integer> cardSlots = filledCardSlots(container);
         if (!cardSlots.isEmpty()) {
-            if (!(crystal.getItem() instanceof CrystalItem)) {
-                return false;
-            }
             int existingCards = CrystalForgeData.readCards(crystal).size();
             return existingCards + cardSlots.size() <= CrystalForgeData.maxCardsForCrystal(crystal);
         }
-        return GatewayForgeService.canForge(player, container);
+        return false;
     }
 
     public static boolean forge(Player player, Container container) {
@@ -50,10 +49,6 @@ public final class GatewayWorkbenchForgeLogic {
                 container.setItem(slot, card.isEmpty() ? ItemStack.EMPTY : card);
             }
             container.setChanged();
-            return true;
-        }
-        if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
-            GatewayForgeService.forge(serverPlayer, container);
             return true;
         }
         return false;

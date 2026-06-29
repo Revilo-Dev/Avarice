@@ -4,10 +4,7 @@ import com.revilo.gatesofavarice.currency.MythicCoinWallet;
 import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
 import com.revilo.gatesofavarice.entity.GatekeeperEntity;
 import com.revilo.gatesofavarice.dungeon.ModDimensions;
-import com.revilo.gatesofavarice.gateway.GatewayPartyScaling;
-import com.revilo.gatesofavarice.gateway.builder.GatewayForgeService;
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
-import com.revilo.gatesofavarice.integration.LevelUpGatewayXpRewards;
 import com.revilo.gatesofavarice.integration.ModCompat;
 import com.revilo.gatesofavarice.item.LootMaterialItem;
 import com.revilo.gatesofavarice.item.MythicCoinStackData;
@@ -15,9 +12,6 @@ import com.revilo.gatesofavarice.item.data.LootRarity;
 import com.revilo.gatesofavarice.menu.ShopkeeperMenu;
 import com.revilo.gatesofavarice.registry.ModEntities;
 import com.revilo.gatesofavarice.registry.ModItems;
-import dev.shadowsoffire.gateways.entity.GatewayEntity;
-import dev.shadowsoffire.gateways.event.GateEvent;
-import dev.shadowsoffire.gateways.gate.normal.NormalGateway;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
@@ -102,37 +96,6 @@ public final class ShopkeeperManager {
     }
 
     @SubscribeEvent
-    public static void onGateCompleted(GateEvent.Completed event) {
-        GatewayEntity gate = event.getEntity();
-        if (!(gate.level() instanceof ServerLevel serverLevel)) {
-            return;
-        }
-
-        if (serverLevel.dimension() == ModDimensions.DUNGEON_LEVEL) {
-            int completionBurst = computeCompletionCoinBurst(gate, serverLevel.random);
-            int awardedCoins = applyGatewayCoinAdjustments(gate, completionBurst);
-            awardedCoins = Math.max(awardedCoins, minimumCompletionCoinReward(gate));
-            creditCoins(gate, awardedCoins);
-        }
-        spawnGatewayLoot(gate, computeCompletionLootRolls(gate, serverLevel.random));
-    }
-
-    @SubscribeEvent
-    public static void onWaveCompleted(GateEvent.WaveEnd event) {
-        GatewayEntity gate = event.getEntity();
-        if (gate.level() instanceof ServerLevel serverLevel) {
-            int awardedCoins = 0;
-            if (serverLevel.dimension() == ModDimensions.DUNGEON_LEVEL) {
-                int waveBurst = computeWaveCoinBurst(gate, serverLevel.random);
-                awardedCoins = applyGatewayCoinAdjustments(gate, waveBurst);
-                awardedCoins = Math.max(awardedCoins, minimumWaveCoinReward(gate));
-                creditCoins(gate, awardedCoins);
-            }
-            sendWaveSummary(gate, awardedCoins);
-        }
-    }
-
-    @SubscribeEvent
     public static void onCoinPickup(ItemEntityPickupEvent.Pre event) {
         ItemEntity itemEntity = event.getItemEntity();
         ItemStack stack = itemEntity.getItem();
@@ -156,22 +119,6 @@ public final class ShopkeeperManager {
 
     @SubscribeEvent
     public static void onCoinTick(EntityTickEvent.Post event) {
-        if (event.getEntity() instanceof GatewayEntity gatewayEntity && isGatewayAnimation(gatewayEntity)) {
-            if (gatewayEntity.level() instanceof ServerLevel serverLevel) {
-                if (!gatewayEntity.getPersistentData().getBoolean(SHOP_GATEWAY_TRADER_SPAWNED) && gatewayEntity.tickCount >= SHOP_GATEWAY_ANIMATION_TICKS) {
-                    Player summoner = gatewayEntity.summonerOrClosest();
-                    GatekeeperEntity trader = spawnShopkeeper(serverLevel, gatewayEntity.getX(), gatewayEntity.getY() + 0.5D, gatewayEntity.getZ(), summoner);
-                    if (trader != null) {
-                        gatewayEntity.getPersistentData().putBoolean(SHOP_GATEWAY_TRADER_SPAWNED, true);
-                        gatewayEntity.getPersistentData().putUUID(SHOP_GATEWAY_TRADER_ID, trader.getUUID());
-                        trader.getPersistentData().putUUID(SHOP_GATEWAY_ENTITY_ID, gatewayEntity.getUUID());
-                        gatewayEntity.remove(Entity.RemovalReason.DISCARDED);
-                    }
-                }
-            }
-            return;
-        }
-
         if (!(event.getEntity() instanceof ItemEntity itemEntity)) {
             return;
         }
@@ -272,8 +219,8 @@ public final class ShopkeeperManager {
         }
 
         Entity linkedEntity = serverLevel.getEntity(traderData.getUUID(SHOP_GATEWAY_ENTITY_ID));
-        if (linkedEntity instanceof GatewayEntity gatewayEntity && isGatewayAnimation(gatewayEntity) && !gatewayEntity.isRemoved()) {
-            gatewayEntity.remove(Entity.RemovalReason.DISCARDED);
+        if (linkedEntity != null && isGatewayAnimation(linkedEntity) && !linkedEntity.isRemoved()) {
+            linkedEntity.remove(Entity.RemovalReason.DISCARDED);
         }
 
         trader.remove(Entity.RemovalReason.DISCARDED);
@@ -303,16 +250,8 @@ public final class ShopkeeperManager {
         return trader.getPersistentData().getBoolean(SHOPKEEPER_KEY);
     }
 
-    public static void markGatewayAnimation(GatewayEntity entity) {
-        entity.getPersistentData().putBoolean(SHOP_GATEWAY_ANIMATION_KEY, true);
-    }
-
     public static void markGatewayAnimation(Entity entity) {
         entity.getPersistentData().putBoolean(SHOP_GATEWAY_ANIMATION_KEY, true);
-    }
-
-    public static boolean isGatewayAnimation(GatewayEntity entity) {
-        return entity.getPersistentData().getBoolean(SHOP_GATEWAY_ANIMATION_KEY);
     }
 
     public static boolean isGatewayAnimation(Entity entity) {
@@ -418,17 +357,17 @@ public final class ShopkeeperManager {
         trader.getPersistentData().putIntArray(STOCK_KEY, stocks);
     }
 
-    private static void creditCoins(GatewayEntity gate, int amount) {
+    private static void creditCoins(Entity gate, int amount) {
         if (amount <= 0) {
             return;
         }
-        ServerPlayer player = LevelUpGatewayXpRewards.findRewardPlayer(gate);
+        ServerPlayer player = findRewardPlayer(gate);
         if (player != null) {
             MythicCoinWallet.add(player, amount);
         }
     }
 
-    private static void spawnGatewayLoot(GatewayEntity gate, int rolls) {
+    private static void spawnGatewayLoot(Entity gate, int rolls) {
         RandomSource random = gate.level().random;
         for (int index = 0; index < rolls; index++) {
             if (random.nextFloat() < STABILITY_PEARL_DROP_CHANCE) {
@@ -452,7 +391,7 @@ public final class ShopkeeperManager {
         }
     }
 
-    private static void spawnGatewayDrop(GatewayEntity gate, ItemStack stack) {
+    private static void spawnGatewayDrop(Entity gate, ItemStack stack) {
         RandomSource random = gate.level().random;
         ItemEntity itemEntity = new ItemEntity(gate.level(), gate.getX(), gate.getY() + 1.0D, gate.getZ(), stack);
             itemEntity.setDeltaMovement(
@@ -463,7 +402,7 @@ public final class ShopkeeperManager {
             gate.level().addFreshEntity(itemEntity);
     }
 
-    private static LootMaterialItem rollGatewayLoot(GatewayEntity gate, RandomSource random) {
+    private static LootMaterialItem rollGatewayLoot(Entity gate, RandomSource random) {
         LootMaterialItem[] pool = getDropPoolForGate(gate);
         int totalWeight = 0;
         for (LootMaterialItem item : pool) {
@@ -677,9 +616,9 @@ public final class ShopkeeperManager {
         return 9;
     }
 
-    private static LootMaterialItem[] getDropPoolForGate(GatewayEntity gate) {
+    private static LootMaterialItem[] getDropPoolForGate(Entity gate) {
         LootMaterialItem[] gatewayDropPool = getGatewayDropPool();
-        if (gate == null || GatewayForgeService.getGatewayCrystalTier(gate.getGateway()) >= 4) {
+        if (gate == null || getGatewayCrystalTier(gate) >= 4) {
             return gatewayDropPool;
         }
 
@@ -699,7 +638,7 @@ public final class ShopkeeperManager {
         return gatewayDropPoolCache;
     }
 
-    private static int getGatewayDropWeight(LootMaterialItem item, GatewayEntity gate) {
+    private static int getGatewayDropWeight(LootMaterialItem item, Entity gate) {
         if (item == ModItems.MANA_STEEL_SCRAP.get()) {
             return LootRarity.COMMON.weight();
         }
@@ -730,34 +669,34 @@ public final class ShopkeeperManager {
         return item.rarity().weight();
     }
 
-    private static boolean isLevel20PlusGate(GatewayEntity gate) {
-        return gate != null && GatewayForgeService.getGatewayCrystalTier(gate.getGateway()) >= 2;
+    private static boolean isLevel20PlusGate(Entity gate) {
+        return gate != null && getGatewayCrystalTier(gate) >= 2;
     }
 
-    private static int getGateLevel(GatewayEntity gate) {
-        return gate == null ? 0 : Math.max(0, GatewayForgeService.getGatewayLevel(gate.getGateway()));
+    private static int getGateLevel(Entity gate) {
+        return gate == null ? 0 : Math.max(0, getGatewayLevel(gate));
     }
 
-    private static int computeWaveCoinBurst(GatewayEntity gate, RandomSource random) {
-        int level = Math.max(1, GatewayForgeService.getGatewayLevel(gate.getGateway()));
-        int tier = Math.max(1, GatewayForgeService.getGatewayCrystalTier(gate.getGateway()));
-        int wave = Math.max(1, gate.getWave());
+    private static int computeWaveCoinBurst(Entity gate, RandomSource random) {
+        int level = Math.max(1, getGatewayLevel(gate));
+        int tier = Math.max(1, getGatewayCrystalTier(gate));
+        int wave = 1;
         int base = 4 + level + tier * 3 + wave * 2;
-        int scaled = (int) Math.round((base + random.nextInt(7)) * GatewayPartyScaling.getRewardMultiplier(gate));
+        int scaled = base + random.nextInt(7);
         return Math.max(1, scaled);
     }
 
-    private static int computeCompletionCoinBurst(GatewayEntity gate, RandomSource random) {
-        int level = Math.max(1, GatewayForgeService.getGatewayLevel(gate.getGateway()));
-        int tier = Math.max(1, GatewayForgeService.getGatewayCrystalTier(gate.getGateway()));
-        int wave = Math.max(1, gate.getWave());
+    private static int computeCompletionCoinBurst(Entity gate, RandomSource random) {
+        int level = Math.max(1, getGatewayLevel(gate));
+        int tier = Math.max(1, getGatewayCrystalTier(gate));
+        int wave = 1;
         int base = 18 + (level * 2) + tier * 8 + wave * 4;
-        int scaled = (int) Math.round((base + random.nextInt(13)) * GatewayPartyScaling.getRewardMultiplier(gate));
+        int scaled = base + random.nextInt(13);
         return Math.max(1, scaled);
     }
 
-    private static void sendWaveSummary(GatewayEntity gate, int awardedCoins) {
-        ServerPlayer player = LevelUpGatewayXpRewards.findRewardPlayer(gate);
+    private static void sendWaveSummary(Entity gate, int awardedCoins) {
+        ServerPlayer player = findRewardPlayer(gate);
         if (player == null) {
             return;
         }
@@ -767,7 +706,7 @@ public final class ShopkeeperManager {
             displayedCoins = Mth.floor((float) (awardedCoins * MythicCoinWallet.getTotalMultiplier(player)) + 0.5F);
         }
 
-        int levelXp = LevelUpGatewayXpRewards.computeWaveXp(gate);
+        int levelXp = 0;
         String survived = formatElapsedTime(gate.tickCount);
         Component summary = Component.empty()
                 .append(Component.literal("* ").withStyle(ChatFormatting.LIGHT_PURPLE))
@@ -779,20 +718,18 @@ public final class ShopkeeperManager {
         player.displayClientMessage(summary, true);
     }
 
-    private static int applyGatewayCoinAdjustments(GatewayEntity gate, int amount) {
-        int scaled = (int) Math.round(amount * GatewayForgeService.getGatewayCoinRewardMultiplier(gate.getGateway()));
-        int withFlatBonus = scaled + GatewayForgeService.getGatewayFlatCoinBonus(gate.getGateway());
-        return Math.max(0, withFlatBonus);
+    private static int applyGatewayCoinAdjustments(Entity gate, int amount) {
+        return Math.max(0, amount);
     }
 
-    private static int minimumWaveCoinReward(GatewayEntity gate) {
+    private static int minimumWaveCoinReward(Entity gate) {
         int minimumTotal = minimumGateCoinTotal(gate);
         int totalWaves = totalGateWaves(gate);
         int waveBudget = (int) Math.floor(minimumTotal * 0.70D);
         return Math.max(1, waveBudget / Math.max(1, totalWaves));
     }
 
-    private static int minimumCompletionCoinReward(GatewayEntity gate) {
+    private static int minimumCompletionCoinReward(Entity gate) {
         int minimumTotal = minimumGateCoinTotal(gate);
         int totalWaves = totalGateWaves(gate);
         int waveBudget = (int) Math.floor(minimumTotal * 0.70D);
@@ -800,17 +737,14 @@ public final class ShopkeeperManager {
         return Math.max(1, completionBudget);
     }
 
-    private static int minimumGateCoinTotal(GatewayEntity gate) {
-        int level = Math.max(1, GatewayForgeService.getGatewayLevel(gate.getGateway()));
+    private static int minimumGateCoinTotal(Entity gate) {
+        int level = Math.max(1, getGatewayLevel(gate));
         int scaled = (int) Math.round(level * 22.5D - 125.0D);
         return Math.max(100, scaled);
     }
 
-    private static int totalGateWaves(GatewayEntity gate) {
-        if (gate.getGateway() instanceof NormalGateway normalGateway) {
-            return Math.max(1, normalGateway.getNumWaves());
-        }
-        return Math.max(1, gate.getWave() + 1);
+    private static int totalGateWaves(Entity gate) {
+        return 1;
     }
 
     private static String formatElapsedTime(int ticks) {
@@ -820,20 +754,35 @@ public final class ShopkeeperManager {
         return String.format(java.util.Locale.ROOT, "%d:%02d", minutes, seconds);
     }
 
-    private static int computeWaveLootRolls(GatewayEntity gate, RandomSource random) {
-        int level = Math.max(1, GatewayForgeService.getGatewayLevel(gate.getGateway()));
-        int tier = Math.max(1, GatewayForgeService.getGatewayCrystalTier(gate.getGateway()));
-        int extraPlayers = GatewayPartyScaling.getExtraPlayers(gate);
+    private static int computeWaveLootRolls(Entity gate, RandomSource random) {
+        int level = Math.max(1, getGatewayLevel(gate));
+        int tier = Math.max(1, getGatewayCrystalTier(gate));
+        int extraPlayers = 0;
         int base = 2 + tier + Math.max(0, level / 12) + extraPlayers * (1 + tier);
         return base + random.nextInt(2 + tier);
     }
 
-    private static int computeCompletionLootRolls(GatewayEntity gate, RandomSource random) {
-        int level = Math.max(1, GatewayForgeService.getGatewayLevel(gate.getGateway()));
-        int tier = Math.max(1, GatewayForgeService.getGatewayCrystalTier(gate.getGateway()));
-        int extraPlayers = GatewayPartyScaling.getExtraPlayers(gate);
+    private static int computeCompletionLootRolls(Entity gate, RandomSource random) {
+        int level = Math.max(1, getGatewayLevel(gate));
+        int tier = Math.max(1, getGatewayCrystalTier(gate));
+        int extraPlayers = 0;
         int base = 6 + tier * 2 + Math.max(0, level / 8) + extraPlayers * (3 + tier * 2);
         return base + random.nextInt(3 + tier);
+    }
+
+    private static ServerPlayer findRewardPlayer(Entity entity) {
+        if (entity == null) {
+            return null;
+        }
+        return entity.level().getNearestPlayer(entity, 64.0D) instanceof ServerPlayer player ? player : null;
+    }
+
+    private static int getGatewayLevel(Entity gate) {
+        return 0;
+    }
+
+    private static int getGatewayCrystalTier(Entity gate) {
+        return 1;
     }
 
     private static boolean isRareOptionalModOffer(ItemStack stack) {

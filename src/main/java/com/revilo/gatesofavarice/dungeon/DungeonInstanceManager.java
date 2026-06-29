@@ -17,7 +17,9 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -45,6 +47,7 @@ public final class DungeonInstanceManager {
     private static final int CENTRAL_PILLAR_MIN_Z_OFFSET = -5;
     private static final int CENTRAL_PILLAR_MAX_Z_OFFSET = 4;
     private static final float PLAYER_SPAWN_YAW = 90.0F;
+    private static final ResourceLocation BROKEN_STRUCTURE_DROP = ResourceLocation.fromNamespaceAndPath("chipped", "iron_bowl_soul_lantern");
 
     private static final DungeonStructurePiece[] DUNGEON_PIECES = {
             new DungeonStructurePiece("dungeon-nw", -32, -32),
@@ -66,6 +69,7 @@ public final class DungeonInstanceManager {
 
         BlockPos origin = instanceOrigin(instanceOwnerId);
         ensureDungeon(dungeonLevel, origin);
+        clearBrokenStructureDrops(dungeonLevel, origin);
 
         Vec3 spawnPos = playerSpawnPosition(instanceOwnerId);
         player.teleportTo(dungeonLevel, spawnPos.x(), spawnPos.y(), spawnPos.z(), PLAYER_SPAWN_YAW, 0.0F);
@@ -189,6 +193,7 @@ public final class DungeonInstanceManager {
         clearDungeonEntities(level, origin);
         clearDungeonVolume(level, origin);
         placeDungeonStructure(level, origin);
+        clearBrokenStructureDrops(level, origin);
     }
 
     private static void placeDungeonStructure(ServerLevel level, BlockPos origin) {
@@ -256,6 +261,23 @@ public final class DungeonInstanceManager {
         for (Entity entity : level.getEntitiesOfClass(Entity.class, bounds, DungeonInstanceManager::isDungeonCleanupEntity)) {
             entity.discard();
         }
+    }
+
+    private static void clearBrokenStructureDrops(ServerLevel level, BlockPos origin) {
+        AABB bounds = new AABB(
+                origin.getX() - INSTANCE_CLEANUP_RADIUS,
+                origin.getY() - 32,
+                origin.getZ() - INSTANCE_CLEANUP_RADIUS,
+                origin.getX() + INSTANCE_CLEANUP_RADIUS,
+                origin.getY() + 96,
+                origin.getZ() + INSTANCE_CLEANUP_RADIUS);
+        for (ItemEntity itemEntity : level.getEntitiesOfClass(ItemEntity.class, bounds, DungeonInstanceManager::isBrokenStructureDrop)) {
+            itemEntity.discard();
+        }
+    }
+
+    private static boolean isBrokenStructureDrop(ItemEntity itemEntity) {
+        return BROKEN_STRUCTURE_DROP.equals(BuiltInRegistries.ITEM.getKey(itemEntity.getItem().getItem()));
     }
 
     private static boolean isDungeonCleanupEntity(Entity entity) {

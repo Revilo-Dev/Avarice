@@ -1,10 +1,8 @@
 package com.revilo.gatesofavarice.item;
 
 import com.revilo.gatesofavarice.registry.ModMobEffects;
-import com.revilo.gatesofavarice.integration.StabilityPearlHandler;
+import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
 import com.revilo.gatesofavarice.shop.GatewaySellValues;
-import com.revilo.gatesofavarice.shop.ShopkeeperManager;
-import java.util.Comparator;
 import java.util.List;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.particles.ItemParticleOption;
@@ -16,7 +14,6 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -26,10 +23,8 @@ import net.minecraft.world.level.Level;
 
 public class StabilityPearlItem extends Item {
 
-    private static final int RANGE = 96;
-    private static final int TIME_EXTENSION_TICKS = 300;
+    private static final double NEGATIVE_STAT_REDUCTION = 0.05D;
     private static final int HEALTH_PENALTY_TICKS = Integer.MAX_VALUE;
-    private static final String GATEWAY_ENTITY_CLASS = "dev.shadowsoffire.gateways.entity.GatewayEntity";
 
     public StabilityPearlItem(Properties properties) {
         super(properties);
@@ -38,18 +33,22 @@ public class StabilityPearlItem extends Item {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand usedHand) {
         ItemStack stack = player.getItemInHand(usedHand);
-        Entity gateway = findGateway(player);
-        if (gateway == null) {
-            if (!level.isClientSide) {
-                player.sendSystemMessage(Component.translatable("message.gatesofavarice.no_active_gateway"));
+        if (level.isClientSide) {
+            return InteractionResultHolder.sidedSuccess(stack, true);
+        }
+        if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+            if (DungeonRunManager.reduceNegativeRunModifiers(serverPlayer, NEGATIVE_STAT_REDUCTION)) {
+                applyHealthDrain(player);
+                spawnShatterEffect((ServerLevel) level, player, stack);
+                player.sendSystemMessage(Component.literal("Stability Pearl reduced dungeon modifiers by 5%."));
+                if (!player.hasInfiniteMaterials()) {
+                    stack.shrink(1);
+                }
+                return InteractionResultHolder.success(stack);
             }
-            return InteractionResultHolder.fail(stack);
+            player.sendSystemMessage(Component.translatable("message.gatesofavarice.no_active_gateway"));
         }
-
-        if (!level.isClientSide) {
-            applyStabilityPearl((ServerLevel) level, player, stack, gateway);
-        }
-        return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
+        return InteractionResultHolder.fail(stack);
     }
 
     @Override
@@ -63,28 +62,9 @@ public class StabilityPearlItem extends Item {
         GatewaySellValues.appendSellValueTooltip(stack, tooltipComponents);
     }
 
-    private static Entity findGateway(Player player) {
-        return player.level().getEntitiesOfClass(Entity.class, player.getBoundingBox().inflate(RANGE)).stream()
-                .filter(StabilityPearlItem::isGatewayEntity)
-                .filter(StabilityPearlItem::isGatewayValid)
-                .filter(gateway -> !gateway.isRemoved())
-                .filter(gateway -> !ShopkeeperManager.isGatewayAnimation(gateway))
-                .min(Comparator.comparingDouble(player::distanceToSqr))
-                .orElse(null);
-    }
-
-    private static void applyStabilityPearl(ServerLevel level, Player player, ItemStack stack, Entity gateway) {
-        reduceGatewayActiveTicks(gateway);
+    private static void applyHealthDrain(Player player) {
         player.addEffect(new MobEffectInstance(ModMobEffects.STABILITY_DRAIN, HEALTH_PENALTY_TICKS, 0, false, true, true));
-        if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
-            StabilityPearlHandler.linkToGateway(serverPlayer, gateway);
-        }
         player.setHealth(Math.min(player.getHealth(), player.getMaxHealth()));
-        spawnShatterEffect(level, player, stack);
-        player.sendSystemMessage(Component.translatable("message.gatesofavarice.gateway_time_extended", TIME_EXTENSION_TICKS / 20));
-        if (!player.hasInfiniteMaterials()) {
-            stack.shrink(1);
-        }
     }
 
     private static void spawnShatterEffect(ServerLevel level, Player player, ItemStack stack) {
@@ -98,39 +78,4 @@ public class StabilityPearlItem extends Item {
         level.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.GLASS_BREAK, SoundSource.PLAYERS, 0.7F, 1.15F);
     }
 
-    private static boolean isGatewayEntity(Entity entity) {
-        net.minecraft.resources.ResourceLocation typeId = net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType());
-        return typeId != null && "gateways".equals(typeId.getNamespace()) && typeId.getPath().contains("gateway");
-    }
-
-    private static boolean isGatewayValid(Entity entity) {
-        try {
-            Class<?> gatewayClass = Class.forName(GATEWAY_ENTITY_CLASS);
-            if (!gatewayClass.isInstance(entity)) {
-                return false;
-            }
-            Object valid = gatewayClass.getMethod("isValid").invoke(entity);
-            return valid instanceof Boolean b && b;
-        } catch (ReflectiveOperationException ignored) {
-            return false;
-        }
-    }
-
-    private static void reduceGatewayActiveTicks(Entity gateway) {
-        try {
-            Class<?> gatewayClass = Class.forName(GATEWAY_ENTITY_CLASS);
-            if (!gatewayClass.isInstance(gateway)) {
-                return;
-            }
-            int currentTicks = (int) gatewayClass.getMethod("getTicksActive").invoke(gateway);
-            Object ticksAccessor = gatewayClass.getField("TICKS_ACTIVE").get(null);
-            net.minecraft.network.syncher.SynchedEntityData data = gateway.getEntityData();
-            @SuppressWarnings("unchecked")
-            net.minecraft.network.syncher.EntityDataAccessor<Integer> accessor =
-                    (net.minecraft.network.syncher.EntityDataAccessor<Integer>) ticksAccessor;
-            data.set(accessor, Math.max(0, currentTicks - TIME_EXTENSION_TICKS));
-        } catch (ReflectiveOperationException ignored) {
-            // If gateways internals are unavailable, keep pearl side-effects but skip timer mutation.
-        }
-    }
 }

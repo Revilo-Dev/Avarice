@@ -52,7 +52,7 @@ public final class ModItems {
     public static final DeferredHolder<Item, GoldCoinItem> GOLD_COIN = ITEMS.register("gold_coin",
             () -> new GoldCoinItem(new Item.Properties().stacksTo(99).rarity(Rarity.UNCOMMON)));
     public static final DeferredHolder<Item, StabilityPearlItem> STABILITY_PEARL = ITEMS.register("stability_pearl",
-            () -> new StabilityPearlItem(new Item.Properties().stacksTo(16).rarity(Rarity.RARE)));
+            () -> new StabilityPearlItem(new Item.Properties().stacksTo(16).rarity(Rarity.EPIC)));
     public static final DeferredHolder<Item, GatewayCardItem> GATEWAY_CARD = ITEMS.register("gateway_card",
             () -> new GatewayCardItem(new Item.Properties().stacksTo(16).rarity(Rarity.UNCOMMON)));
     public static final DeferredHolder<Item, LootMaterialItem> GRIMSTONE = ITEMS.register("grimstone",

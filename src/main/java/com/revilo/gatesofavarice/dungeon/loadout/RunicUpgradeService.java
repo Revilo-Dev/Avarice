@@ -41,7 +41,7 @@ public final class RunicUpgradeService {
             statCard("bleeding_chance", "Effect Card", "Bleeding", 0.01F, 0.06F),
             statCard("stun_chance", "Effect Card", "Stunning", 0.01F, 0.05F),
             statCard("shocking_chance", "Effect Card", "Shocking", 0.01F, 0.05F),
-            statCard("leeching_chance", "Effect Card", "Leeching", 0.005F, 0.02F),
+            statCard("leeching_chance", "Effect Card", "Leeching", 0.01F, 0.02F),
             statCard("freezing_chance", "Effect Card", "Freezing", 0.01F, 0.05F),
             statCard("fangs", "Effect Card", "Fangs", 1.0F, 4.0F)
     );
@@ -57,7 +57,7 @@ public final class RunicUpgradeService {
     private static final List<CardSpec> DEFAULT_ARMOR_EFFECT_CARDS = List.of(
             statCard("health", "Effect Card", "Health Boost", 1.0F, 3.0F),
             statCard("jump_height", "Effect Card", "Leaping", 0.05F, 0.12F),
-            statCard("ability_power", "Effect Card", "Ability Power", 0.50F, 2.50F),
+            statCard("ability_power", "Effect Card", "Ability Power", 1.0F, 5.0F),
             statCard("movement_speed", "Effect Card", "Movement Speed", 0.04F, 0.10F),
             statCard("aura:ability_power", "Ability Card", "Ability Power", 0.10F, 0.35F),
             statCard("aura:ability_fire_bonus", "Ability Card", "Fire", 1.0F, 1.0F),
@@ -117,7 +117,7 @@ public final class RunicUpgradeService {
     public static boolean canAddNewStat(ItemStack stack, RuneStatType type, float value, UpgradeContext ctx) {
         if (stack.isEmpty() || value <= 0.0F) return false;
         RuneStats current = RuneStats.get(stack);
-        return !current.has(type);
+        return !current.has(type) && RuneSlots.remaining(stack) > 0;
     }
 
     public static ItemStack addNewStat(ItemStack stack, RuneStatType type, float value, UpgradeContext ctx) {
@@ -134,7 +134,11 @@ public final class RunicUpgradeService {
     }
 
     public static boolean canAddOrUpgradeEffect(ItemStack stack, Holder<Enchantment> effect, int level, UpgradeContext ctx) {
-        return !stack.isEmpty() && level > 0 && RuneItem.isEffectEnchantment(effect);
+        if (stack.isEmpty() || level <= 0 || !RuneItem.isEffectEnchantment(effect)) {
+            return false;
+        }
+        ItemEnchantments current = stack.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY);
+        return current.getLevel(effect) > 0 || RuneSlots.remaining(stack) > 0;
     }
 
     public static ItemStack addOrUpgradeEffect(ItemStack stack, Holder<Enchantment> effect, int requestedLevel, UpgradeContext ctx) {
@@ -178,7 +182,11 @@ public final class RunicUpgradeService {
         }
 
         while (cards.size() < CARD_COUNT) {
-            cards.add(generateFallbackCard(category, targetLabel, current, usedIds, random, waveNumber, playerLevel));
+            UpgradeCard fallback = generateFallbackCard(category, targetLabel, current, target, usedIds, random, waveNumber, playerLevel);
+            if (fallback == null) {
+                break;
+            }
+            cards.add(fallback);
         }
         return List.copyOf(cards);
     }
@@ -212,7 +220,7 @@ public final class RunicUpgradeService {
             if (cards.size() >= CARD_COUNT || maxToAdd <= 0) {
                 break;
             }
-            if (!isCardSpecAllowed(spec, target) || !usedIds.add(spec.uniqueId())) {
+            if (!isCardSpecAllowed(spec, target) || !canOfferCardSpec(spec, current, target) || !usedIds.add(spec.uniqueId())) {
                 continue;
             }
             cards.add(buildStatCard(spec, current, category, targetLabel, target, random, waveNumber, playerLevel));
@@ -224,6 +232,7 @@ public final class RunicUpgradeService {
             UpgradeCategory category,
             String targetLabel,
             RuneStats current,
+            ItemStack target,
             Set<String> usedIds,
             RandomSource random,
             int waveNumber,
@@ -234,17 +243,15 @@ public final class RunicUpgradeService {
         int startIndex = fallbacks.isEmpty() ? 0 : random.nextInt(fallbacks.size());
         for (int offset = 0; offset < fallbacks.size(); offset++) {
             CardSpec spec = fallbacks.get((startIndex + offset) % fallbacks.size());
-            if (usedIds.add(spec.uniqueId())) {
+            if (isCardSpecAllowed(spec, target) && canOfferCardSpec(spec, current, target) && usedIds.add(spec.uniqueId())) {
                 fallback = spec;
                 break;
             }
         }
         if (fallback == null) {
-            fallback = category == UpgradeCategory.ARMOR
-                    ? statCard("resistance", "Stat Card", "Resistance", 0.02F, 0.08F)
-                    : statCard("attack_damage", "Damage Card", "Attack Damage", 0.5F, 2.0F);
+            return null;
         }
-        return buildStatCard(fallback, current, category, targetLabel, ItemStack.EMPTY, random, waveNumber, playerLevel);
+        return buildStatCard(fallback, current, category, targetLabel, target, random, waveNumber, playerLevel);
     }
 
     private static List<CardSpec> weightedForExistingStats(List<CardSpec> specs, RuneStats current) {
@@ -266,10 +273,24 @@ public final class RunicUpgradeService {
         return List.copyOf(weighted);
     }
 
+    private static boolean canOfferCardSpec(CardSpec spec, RuneStats current, ItemStack target) {
+        if (target.isEmpty() || RunicLoadoutService.runeSlotsRemaining(target) > 0) {
+            return true;
+        }
+        if (spec.effectId() != null) {
+            return hasEffect(target, spec.effectId());
+        }
+        if (AuraAttributeSupport.isAuraAttributeStatId(spec.statId())) {
+            return true;
+        }
+        RuneStatType type = RuneStatType.byId(spec.statId());
+        return type != null && current.has(type);
+    }
+
     private static UpgradeCard buildStatCard(CardSpec spec, RuneStats current, UpgradeCategory category, String targetLabel, ItemStack target, RandomSource random, int waveNumber, int playerLevel) {
         if (spec.effectId() != null) {
-            boolean alreadyHasEffect = false;
-            String currentValue = "-";
+            boolean alreadyHasEffect = hasEffect(target, spec.effectId());
+            String currentValue = alreadyHasEffect ? "Lv " + currentEffectLevel(target, spec.effectId()) : "-";
             return new UpgradeCard(
                     UUID.randomUUID().toString(),
                     UpgradeCardType.ADD_OR_UPGRADE_EFFECT,
@@ -324,13 +345,31 @@ public final class RunicUpgradeService {
         );
     }
 
+    private static boolean hasEffect(ItemStack target, String effectId) {
+        return currentEffectLevel(target, effectId) > 0;
+    }
+
+    private static int currentEffectLevel(ItemStack target, String effectId) {
+        ResourceLocation id = ResourceLocation.tryParse(effectId);
+        if (id == null || target.isEmpty()) {
+            return 0;
+        }
+        ItemEnchantments enchantments = target.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY);
+        for (Holder<Enchantment> holder : enchantments.keySet()) {
+            if (holder.unwrapKey().map(key -> key.location().equals(id)).orElse(false)) {
+                return enchantments.getLevel(holder);
+            }
+        }
+        return 0;
+    }
+
     private static List<UpgradeCard> generateItemCards(LoadoutDefinition definition, UpgradeCategory category, RandomSource random) {
         ArrayList<UpgradeCard> cards = new ArrayList<>(5);
         cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REWARD_FOOD, category, "Food Card", definition.displayName(), "Heart Fragment", "0", "+8-16", 1, 0));
         if (random.nextFloat() < 0.18F) {
             cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REWARD_GATEWAY_CARD, category, "Deck Card", definition.displayName(), "Gateway Card", "0", "+1 random card", 3, 0));
         } else {
-            cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REWARD_RESTOCK, category, "Restock Card", definition.displayName(), "Restock", "5-16 apples", "Apples, arrows, or e-gap", 1, 0));
+            cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.UPGRADE_DUNGEON_MAGNET, category, "Magnet Card", definition.displayName(), "Dungeon Magnet", "Current", "Upgrade tier", 2, 0));
         }
         cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REWARD_ABILITY, category, "Ability Card", definition.displayName(), "Arcane Apples + Magnet", "0", "+1 magnet +1-3 apples", 1, 0));
         cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REROLL_PRIMARY_WEAPON, category, "Reroll Primary Weapon", definition.displayName(), "Primary", "Current", "Same tier or rare +1", 2, 0));
@@ -523,6 +562,9 @@ public final class RunicUpgradeService {
         };
         if ("health".equals(id)) {
             return statCard(id, title, label, 1.0F, 3.0F);
+        }
+        if ("ability_power".equals(id)) {
+            return statCard(id, title, label, 1.0F, 5.0F);
         }
         if ("aura:ability_power".equals(id)) {
             return statCard(id, title, label, Math.max(0.10F, range.min()), Math.max(0.10F, range.max()));

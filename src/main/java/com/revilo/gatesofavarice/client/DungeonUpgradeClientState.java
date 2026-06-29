@@ -16,6 +16,8 @@ public final class DungeonUpgradeClientState {
     public static int rerollCost = 0;
     public static int selectedCardCount = 0;
     public static int maxCardSelections = 5;
+    public static int runeSlotsUsed = 0;
+    public static int runeSlotsCapacity = 0;
 
     private DungeonUpgradeClientState() {}
 }

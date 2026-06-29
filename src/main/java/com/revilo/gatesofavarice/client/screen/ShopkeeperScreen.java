@@ -112,6 +112,8 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private List<UpgradeCard> upgradeCards = List.of();
     private int selectedCardCount = 0;
     private int maxCardSelections = 5;
+    private int runeSlotsUsed = 0;
+    private int runeSlotsCapacity = 0;
     private AnimationState animationState = AnimationState.DRAWING;
     private int animationTick = 0;
     private int selectedCardIndex = -1;
@@ -287,7 +289,15 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             return;
         }
 
-        guiGraphics.drawCenteredString(this.font, this.upgradePreviewStack.getHoverName().copy().withStyle(ChatFormatting.GOLD), this.leftPos + 88, this.topPos + 15, 0xF3D78A);
+        Component title = this.upgradePreviewStack.isEmpty()
+                ? Component.literal("Item").withStyle(ChatFormatting.GOLD)
+                : this.upgradePreviewStack.getHoverName().copy().withStyle(ChatFormatting.GOLD);
+        guiGraphics.drawCenteredString(this.font, title, this.leftPos + 88, this.topPos + 15, 0xF3D78A);
+        if (!this.upgradePreviewStack.isEmpty()
+                && mouseX >= this.leftPos + 42 && mouseX <= this.leftPos + 134
+                && mouseY >= this.topPos + 8 && mouseY <= this.topPos + 28) {
+            renderUpgradePreviewTooltip(guiGraphics, mouseX, mouseY);
+        }
         this.renderUpgradeCards(guiGraphics, mouseX, mouseY);
         this.renderSelectionCounter(guiGraphics);
     }
@@ -325,12 +335,16 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         for (int i = 0; i < count; i++) {
             UpgradeCard card = this.upgradeCards.get(i);
             int x = startX + Math.round(i * CARD_W * UPGRADE_CARD_SCALE) + (i * UPGRADE_CARD_GAP);
-            boolean hovered = this.isMouseOverScaledCard(mouseX, mouseY, x, y, UPGRADE_CARD_SCALE);
+            boolean blocked = this.isBlockedByRuneSlots(card);
+            boolean hovered = !blocked && this.isMouseOverScaledCard(mouseX, mouseY, x, y, UPGRADE_CARD_SCALE);
             float drawScale = hovered && this.animationState == AnimationState.IDLE ? UPGRADE_CARD_SCALE * HOVER_SCALE_MULTIPLIER : UPGRADE_CARD_SCALE;
             int drawX = animatedCardX(x, i, startX, UPGRADE_CARD_SCALE);
             int drawY = animatedCardY(y, i, UPGRADE_CARD_SCALE);
             this.drawCard(guiGraphics, resolveCardTexture(card, hovered), drawX, drawY, drawScale);
             this.renderUpgradeCardContents(guiGraphics, drawX, drawY, card, drawScale);
+            if (blocked) {
+                guiGraphics.fill(drawX, drawY, drawX + Math.round(CARD_W * drawScale), drawY + Math.round(CARD_H * drawScale), 0x99000000);
+            }
         }
         guiGraphics.disableScissor();
     }
@@ -624,6 +638,8 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         this.upgradeCards = List.copyOf(DungeonUpgradeClientState.cards);
         this.selectedCardCount = DungeonUpgradeClientState.selectedCardCount;
         this.maxCardSelections = Math.max(0, DungeonUpgradeClientState.maxCardSelections);
+        this.runeSlotsUsed = Math.max(0, DungeonUpgradeClientState.runeSlotsUsed);
+        this.runeSlotsCapacity = Math.max(0, DungeonUpgradeClientState.runeSlotsCapacity);
     }
 
     private void handleUpgradeClick(int index) {
@@ -646,6 +662,9 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             return;
         }
         UpgradeCard card = this.upgradeCards.get(index);
+        if (this.isBlockedByRuneSlots(card)) {
+            return;
+        }
         if (card.cost() > this.menu.getWalletBalance()) {
             return;
         }
@@ -674,6 +693,36 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         boolean show = this.menu.canStartNextWave();
         this.nextWaveButton.visible = show;
         this.nextWaveButton.active = show;
+    }
+
+    private boolean isBlockedByRuneSlots(UpgradeCard card) {
+        return (card.type() == com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCardType.ADD_OR_UPGRADE_EFFECT
+                || card.type() == com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCardType.ADD_NEW_RUNE_STAT)
+                && this.runeSlotsCapacity > 0
+                && this.runeSlotsUsed >= this.runeSlotsCapacity;
+    }
+
+    private void renderUpgradePreviewTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        if (this.runeSlotsCapacity <= 0) {
+            guiGraphics.renderTooltip(this.font, this.upgradePreviewStack, mouseX, mouseY);
+            return;
+        }
+        int available = Math.max(0, this.runeSlotsCapacity - this.runeSlotsUsed);
+        ChatFormatting color = available <= 0 ? ChatFormatting.RED : ChatFormatting.LIGHT_PURPLE;
+        net.minecraft.world.item.TooltipFlag.Default tooltipFlag = this.minecraft != null && this.minecraft.options.advancedItemTooltips
+                ? net.minecraft.world.item.TooltipFlag.Default.ADVANCED
+                : net.minecraft.world.item.TooltipFlag.Default.NORMAL;
+        net.minecraft.world.item.Item.TooltipContext context = this.minecraft == null || this.minecraft.level == null
+                ? net.minecraft.world.item.Item.TooltipContext.EMPTY
+                : net.minecraft.world.item.Item.TooltipContext.of(this.minecraft.level);
+        List<Component> lines = new ArrayList<>(this.upgradePreviewStack.getTooltipLines(
+                context,
+                this.minecraft == null ? null : this.minecraft.player,
+                net.neoforged.neoforge.client.ClientTooltipFlag.of(tooltipFlag)));
+        lines.add(Component.literal("Rune Slots: " + this.runeSlotsUsed + "/" + this.runeSlotsCapacity).withStyle(color));
+        lines.add(Component.literal("Available Slots: " + available).withStyle(color));
+        lines.add(Component.literal("New rune stats and effects use a slot.").withStyle(ChatFormatting.GRAY));
+        guiGraphics.renderComponentTooltip(this.font, lines, mouseX, mouseY);
     }
 
     private void startNextWave() {
@@ -920,7 +969,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
 
     private static ResourceLocation resolveCardIcon(UpgradeCard card) {
         String iconName = switch (card.changeLabel()) {
-            case "Restock" -> "capacity";
+            case "Restock", "Apple Bundle", "Arrow Bundle", "Food Bundle" -> "capacity";
             case "Magnet", "Arcane Apples + Magnet" -> "movement_speed";
             case "Food", "Heart Fragment", "Heart Fragments" -> "health";
             case "Primary" -> "attack_damage";

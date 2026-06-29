@@ -6,6 +6,7 @@ import java.util.HashSet;
 import com.revilo.gatesofavarice.item.data.CrystalTheme;
 import java.util.List;
 import java.util.Set;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.EntityType;
 
 public final class EnemyPoolRegistry {
@@ -129,6 +130,9 @@ public final class EnemyPoolRegistry {
 
         for (EnemyPoolRole role : List.of(EnemyPoolRole.ASSASSIN, EnemyPoolRole.HOARD, EnemyPoolRole.ARCHER, EnemyPoolRole.TANK)) {
             pools.pool(role).removeIf(entry -> banned.contains(entry.type()));
+        }
+        for (EnemyPoolRole role : EnemyPoolRole.values()) {
+            pools.pool(role).removeIf(entry -> isBannedCompatMob(entry.type()));
         }
 
         // One category per mob: priority = tank, archer, assassin, hoard.
@@ -365,10 +369,17 @@ public final class EnemyPoolRegistry {
                 pools.pool(EnemyPoolRole.THEME).addAll(darkMobs, 3, "deeperdarker");
                 pools.pool(EnemyPoolRole.ELITE).addAll(ModCompat.findEntitiesMatching(DEEPER_DARKER_IDS, "stalker", "shattered", "sculk"), 2, "deeperdarker");
             }
-            if (level >= 50) {
-                pools.pool(EnemyPoolRole.SUPPORT).addAll(ModCompat.findEntitiesMatching(DEEPER_DARKER_IDS, "shriek", "worm"), 2, "deeperdarker");
-            }
         }
+    }
+
+    private static boolean isBannedCompatMob(EntityType<?> type) {
+        net.minecraft.resources.ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(type);
+        if (id == null) {
+            return false;
+        }
+        String path = id.getPath();
+        return "deeperdarker".equals(id.getNamespace())
+                && ((path.contains("shriek") && path.contains("worm")) || path.contains("pot"));
     }
 
     private static void addEndermanOverhaulCompat(CrystalTheme theme, int level, EnemyPoolSet pools) {

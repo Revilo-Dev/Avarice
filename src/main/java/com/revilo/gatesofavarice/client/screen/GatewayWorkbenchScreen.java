@@ -70,7 +70,8 @@ public class GatewayWorkbenchScreen extends AbstractContainerScreen<GatewayWorkb
                 && !hasShiftDown()
                 && this.minecraft != null
                 && this.minecraft.gameMode != null
-                && !this.isForgeAnimating()) {
+                && !this.isForgeAnimating()
+                && this.menu.canForge()) {
             this.forgeAnimationTicks = FORGE_ANIMATION_TICKS;
             this.pendingForgeSend = true;
             return true;

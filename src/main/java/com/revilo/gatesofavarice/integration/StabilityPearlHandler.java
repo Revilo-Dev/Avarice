@@ -1,7 +1,6 @@
 package com.revilo.gatesofavarice.integration;
 
 import com.revilo.gatesofavarice.registry.ModMobEffects;
-import com.revilo.gatesofavarice.shop.ShopkeeperManager;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -17,7 +16,6 @@ public final class StabilityPearlHandler {
 
     private static final String GATEWAY_ID_KEY = "gatesofavarice.stability_gateway_id";
     private static final String GATEWAY_LEVEL_KEY = "gatesofavarice.stability_gateway_level";
-    private static final String GATEWAY_ENTITY_CLASS = "dev.shadowsoffire.gateways.entity.GatewayEntity";
 
     private StabilityPearlHandler() {
     }
@@ -34,16 +32,13 @@ public final class StabilityPearlHandler {
         }
 
         if (!player.getPersistentData().hasUUID(GATEWAY_ID_KEY)) {
-            if (player.hasEffect(ModMobEffects.STABILITY_DRAIN)) {
-                player.removeEffect(ModMobEffects.STABILITY_DRAIN);
-            }
             return;
         }
 
         ServerLevel gatewayLevel = resolveGatewayLevel(player);
         UUID gatewayId = player.getPersistentData().getUUID(GATEWAY_ID_KEY);
         Entity entity = gatewayLevel == null ? null : gatewayLevel.getEntity(gatewayId);
-        if (isActiveGateway(entity)) {
+        if (entity != null && !entity.isRemoved()) {
             return;
         }
 
@@ -61,19 +56,4 @@ public final class StabilityPearlHandler {
         return player.getServer().getLevel(ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION, location));
     }
 
-    private static boolean isActiveGateway(Entity entity) {
-        if (entity == null || entity.isRemoved() || ShopkeeperManager.isGatewayAnimation(entity)) {
-            return false;
-        }
-        try {
-            Class<?> gatewayClass = Class.forName(GATEWAY_ENTITY_CLASS);
-            if (!gatewayClass.isInstance(entity)) {
-                return false;
-            }
-            Object valid = gatewayClass.getMethod("isValid").invoke(entity);
-            return valid instanceof Boolean b && b;
-        } catch (ReflectiveOperationException ignored) {
-            return false;
-        }
-    }
 }

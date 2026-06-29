@@ -15,6 +15,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -42,6 +43,8 @@ public class DungeonUpgradeCardsScreen extends Screen {
     private int rerollCost = 0;
     private int selectedCardCount = 0;
     private int maxCardSelections = 5;
+    private int runeSlotsUsed = 0;
+    private int runeSlotsCapacity = 0;
     private Button rerollButton;
     private int centerX;
     private int top;
@@ -91,7 +94,7 @@ public class DungeonUpgradeCardsScreen extends Screen {
             gg.renderFakeItem(this.previewStack, -8, -8);
             gg.pose().popPose();
             if (mouseX >= itemX - 22 && mouseX <= itemX + 22 && mouseY >= itemY - 22 && mouseY <= itemY + 22) {
-                gg.renderTooltip(this.font, this.previewStack, mouseX, mouseY);
+                renderPreviewTooltip(gg, mouseX, mouseY);
             }
         }
 
@@ -104,6 +107,9 @@ public class DungeonUpgradeCardsScreen extends Screen {
             ResourceLocation texture = resolveCardTexture(card, button.isHoveredOrFocused());
             drawCard(gg, texture, drawX, drawY, scale);
             renderCardContents(gg, drawX, drawY, card, scale);
+            if (isBlockedByRuneSlots(card)) {
+                gg.fill(drawX, drawY, drawX + Mth.floor(CARD_W * scale), drawY + Mth.floor(CARD_H * scale), 0x99000000);
+            }
         }
         renderSelectionCounter(gg);
     }
@@ -201,6 +207,8 @@ public class DungeonUpgradeCardsScreen extends Screen {
         this.rerollCost = DungeonUpgradeClientState.rerollCost;
         this.selectedCardCount = DungeonUpgradeClientState.selectedCardCount;
         this.maxCardSelections = Math.max(0, DungeonUpgradeClientState.maxCardSelections);
+        this.runeSlotsUsed = Math.max(0, DungeonUpgradeClientState.runeSlotsUsed);
+        this.runeSlotsCapacity = Math.max(0, DungeonUpgradeClientState.runeSlotsCapacity);
     }
 
     private void rebuildCardWidgets() {
@@ -224,8 +232,9 @@ public class DungeonUpgradeCardsScreen extends Screen {
 
     private void updateButtonStates() {
         boolean active = !isTransitioning() && !this.awaitingRerollSync;
-        for (Button button : this.cardButtons) {
-            button.active = active;
+        for (int i = 0; i < this.cardButtons.size(); i++) {
+            Button button = this.cardButtons.get(i);
+            button.active = active && (i >= this.cards.size() || !isBlockedByRuneSlots(this.cards.get(i)));
             button.visible = true;
         }
         if (this.rerollButton != null) {
@@ -248,6 +257,36 @@ public class DungeonUpgradeCardsScreen extends Screen {
 
     private boolean isTransitioning() {
         return this.animatingOut || this.animatingIn;
+    }
+
+    private boolean isBlockedByRuneSlots(UpgradeCard card) {
+        return (card.type() == com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCardType.ADD_OR_UPGRADE_EFFECT
+                || card.type() == com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCardType.ADD_NEW_RUNE_STAT)
+                && this.runeSlotsCapacity > 0
+                && this.runeSlotsUsed >= this.runeSlotsCapacity;
+    }
+
+    private void renderPreviewTooltip(GuiGraphics gg, int mouseX, int mouseY) {
+        if (this.runeSlotsCapacity <= 0) {
+            gg.renderTooltip(this.font, this.previewStack, mouseX, mouseY);
+            return;
+        }
+        int available = Math.max(0, this.runeSlotsCapacity - this.runeSlotsUsed);
+        ChatFormatting color = available <= 0 ? ChatFormatting.RED : ChatFormatting.LIGHT_PURPLE;
+        net.minecraft.world.item.TooltipFlag.Default tooltipFlag = this.minecraft != null && this.minecraft.options.advancedItemTooltips
+                ? net.minecraft.world.item.TooltipFlag.Default.ADVANCED
+                : net.minecraft.world.item.TooltipFlag.Default.NORMAL;
+        Item.TooltipContext context = this.minecraft == null || this.minecraft.level == null
+                ? Item.TooltipContext.EMPTY
+                : Item.TooltipContext.of(this.minecraft.level);
+        List<Component> lines = new ArrayList<>(this.previewStack.getTooltipLines(
+                context,
+                this.minecraft == null ? null : this.minecraft.player,
+                net.neoforged.neoforge.client.ClientTooltipFlag.of(tooltipFlag)));
+        lines.add(Component.literal("Rune Slots: " + this.runeSlotsUsed + "/" + this.runeSlotsCapacity).withStyle(color));
+        lines.add(Component.literal("Available Slots: " + available).withStyle(color));
+        lines.add(Component.literal("New rune stats and effects use a slot.").withStyle(ChatFormatting.GRAY));
+        gg.renderComponentTooltip(this.font, lines, mouseX, mouseY);
     }
 
     private int animatedCardX(int baseX, int index) {
@@ -320,7 +359,7 @@ public class DungeonUpgradeCardsScreen extends Screen {
 
     private static ResourceLocation resolveCardIcon(UpgradeCard card) {
         String iconName = switch (card.changeLabel()) {
-            case "Restock" -> "capacity";
+            case "Restock", "Apple Bundle", "Arrow Bundle", "Food Bundle" -> "capacity";
             case "Magnet", "Arcane Apples + Magnet" -> "movement_speed";
             case "Food", "Heart Fragment", "Heart Fragments" -> "health";
             case "Primary" -> "attack_damage";

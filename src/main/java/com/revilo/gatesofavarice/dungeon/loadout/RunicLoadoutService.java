@@ -2,9 +2,13 @@ package com.revilo.gatesofavarice.dungeon.loadout;
 
 import com.revilo.gatesofavarice.GatewayExpansion;
 import com.revilo.gatesofavarice.config.GatewayExpansionConfig;
+import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.ArmorSetDefinition;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.EffectSpec;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.StatRollRange;
+import com.revilo.gatesofavarice.item.DungeonArmorItem;
+import com.revilo.gatesofavarice.item.RunicItemSupport;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -18,10 +22,17 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.ArmorItem;
+import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.ItemEnchantments;
+import net.minecraft.world.item.component.CustomModelData;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.component.ItemAttributeModifiers;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.EquipmentSlotGroup;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.revilodev.runic.gear.GearAttributes;
 import net.revilodev.runic.item.custom.RuneItem;
 import net.revilodev.runic.runes.RuneSlots;
@@ -36,10 +47,10 @@ public final class RunicLoadoutService {
             "shocking_chance", "withering_chance"
     );
     private static final Set<String> WEAPON_ALLOWED_STATS = Set.of(
-            "attack_speed", "attack_damage", "attack_range", "movement_speed", "sweeping_range", "durability",
+            "attack_speed", "attack_damage", "attack_range", "sweeping_range", "durability",
             "mining_speed", "undead_damage", "nether_damage", "stun_chance", "flame_chance", "bleeding_chance",
             "shocking_chance", "poison_chance", "withering_chance", "weakening_chance", "draw_speed", "freezing_chance",
-            "leeching_chance", "bonus_chance", "fangs", "jump_height", "power"
+            "leeching_chance", "bonus_chance", "fangs", "power"
     );
 
     private RunicLoadoutService() {}
@@ -110,8 +121,39 @@ public final class RunicLoadoutService {
             root.putString("loadout_id", loadoutId);
             root.putString("loadout_set_name", setName);
             root.putString("armor_piece", pieceId);
+            root.putString(DungeonArmorItem.ARMOR_TYPE_KEY, setName);
             tag.put(GatewayExpansion.MOD_ID, root);
         });
+        int modelData = armorModelData(setName);
+        if (modelData > 0) {
+            stack.set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(modelData));
+        }
+    }
+
+    public static void applyDungeonArmorBaseStats(ItemStack stack, ArmorSetDefinition armorSet, EquipmentSlot slot, RandomSource random) {
+        if (stack.isEmpty() || !(stack.getItem() instanceof ArmorItem)) {
+            return;
+        }
+        float armor = roll(armorSet.armorMin(), armorSet.armorMax(), random) * armorPieceShare(slot);
+        float resistance = roll(armorSet.resistanceMin(), armorSet.resistanceMax(), random);
+        float knockback = roll(armorSet.knockbackResistanceMin(), armorSet.knockbackResistanceMax(), random);
+        EquipmentSlotGroup slotGroup = EquipmentSlotGroup.bySlot(slot);
+        ResourceLocation modifierId = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "dungeon_armor_" + slot.getName());
+        ItemAttributeModifiers.Builder attributes = ItemAttributeModifiers.builder();
+        attributes.add(Attributes.ARMOR, new AttributeModifier(modifierId, Math.max(0.0D, armor), AttributeModifier.Operation.ADD_VALUE), slotGroup);
+        if (knockback > 0.0F) {
+            attributes.add(Attributes.KNOCKBACK_RESISTANCE, new AttributeModifier(modifierId, knockback, AttributeModifier.Operation.ADD_VALUE), slotGroup);
+        }
+        stack.set(DataComponents.ATTRIBUTE_MODIFIERS, attributes.build());
+
+        RuneStats current = RuneStats.get(stack);
+        EnumMap<RuneStatType, Float> stats = new EnumMap<>(RuneStatType.class);
+        stats.putAll(current.view());
+        putPositive(stats, "resistance", resistance * 100.0F);
+        putPositive(stats, "knockback_resistance", knockback * 100.0F);
+        RuneStats.set(stack, new RuneStats(stats));
+        RunicItemSupport.ensureRunicData(stack, armorSet.runeSlots());
+        RuneSlots.syncUsedToContents(stack);
     }
 
     public static boolean isAllowedEffect(ResourceLocation enchantmentId) {
@@ -125,6 +167,17 @@ public final class RunicLoadoutService {
         if (enchantmentId.equals(ResourceLocation.withDefaultNamespace("multishot"))) {
             return stack.getItem() instanceof CrossbowItem;
         }
+        if (enchantmentId.equals(ResourceLocation.withDefaultNamespace("swift_sneak"))
+                || enchantmentId.equals(ResourceLocation.withDefaultNamespace("soul_speed"))
+                || enchantmentId.equals(ResourceLocation.withDefaultNamespace("feather_falling"))
+                || enchantmentId.equals(ResourceLocation.fromNamespaceAndPath("combat_roll", "longfooted"))) {
+            return stack.getItem() instanceof ArmorItem;
+        }
+        if (enchantmentId.equals(ResourceLocation.withDefaultNamespace("flame"))
+                || enchantmentId.equals(ResourceLocation.withDefaultNamespace("infinity"))
+                || enchantmentId.equals(ResourceLocation.withDefaultNamespace("punch"))) {
+            return stack.getItem() instanceof BowItem || stack.getItem() instanceof CrossbowItem;
+        }
         return true;
     }
 
@@ -134,6 +187,30 @@ public final class RunicLoadoutService {
 
     public static void syncRunicSlots(ItemStack stack) {
         RuneSlots.syncUsedToContents(stack);
+    }
+
+    public static void applyRuneSlotCapacity(ItemStack stack, int capacity) {
+        if (stack.isEmpty() || capacity <= 0) {
+            return;
+        }
+        RuneSlots.syncUsedToContents(stack);
+        RunicItemSupport.ensureRunicData(stack, capacity);
+    }
+
+    public static int runeSlotsForPlayerLevel(int playerLevel) {
+        return Math.max(4, Math.min(18, 4 + Math.max(0, playerLevel) * 3 / 10));
+    }
+
+    public static int runeSlotsCapacity(ItemStack stack) {
+        return RuneSlots.capacity(stack);
+    }
+
+    public static int runeSlotsUsed(ItemStack stack) {
+        return RuneSlots.used(stack);
+    }
+
+    public static int runeSlotsRemaining(ItemStack stack) {
+        return RuneSlots.remaining(stack);
     }
 
     public static float cursedMultiplier(ItemStack stack) {
@@ -154,6 +231,9 @@ public final class RunicLoadoutService {
         String id = type.id();
         if (stack.getItem() instanceof ArmorItem) {
             return ARMOR_ALLOWED_STATS.contains(id) && isStatAllowedForArmorPiece(stack, id);
+        }
+        if ("power".equals(id)) {
+            return stack.getItem() instanceof BowItem || stack.getItem() instanceof CrossbowItem;
         }
         return WEAPON_ALLOWED_STATS.contains(id);
     }
@@ -186,5 +266,44 @@ public final class RunicLoadoutService {
             }
         }
         return out;
+    }
+
+    private static float roll(float min, float max, RandomSource random) {
+        return min + random.nextFloat() * Math.max(0.0F, max - min);
+    }
+
+    private static float armorPieceShare(EquipmentSlot slot) {
+        return switch (slot) {
+            case HEAD -> 0.18F;
+            case CHEST -> 0.40F;
+            case LEGS -> 0.30F;
+            case FEET -> 0.12F;
+            default -> 0.0F;
+        };
+    }
+
+    private static void putPositive(EnumMap<RuneStatType, Float> stats, String id, float value) {
+        RuneStatType type = RuneStatType.byId(id);
+        if (type != null && value > 0.0F) {
+            stats.put(type, Math.max(1.0F, value));
+        }
+    }
+
+    private static int armorModelData(String setName) {
+        return switch (setName) {
+            case "Assassin Set" -> 1;
+            case "Knight Set" -> 2;
+            case "Berserker Set" -> 3;
+            case "Vanguard Set" -> 4;
+            case "Samurai Set" -> 5;
+            case "Reaper Set" -> 6;
+            case "Ranger Set" -> 7;
+            case "Marksman Set" -> 8;
+            case "Gladiator Set" -> 9;
+            case "Spellblade Set" -> 10;
+            case "Warlord Set" -> 11;
+            case "Nomad Set" -> 12;
+            default -> 0;
+        };
     }
 }

@@ -1,0 +1,17 @@
+{
+  "parent": "gatesofavarice:item/shadow_set_leggings",
+  "overrides": [
+    {"predicate": {"custom_model_data": 1}, "model": "gatesofavarice:item/shadow_set_leggings"},
+    {"predicate": {"custom_model_data": 2}, "model": "gatesofavarice:item/steel_knight_set_leggings"},
+    {"predicate": {"custom_model_data": 3}, "model": "gatesofavarice:item/rage_set_leggings"},
+    {"predicate": {"custom_model_data": 4}, "model": "gatesofavarice:item/fortress_set_leggings"},
+    {"predicate": {"custom_model_data": 5}, "model": "gatesofavarice:item/windwalker_set_leggings"},
+    {"predicate": {"custom_model_data": 6}, "model": "gatesofavarice:item/soulbound_set_leggings"},
+    {"predicate": {"custom_model_data": 7}, "model": "gatesofavarice:item/hunter_set_leggings"},
+    {"predicate": {"custom_model_data": 8}, "model": "gatesofavarice:item/sharpshooter_set_leggings"},
+    {"predicate": {"custom_model_data": 9}, "model": "gatesofavarice:item/arena_set_leggings"},
+    {"predicate": {"custom_model_data": 10}, "model": "gatesofavarice:item/arcane_set_leggings"},
+    {"predicate": {"custom_model_data": 11}, "model": "gatesofavarice:item/tyrant_set_leggings"},
+    {"predicate": {"custom_model_data": 12}, "model": "gatesofavarice:item/traveler_set_leggings"}
+  ]
+}

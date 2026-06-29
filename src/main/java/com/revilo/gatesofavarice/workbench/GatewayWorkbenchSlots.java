@@ -17,11 +17,11 @@ public final class GatewayWorkbenchSlots {
     public static final int CARD_GRID_Y = 6;
     public static final int CARD_SLOT_SPACING = 18;
     public static final int CRYSTAL_X = 115;
-    public static final int CRYSTAL_Y = 16;
+    public static final int CRYSTAL_Y = 60;
     public static final int DISPLAY_CENTER_X = 123;
     public static final int DISPLAY_CENTER_Y = 30;
     public static final int OUTPUT_X = 151;
-    public static final int OUTPUT_Y = 62;
+    public static final int OUTPUT_Y = 60;
 
     private GatewayWorkbenchSlots() {
     }

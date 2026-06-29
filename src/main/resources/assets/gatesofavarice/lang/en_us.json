@@ -92,6 +92,7 @@
   "item.gatesofavarice.prismatic_steel_paxel": "Prismatic Steel Paxel",
   "item.gatesofavarice.shop_gateway": "Shop Crystal",
   "item.gatesofavarice.lootbox": "Lootbox",
+  "entity.gatesofavarice.gateway_crystal": "Gateway Portal",
   "entity.gatesofavarice.shopkeeper": "Gatekeeper",
   "gatesofavarice.shopkeeper_bazaar": "Gatekeeper",
   "tooltip.gatesofavarice.crystal.description": "Used in a gateway workbench",

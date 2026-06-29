@@ -11,6 +11,8 @@ import com.revilo.gatesofavarice.dungeon.loadout.LoadoutPresetRegistry;
 import com.revilo.gatesofavarice.dungeon.loadout.AuraAttributeSupport;
 import com.revilo.gatesofavarice.dungeon.loadout.RunicLoadoutService;
 import com.revilo.gatesofavarice.dungeon.loadout.RunicUpgradeService;
+import com.revilo.gatesofavarice.item.GatewayCardItem;
+import com.revilo.gatesofavarice.item.MagnetItem;
 import com.revilo.gatesofavarice.network.OpenUpgradeCategoryPayload;
 import com.revilo.gatesofavarice.network.SyncUpgradeCardsPayload;
 import java.util.HashMap;
@@ -107,6 +109,11 @@ public final class DungeonUpgradeManager {
         UpgradeCard card = cards.get(cardIndex);
         if (session.purchasedShopCards >= maxShopSelections(player)) {
             reject(player, "You have selected all available cards.");
+            return false;
+        }
+        ItemStack target = representativeTargetStack(player, session.activeCategory, session.activeArmorPiece);
+        if (!canApplyCardToTarget(player, target, card)) {
+            reject(player, "No rune slots available.");
             return false;
         }
         if (!trySpendForCard(player, session, card)) {
@@ -212,6 +219,12 @@ public final class DungeonUpgradeManager {
             reject(player, "Invalid card selection.");
             return;
         }
+        ItemStack target = representativeTargetStack(player, session.activeCategory, session.activeArmorPiece);
+        if (!canApplyCardToTarget(player, target, card)) {
+            reject(player, "No rune slots available.");
+            syncCategoryCards(player, session, session.activeCategory, 0, 0);
+            return;
+        }
         try {
             applySelectedCard(player, session, card, true);
         } finally {
@@ -252,9 +265,7 @@ public final class DungeonUpgradeManager {
             session.cardsByCategory.remove(category);
         }
         ItemStack target = representativeTargetStack(player, category, session.activeArmorPiece);
-        ItemStack preview = category == UpgradeCategory.ITEM
-                ? ItemStack.EMPTY
-                : (target.isEmpty() ? previewStackForCategory(category, player) : target);
+        ItemStack preview = target.isEmpty() ? previewStackForCategory(category, player) : target;
         int waveNumber = getSessionWaveNumber(session);
         session.activeCategory = category;
         List<UpgradeCard> cards = session.cardsByCategory.get(category);
@@ -271,6 +282,8 @@ public final class DungeonUpgradeManager {
                 rerollCost,
                 session.purchasedShopCards,
                 maxShopSelections(player),
+                slotCount(target, true),
+                slotCount(target, false),
                 cards));
     }
 
@@ -291,9 +304,7 @@ public final class DungeonUpgradeManager {
         List<UpgradeCard> cards = generateShopCards(player, session, category, target, waveNumber, remainingSlots);
         session.cardsByCategory.put(category, cards);
         rebuildShopCardIndex(session);
-        ItemStack preview = category == UpgradeCategory.ITEM
-                ? ItemStack.EMPTY
-                : (target.isEmpty() ? previewStackForCategory(category, player) : target);
+        ItemStack preview = target.isEmpty() ? previewStackForCategory(category, player) : target;
         PacketDistributor.sendToPlayer(player, new SyncUpgradeCardsPayload(
                 session.sessionId.toString(),
                 category.name(),
@@ -302,6 +313,8 @@ public final class DungeonUpgradeManager {
                 rerollCost,
                 session.purchasedShopCards,
                 maxShopSelections(player),
+                slotCount(target, true),
+                slotCount(target, false),
                 cards));
     }
 
@@ -320,6 +333,8 @@ public final class DungeonUpgradeManager {
             return;
         }
         session.purchasedShopCards++;
+        ItemStack target = representativeTargetStack(player, category, session.activeArmorPiece);
+        remaining.removeIf(candidate -> !canApplyCardToTarget(player, target, candidate));
         session.cardsByCategory.put(category, List.copyOf(remaining));
         rebuildShopCardIndex(session);
         int rerollsLeft = session.waveOwnerId == null ? 0 : DungeonRunManager.getUpgradeRerollsLeft(session.waveOwnerId);
@@ -380,6 +395,7 @@ public final class DungeonUpgradeManager {
         int typeScale = switch (card.type()) {
             case ADD_OR_UPGRADE_EFFECT -> 90;
             case ITEM_REROLL_PRIMARY_WEAPON, ITEM_REROLL_SECONDARY_WEAPON -> 120;
+            case UPGRADE_DUNGEON_MAGNET -> 95;
             case ITEM_REWARD_ABILITY -> 80;
             case ITEM_REWARD_GATEWAY_CARD -> 260;
             case ITEM_REWARD_FOOD, ITEM_REWARD_RESTOCK, UPGRADE_ITEM_SUPPLY -> 30;
@@ -404,11 +420,52 @@ public final class DungeonUpgradeManager {
         }
     }
 
+    private static boolean canApplyCardToTarget(ServerPlayer player, ItemStack target, UpgradeCard card) {
+        if (!wouldAddRuneEntry(player, target, card)) {
+            return true;
+        }
+        return !target.isEmpty() && RunicLoadoutService.runeSlotsRemaining(target) > 0;
+    }
+
+    private static boolean wouldAddRuneEntry(ServerPlayer player, ItemStack target, UpgradeCard card) {
+        if (target.isEmpty()) {
+            return false;
+        }
+        return switch (card.type()) {
+            case ADD_NEW_RUNE_STAT -> {
+                RuneStatType type = resolveCardStatType(card);
+                yield type != null && !RuneStats.get(target).has(type);
+            }
+            case ADD_OR_UPGRADE_EFFECT -> {
+                String raw = switch (card.changeLabel()) {
+                    case "Thorns" -> "minecraft:thorns";
+                    default -> card.changeLabel().startsWith("effect:") ? card.changeLabel().substring("effect:".length()) : null;
+                };
+                if (raw == null) {
+                    yield false;
+                }
+                var holder = RunicUpgradeService.resolveEffect(player.serverLevel(), net.minecraft.resources.ResourceLocation.parse(raw));
+                if (holder == null) {
+                    yield false;
+                }
+                yield target.getOrDefault(DataComponents.ENCHANTMENTS, net.minecraft.world.item.enchantment.ItemEnchantments.EMPTY).getLevel(holder) <= 0;
+            }
+            default -> false;
+        };
+    }
+
+    private static int slotCount(ItemStack target, boolean used) {
+        if (target.isEmpty()) {
+            return 0;
+        }
+        return used ? RunicLoadoutService.runeSlotsUsed(target) : RunicLoadoutService.runeSlotsCapacity(target);
+    }
+
     private static void applyCard(ServerPlayer player, ItemStack target, UpgradeCard card, UpgradeContext ctx, LoadoutDefinition definition) {
         try {
             switch (card.type()) {
-                case ITEM_REWARD_FOOD, ITEM_REWARD_RESTOCK, ITEM_REWARD_ABILITY, ITEM_REWARD_GATEWAY_CARD, ITEM_REROLL_PRIMARY_WEAPON, ITEM_REROLL_SECONDARY_WEAPON, UPGRADE_ITEM_SUPPLY -> {
-                    applyItemUpgrade(player, definition, card.type());
+                case ITEM_REWARD_FOOD, ITEM_REWARD_RESTOCK, ITEM_REWARD_ABILITY, ITEM_REWARD_GATEWAY_CARD, ITEM_REROLL_PRIMARY_WEAPON, ITEM_REROLL_SECONDARY_WEAPON, UPGRADE_ITEM_SUPPLY, UPGRADE_DUNGEON_MAGNET -> {
+                    applyItemUpgrade(player, definition, card);
                     return;
                 }
                 case ADD_OR_UPGRADE_EFFECT -> {
@@ -452,16 +509,17 @@ public final class DungeonUpgradeManager {
         }
     }
 
-    private static void applyItemUpgrade(ServerPlayer player, LoadoutDefinition definition, UpgradeCardType type) {
+    private static void applyItemUpgrade(ServerPlayer player, LoadoutDefinition definition, UpgradeCard card) {
         RandomSource random = player.getRandom();
-        switch (type) {
+        switch (card.type()) {
             case ITEM_REWARD_FOOD -> giveBoundStack(player, new ItemStack(com.revilo.gatesofavarice.registry.ModItems.HEART_FRAGMENT.get(), 8 + random.nextInt(9)));
-            case ITEM_REWARD_RESTOCK, UPGRADE_ITEM_SUPPLY -> giveBoundStack(player, rollRestockReward(random));
+            case ITEM_REWARD_RESTOCK, UPGRADE_ITEM_SUPPLY -> giveBoundStack(player, rollRestockReward(random, definition, card.changeLabel()));
             case ITEM_REWARD_ABILITY -> {
                 giveBoundStack(player, new ItemStack(com.revilo.gatesofavarice.registry.ModItems.ARCANE_APPLE.get(), 1 + random.nextInt(3)));
                 giveBoundStack(player, DungeonRunManager.rollUpgradeMagnetReward(random, Math.max(1, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player))));
             }
             case ITEM_REWARD_GATEWAY_CARD -> giveBoundStack(player, DungeonRunManager.rollGatewayCard(random, Math.max(1, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player))));
+            case UPGRADE_DUNGEON_MAGNET -> upgradeDungeonMagnet(player, random);
             case ITEM_REROLL_PRIMARY_WEAPON -> rerollWeapon(player, definition, true, random);
             case ITEM_REROLL_SECONDARY_WEAPON -> rerollWeapon(player, definition, false, random);
             default -> {
@@ -469,11 +527,79 @@ public final class DungeonUpgradeManager {
         }
     }
 
+    private static void upgradeDungeonMagnet(ServerPlayer player, RandomSource random) {
+        ItemStack current = findFirstDungeonMagnet(player);
+        Item nextItem = nextMagnetTier(current);
+        if (nextItem == null) {
+            nextItem = resolveItem("gatewayexpansion:mana_steel_magnet");
+        }
+        if (nextItem == null) {
+            return;
+        }
+        ItemStack replacement = new ItemStack(nextItem);
+        DungeonGearRoller.rollAndBind(replacement, random, Math.max(1, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player)), 0L, player.registryAccess());
+        DungeonBoundItems.forceMarkDungeonBound(replacement);
+        if (!replaceInventoryStack(player, current, replacement)) {
+            giveBoundStack(player, replacement);
+        }
+        player.inventoryMenu.broadcastChanges();
+        player.containerMenu.broadcastChanges();
+    }
+
+    private static Item nextMagnetTier(ItemStack current) {
+        if (current.isEmpty() || !(current.getItem() instanceof MagnetItem)) {
+            return resolveItem("gatewayexpansion:mana_steel_magnet");
+        }
+        net.minecraft.resources.ResourceLocation id = BuiltInRegistries.ITEM.getKey(current.getItem());
+        String path = id == null ? "" : id.getPath();
+        String nextId = switch (path) {
+            case "mana_steel_magnet" -> "gatewayexpansion:elixrite_magnet";
+            case "elixrite_magnet" -> "gatewayexpansion:astrite_magnet";
+            case "astrite_magnet" -> "gatewayexpansion:lunarium_magnet";
+            case "lunarium_magnet" -> "gatewayexpansion:ignite_magnet";
+            case "ignite_magnet" -> "gatewayexpansion:iridium_magnet";
+            case "iridium_magnet" -> "gatewayexpansion:mythril_magnet";
+            case "mythril_magnet" -> "gatewayexpansion:arcanium_magnet";
+            case "arcanium_magnet" -> "gatewayexpansion:prismatic_steel_magnet";
+            default -> "gatewayexpansion:prismatic_steel_magnet";
+        };
+        Item next = resolveItem(nextId);
+        return next == null ? current.getItem() : next;
+    }
+
+    private static boolean replaceInventoryStack(ServerPlayer player, ItemStack current, ItemStack replacement) {
+        if (current.isEmpty()) {
+            return false;
+        }
+        for (int slot = 0; slot < player.getInventory().items.size(); slot++) {
+            if (player.getInventory().items.get(slot) == current) {
+                player.getInventory().items.set(slot, replacement);
+                return true;
+            }
+        }
+        for (int slot = 0; slot < player.getInventory().offhand.size(); slot++) {
+            if (player.getInventory().offhand.get(slot) == current) {
+                player.getInventory().offhand.set(slot, replacement);
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static Item defaultFoodItem(LoadoutDefinition definition) {
         return definition.supplies().stream().findFirst().map(spec -> spec.item()).orElse(Items.COOKED_BEEF);
     }
 
-    private static ItemStack rollRestockReward(RandomSource random) {
+    private static ItemStack rollRestockReward(RandomSource random, LoadoutDefinition definition, String bundleType) {
+        if ("Arrow Bundle".equals(bundleType)) {
+            return rollArrowBundle(random);
+        }
+        if ("Food Bundle".equals(bundleType)) {
+            return new ItemStack(defaultFoodItem(definition), 16 + random.nextInt(17));
+        }
+        if ("Apple Bundle".equals(bundleType)) {
+            return rollAppleBundle(random);
+        }
         float roll = random.nextFloat();
         if (roll < 0.18F) {
             return new ItemStack(Items.ENCHANTED_GOLDEN_APPLE, 1);
@@ -484,6 +610,41 @@ public final class DungeonUpgradeManager {
         return new ItemStack(Items.GOLDEN_APPLE, 5 + random.nextInt(12));
     }
 
+    private static ItemStack rollAppleBundle(RandomSource random) {
+        float roll = random.nextFloat();
+        if (roll < 0.08F) {
+            return new ItemStack(com.revilo.gatesofavarice.registry.ModItems.ENCHANTED_ARCANE_APPLE.get(), 1);
+        }
+        if (roll < 0.18F) {
+            return new ItemStack(Items.ENCHANTED_GOLDEN_APPLE, 1);
+        }
+        if (roll < 0.52F) {
+            return new ItemStack(com.revilo.gatesofavarice.registry.ModItems.ARCANE_APPLE.get(), 2 + random.nextInt(4));
+        }
+        return new ItemStack(Items.GOLDEN_APPLE, 5 + random.nextInt(12));
+    }
+
+    private static ItemStack rollArrowBundle(RandomSource random) {
+        String[] arrows = {
+                "arsenal:amethyst_arrow",
+                "arsenal:copper_arrow",
+                "arsenal:iron_arrow",
+                "arsenal:golden_arrow",
+                "arsenal:diamond_arrow",
+                "arsenal:netherite_arrow"
+        };
+        Item item = resolveItem(arrows[random.nextInt(arrows.length)]);
+        return new ItemStack(item == null ? Items.ARROW : item, 32);
+    }
+
+    private static Item resolveItem(String id) {
+        net.minecraft.resources.ResourceLocation key = net.minecraft.resources.ResourceLocation.tryParse(id);
+        if (key == null || !BuiltInRegistries.ITEM.containsKey(key)) {
+            return null;
+        }
+        return BuiltInRegistries.ITEM.get(key);
+    }
+
     private static void rerollWeapon(ServerPlayer player, LoadoutDefinition definition, boolean primary, RandomSource random) {
         int playerLevel = Math.max(1, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player));
         ItemStack current = representativeTargetStack(player, primary ? UpgradeCategory.PRIMARY_WEAPON : UpgradeCategory.SECONDARY_WEAPON);
@@ -492,6 +653,7 @@ public final class DungeonUpgradeManager {
                 : DungeonUpgradeWeaponRolls.rollSecondaryUpgradeWeapon(random, playerLevel, current);
         ItemStack replacement = new ItemStack(item);
         DungeonGearRoller.rollAndBind(replacement, random, playerLevel, 0L, player.registryAccess());
+        RunicLoadoutService.applyRuneSlotCapacity(replacement, RunicLoadoutService.runeSlotsForPlayerLevel(playerLevel));
         if (primary) {
             DungeonBoundItems.markPrimaryWeapon(replacement);
         } else {
@@ -506,7 +668,9 @@ public final class DungeonUpgradeManager {
         if (stack.isEmpty()) {
             return;
         }
-        DungeonBoundItems.forceMarkDungeonBound(stack);
+        if (!(stack.getItem() instanceof GatewayCardItem)) {
+            DungeonBoundItems.forceMarkDungeonBound(stack);
+        }
         player.getInventory().add(stack);
         player.inventoryMenu.broadcastChanges();
         player.containerMenu.broadcastChanges();
@@ -530,7 +694,7 @@ public final class DungeonUpgradeManager {
             case PRIMARY_WEAPON -> List.of(findWeaponByRole(player, DungeonBoundItems.PRIMARY_WEAPON_ROLE));
             case SECONDARY_WEAPON -> List.of(findWeaponByRole(player, DungeonBoundItems.SECONDARY_WEAPON_ROLE));
             case ARMOR -> findArmorPieceTarget(player, armorPiece);
-            case ITEM -> List.of(findFirstSupplyItem(player));
+            case ITEM -> List.of(findFirstDungeonMagnet(player));
         };
     }
 
@@ -613,7 +777,10 @@ public final class DungeonUpgradeManager {
                 List<ItemStack> armorTargets = findArmorSetTargets(player);
                 yield armorTargets.isEmpty() ? new ItemStack(Items.IRON_CHESTPLATE) : armorTargets.getFirst().copy();
             }
-            case ITEM -> ItemStack.EMPTY;
+            case ITEM -> {
+                ItemStack magnet = findFirstDungeonMagnet(player);
+                yield magnet.isEmpty() ? ItemStack.EMPTY : magnet.copy();
+            }
         };
     }
 
@@ -647,6 +814,16 @@ public final class DungeonUpgradeManager {
         for (ItemStack stack : allInventoryStacks(player)) {
             if (stack.isEmpty()) continue;
             if (stack.is(Items.ARROW) || stack.is(Items.GOLDEN_APPLE) || stack.is(Items.COOKED_BEEF) || stack.is(com.revilo.gatesofavarice.registry.ModItems.ARCANE_APPLE.get())) {
+                return stack;
+            }
+        }
+        return ItemStack.EMPTY;
+    }
+
+    private static ItemStack findFirstDungeonMagnet(ServerPlayer player) {
+        for (ItemStack stack : allInventoryStacks(player)) {
+            if (stack.isEmpty()) continue;
+            if (stack.getItem() instanceof MagnetItem) {
                 return stack;
             }
         }

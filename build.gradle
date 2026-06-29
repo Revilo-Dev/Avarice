@@ -105,7 +105,6 @@ configurations {
 
 dependencies {
     implementation "net.neoforged:neoforge:${neo_version}"
-    compileOnly "dev.shadowsoffire:GatewaysToEternity:${minecraft_version}-${gateways_version}"
     compileOnly "mezz.jei:jei-${minecraft_version}-common-api:${jei_version}"
     compileOnly "mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}"
     compileOnly "top.theillusivec4.curios:curios-neoforge:${curios_version}:api"
@@ -138,7 +137,6 @@ tasks.withType(ProcessResources).configureEach {
             mod_version            : mod_version,
             mod_authors            : mod_authors,
             mod_description        : mod_description,
-            gateways_version       : gateways_version,
             placebo_version        : placebo_version,
             apothic_attributes_version: apothic_attributes_version,
             curios_version         : curios_version

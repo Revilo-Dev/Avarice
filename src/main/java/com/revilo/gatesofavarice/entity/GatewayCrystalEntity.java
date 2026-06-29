@@ -5,6 +5,7 @@ import com.revilo.gatesofavarice.registry.ModEntities;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -29,6 +30,8 @@ public class GatewayCrystalEntity extends Entity {
     public GatewayCrystalEntity(EntityType<? extends GatewayCrystalEntity> entityType, Level level) {
         super(entityType, level);
         this.noPhysics = true;
+        this.setCustomName(Component.translatable("entity.gatesofavarice.gateway_crystal"));
+        this.setCustomNameVisible(true);
     }
 
     public GatewayCrystalEntity(Level level) {

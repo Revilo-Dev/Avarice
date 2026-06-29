@@ -14,41 +14,21 @@ public interface RarityTintedItemName {
     default Component tintedName(ItemStack stack, Component baseName) {
         return switch (this.nameColor()) {
             case GOLD -> shimmeringLegendary(baseName.getString());
-            case DARK_PURPLE -> shimmeringEpic(baseName.getString());
+            case LIGHT_PURPLE -> pulsingEpic(baseName.getString());
             default -> baseName.copy().withStyle(this.nameColor());
         };
     }
 
-    private static Component shimmeringEpic(String text) {
+    private static Component pulsingEpic(String text) {
         if (text.isEmpty()) {
             return Component.empty();
         }
 
-        final int basePurple = 0x59236D;
-        final int edgePurple = 0x7A3E92;
-        final int softViolet = 0xA468BE;
-        final int softHighlight = 0xC59BDD;
-
-        int length = text.length();
-        // A narrower, slower sweep than legendary so epic remains subtle.
-        double sweep = ((System.currentTimeMillis() % 2600L) / 2600.0D) * (length + 10) - 5.0D;
-        MutableComponent result = Component.empty();
-        for (int i = 0; i < length; i++) {
-            double distance = Math.abs(i - sweep);
-            int color;
-            if (distance < 0.45D) {
-                color = softHighlight;
-            } else if (distance < 1.35D) {
-                color = lerpColor(softViolet, softHighlight, (float) (1.35D - distance));
-            } else if (distance < 2.2D) {
-                color = lerpColor(edgePurple, softViolet, (float) ((2.2D - distance) / 0.85D));
-            } else {
-                color = basePurple;
-            }
-            result = result.append(Component.literal(String.valueOf(text.charAt(i)))
-                    .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(color))));
-        }
-        return result;
+        final int lightPurple = 0xB96CFF;
+        final int lighterPurple = 0xE0B2FF;
+        float pulse = (float) ((Math.sin((System.currentTimeMillis() % 1800L) / 1800.0D * Math.PI * 2.0D) + 1.0D) * 0.5D);
+        int color = lerpColor(lightPurple, lighterPurple, pulse);
+        return Component.literal(text).withStyle(Style.EMPTY.withColor(TextColor.fromRgb(color)));
     }
 
     private static Component shimmeringLegendary(String text) {

@@ -25,7 +25,8 @@ public final class LoadoutModels {
             float resistanceMin,
             float resistanceMax,
             float knockbackResistanceMin,
-            float knockbackResistanceMax
+            float knockbackResistanceMax,
+            int runeSlots
     ) {}
 
     public record LoadoutDefinition(
@@ -61,6 +62,7 @@ public final class LoadoutModels {
         ADD_IMPLICIT,
         UPGRADE_ARMOR_BASE_STAT,
         UPGRADE_ITEM_SUPPLY,
+        UPGRADE_DUNGEON_MAGNET,
         ITEM_REWARD_FOOD,
         ITEM_REWARD_RESTOCK,
         ITEM_REWARD_ABILITY,
