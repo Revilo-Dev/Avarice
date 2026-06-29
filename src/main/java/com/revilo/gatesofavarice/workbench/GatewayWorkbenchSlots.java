@@ -13,15 +13,15 @@ public final class GatewayWorkbenchSlots {
     public static final int CARD_SLOT_COUNT = 16;
     public static final int CUSTOM_SLOT_COUNT = FIRST_CARD_SLOT + CARD_SLOT_COUNT;
 
-    public static final int CARD_GRID_X = 7;
-    public static final int CARD_GRID_Y = 6;
+    public static final int CARD_GRID_X = 8;
+    public static final int CARD_GRID_Y = 7;
     public static final int CARD_SLOT_SPACING = 18;
-    public static final int CRYSTAL_X = 115;
-    public static final int CRYSTAL_Y = 60;
+    public static final int CRYSTAL_X = 116;
+    public static final int CRYSTAL_Y = 61;
     public static final int DISPLAY_CENTER_X = 123;
     public static final int DISPLAY_CENTER_Y = 30;
-    public static final int OUTPUT_X = 151;
-    public static final int OUTPUT_Y = 60;
+    public static final int OUTPUT_X = 153;
+    public static final int OUTPUT_Y = 62;
 
     private GatewayWorkbenchSlots() {
     }

@@ -87,6 +87,8 @@ public final class ModItems {
             () -> new LootMaterialItem(LootRarity.UNCOMMON, new Item.Properties().stacksTo(64)));
     public static final DeferredHolder<Item, MagnetItem> MANA_STEEL_MAGNET = ITEMS.register("mana_steel_magnet",
             () -> new MagnetItem(LootRarity.COMMON.color(), 1, 5, 2, new Item.Properties().stacksTo(1)));
+    public static final DeferredHolder<Item, MagnetItem> DUNGEON_MAGNET = ITEMS.register("dungeon_magnet",
+            () -> new MagnetItem(LootRarity.UNCOMMON.color(), 1, 5, 2, new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON)));
     public static final DeferredHolder<Item, LootMaterialItem> SCRAP_METAL = ITEMS.register("scrap_metal",
             () -> new LootMaterialItem(LootRarity.COMMON, new Item.Properties().stacksTo(64)));
     public static final DeferredHolder<Item, LootMaterialItem> RUSTY_COIN = ITEMS.register("rusty_coin",

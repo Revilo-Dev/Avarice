@@ -109,6 +109,9 @@ public class DungeonCompleteScreen extends Screen {
     }
 
     private void renderRewards(GuiGraphics guiGraphics) {
+        if (!this.payload.survived()) {
+            return;
+        }
         List<ItemStack> rewards = this.payload.rewards();
         int startX = this.leftPos + 120;
         int startY = this.topPos + 24;
@@ -149,6 +152,9 @@ public class DungeonCompleteScreen extends Screen {
     }
 
     private void renderRewardTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        if (!this.payload.survived()) {
+            return;
+        }
         int index = hoveredRewardIndex(mouseX, mouseY);
         if (index >= 0 && index < this.payload.rewards().size()) {
             guiGraphics.renderTooltip(this.font, this.payload.rewards().get(index), mouseX, mouseY);
@@ -157,6 +163,9 @@ public class DungeonCompleteScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (!this.payload.survived()) {
+            return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+        }
         int maxScroll = Math.max(0, Mth.ceil((this.payload.rewards().size() - REWARD_VISIBLE) / (float) REWARD_COLS));
         if (maxScroll <= 0 || !isInRewardArea(mouseX, mouseY)) {
             return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
@@ -213,6 +222,9 @@ public class DungeonCompleteScreen extends Screen {
         this.statLines.add(StatLine.time("Time Spent", this.payload.timeSpentTicks()));
         this.statLines.add(StatLine.number("Level Points earnt", this.payload.levelPointsEarned(), ""));
         this.statLines.add(StatLine.number("Coins earnt", this.payload.coinsEarned(), ""));
+        if (this.payload.goldCoinsEarned() > 0) {
+            this.statLines.add(StatLine.number("Gold Coins earnt", this.payload.goldCoinsEarned(), ""));
+        }
         this.statLines.add(StatLine.number("Mobs Killed", this.payload.mobsKilled(), ""));
         this.statLines.add(StatLine.number("Damage Delt", this.payload.damageDealt(), ""));
         this.statLines.add(StatLine.number("Damage Receieved", this.payload.damageReceived(), ""));

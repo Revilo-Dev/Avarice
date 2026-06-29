@@ -10,8 +10,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.Style;
-import net.minecraft.network.chat.TextColor;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ItemStack;
@@ -101,25 +99,15 @@ public final class CrystalForgeData {
     public static List<Component> buildCrystalTooltip(ItemStack stack) {
         List<Component> lines = new ArrayList<>();
         CompoundTag rootTag = getRootTag(stack);
-        if (rootTag.contains(THEME_KEY) && rootTag.contains(ATTUNED_KEY) && rootTag.getBoolean(ATTUNED_KEY)) {
-            CrystalTheme theme = CrystalTheme.valueOf(rootTag.getString(THEME_KEY));
-            lines.add(Component.translatable("tooltip.gatesofavarice.crystal.theme", themedLabel(theme)));
-            if (isAltHeld()) {
-                lines.addAll(themeSummary(theme));
-            }
-        } else {
-            lines.add(Component.translatable("tooltip.gatesofavarice.crystal.random_theme")
-                    .withStyle(Style.EMPTY.withColor(TextColor.fromRgb(0xA45CFF))));
-        }
         if (rootTag.contains(LEVEL_KEY)) {
             lines.add(Component.translatable("tooltip.gatesofavarice.crystal.level", levelBand(rootTag.getInt(LEVEL_KEY)))
                     .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD));
         }
         List<GatewayCardData.CardModifier> cards = readCards(stack);
         int slots = maxCardsForCrystal(stack);
-        lines.add(Component.literal("Deck: " + cards.size() + "/" + slots + " cards").withStyle(ChatFormatting.AQUA));
+        lines.add(Component.literal("Deck").withStyle(ChatFormatting.LIGHT_PURPLE, ChatFormatting.BOLD)
+                .append(Component.literal(": " + cards.size() + "/" + slots + " cards").withStyle(ChatFormatting.LIGHT_PURPLE)));
         if (!cards.isEmpty()) {
-            lines.add(Component.literal("Card modifiers next run:").withStyle(ChatFormatting.LIGHT_PURPLE));
             for (GatewayCardData.CardModifier card : cards) {
                 lines.add(Component.literal("- " + card.summary()).withStyle(card.type().color()));
             }
@@ -151,6 +139,39 @@ public final class CrystalForgeData {
             tag.put(ROOT_KEY, root);
         });
         return true;
+    }
+
+    public static void clearCards(ItemStack crystal) {
+        if (crystal.isEmpty()) {
+            return;
+        }
+        CustomData.update(DataComponents.CUSTOM_DATA, crystal, tag -> {
+            CompoundTag root = tag.getCompound(ROOT_KEY);
+            root.remove(CARD_DECK_KEY);
+            tag.put(ROOT_KEY, root);
+        });
+    }
+
+    public static int fillCards(ItemStack crystal, GatewayCardData.CardType type, int playerLevel) {
+        int slots = maxCardsForCrystal(crystal);
+        if (crystal.isEmpty() || type == null || slots <= 0) {
+            return 0;
+        }
+        int safeLevel = Math.max(1, playerLevel);
+        CustomData.update(DataComponents.CUSTOM_DATA, crystal, tag -> {
+            CompoundTag root = tag.getCompound(ROOT_KEY);
+            ListTag list = new ListTag();
+            for (int index = 0; index < slots; index++) {
+                CompoundTag entry = new CompoundTag();
+                entry.putString("type", type.name());
+                entry.putDouble("value", type.maxValue());
+                entry.putInt("level", safeLevel);
+                list.add(entry);
+            }
+            root.put(CARD_DECK_KEY, list);
+            tag.put(ROOT_KEY, root);
+        });
+        return slots;
     }
 
     public static List<GatewayCardData.CardModifier> readCards(ItemStack crystal) {
@@ -201,65 +222,6 @@ public final class CrystalForgeData {
         return new CrystalProfile(theme, level, seed);
     }
 
-    private static Component themedLabel(CrystalTheme theme) {
-        return theme.displayName().copy().withStyle(Style.EMPTY.withColor(TextColor.fromRgb(themeColor(theme))))
-                .append(Component.literal(" "))
-                .append(Component.literal("[alt]").withStyle(ChatFormatting.GRAY));
-    }
-
-    private static List<Component> themeSummary(CrystalTheme theme) {
-        List<Component> lines = new ArrayList<>();
-        switch (theme) {
-            case UNDEAD -> {
-                lines.add(themeStat("More mobs"));
-                lines.add(themeStat("High item quantity"));
-                lines.add(themeStat("Low rarity"));
-            }
-            case RAIDER -> {
-                lines.add(themeStat("More assassins"));
-                lines.add(themeStat("High rarity"));
-                lines.add(themeStat("High coins"));
-                lines.add(themeStat("Low levels"));
-            }
-            case NETHER -> {
-                lines.add(themeStat("More tanks"));
-                lines.add(themeStat("High xp"));
-                lines.add(themeStat("High quantity"));
-                lines.add(themeStat("Low coins"));
-            }
-            case ARCANE -> {
-                lines.add(themeStat("More Chaos"));
-                lines.add(themeStat("High levels"));
-                lines.add(themeStat("High coins"));
-                lines.add(themeStat("High rarity"));
-                lines.add(themeStat("Low xp"));
-            }
-            case BEAST -> {
-            }
-            case WILD -> {
-                lines.add(themeStat("Unpredictable waves"));
-                lines.add(themeStat("Balanced archetypes"));
-                lines.add(themeStat("All enemy factions"));
-            }
-        }
-        return lines;
-    }
-
-    private static Component themeStat(String text) {
-        return Component.literal(text).withStyle(ChatFormatting.GRAY);
-    }
-
-    private static int themeColor(CrystalTheme theme) {
-        return switch (theme) {
-            case UNDEAD -> 0x2E6B2E;
-            case ARCANE -> 0x66CCFF;
-            case NETHER -> 0xD63B2A;
-            case RAIDER -> 0x2A4FA8;
-            case BEAST -> 0xFFFFFF;
-            case WILD -> 0x6C4CD8;
-        };
-    }
-
     private static String levelBand(int level) {
         if (level >= 90) {
             return "90+";
@@ -286,16 +248,6 @@ public final class CrystalForgeData {
 
     private static long stableThemeSeed(int levelBandStart, CrystalTheme theme) {
         return (long) levelBandStart * 31L + theme.ordinal() * 131L + 0x5F3759D5L;
-    }
-
-    private static boolean isAltHeld() {
-        try {
-            Class<?> screenClass = Class.forName("net.minecraft.client.gui.screens.Screen");
-            Object value = screenClass.getMethod("hasAltDown").invoke(null);
-            return value instanceof Boolean bool && bool;
-        } catch (ReflectiveOperationException ignored) {
-            return false;
-        }
     }
 
     private static CrystalTheme randomThemeForLevel(int level, long seed) {

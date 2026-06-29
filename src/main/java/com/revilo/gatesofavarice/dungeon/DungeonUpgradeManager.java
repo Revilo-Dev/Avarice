@@ -13,6 +13,8 @@ import com.revilo.gatesofavarice.dungeon.loadout.RunicLoadoutService;
 import com.revilo.gatesofavarice.dungeon.loadout.RunicUpgradeService;
 import com.revilo.gatesofavarice.item.GatewayCardItem;
 import com.revilo.gatesofavarice.item.MagnetItem;
+import com.revilo.gatesofavarice.integration.CuriosCompat;
+import com.revilo.gatesofavarice.integration.ModCompat;
 import com.revilo.gatesofavarice.network.OpenUpgradeCategoryPayload;
 import com.revilo.gatesofavarice.network.SyncUpgradeCardsPayload;
 import java.util.HashMap;
@@ -516,7 +518,6 @@ public final class DungeonUpgradeManager {
             case ITEM_REWARD_RESTOCK, UPGRADE_ITEM_SUPPLY -> giveBoundStack(player, rollRestockReward(random, definition, card.changeLabel()));
             case ITEM_REWARD_ABILITY -> {
                 giveBoundStack(player, new ItemStack(com.revilo.gatesofavarice.registry.ModItems.ARCANE_APPLE.get(), 1 + random.nextInt(3)));
-                giveBoundStack(player, DungeonRunManager.rollUpgradeMagnetReward(random, Math.max(1, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player))));
             }
             case ITEM_REWARD_GATEWAY_CARD -> giveBoundStack(player, DungeonRunManager.rollGatewayCard(random, Math.max(1, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player))));
             case UPGRADE_DUNGEON_MAGNET -> upgradeDungeonMagnet(player, random);
@@ -529,61 +530,26 @@ public final class DungeonUpgradeManager {
 
     private static void upgradeDungeonMagnet(ServerPlayer player, RandomSource random) {
         ItemStack current = findFirstDungeonMagnet(player);
-        Item nextItem = nextMagnetTier(current);
-        if (nextItem == null) {
-            nextItem = resolveItem("gatewayexpansion:mana_steel_magnet");
-        }
-        if (nextItem == null) {
-            return;
-        }
-        ItemStack replacement = new ItemStack(nextItem);
-        DungeonGearRoller.rollAndBind(replacement, random, Math.max(1, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player)), 0L, player.registryAccess());
-        DungeonBoundItems.forceMarkDungeonBound(replacement);
-        if (!replaceInventoryStack(player, current, replacement)) {
-            giveBoundStack(player, replacement);
+        if (current.isEmpty()) {
+            current = new ItemStack(com.revilo.gatesofavarice.registry.ModItems.DUNGEON_MAGNET.get());
+            DungeonGearRoller.rollAndBind(current, random, Math.max(1, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player)), 0L, player.registryAccess());
+            DungeonBoundItems.forceMarkDungeonBound(current);
+            MagnetItem.upgradeDungeonMagnet(current);
+            if (!equipBeltMagnet(player, current)) {
+                player.getInventory().add(current);
+            }
+        } else {
+            MagnetItem.upgradeDungeonMagnet(current);
         }
         player.inventoryMenu.broadcastChanges();
         player.containerMenu.broadcastChanges();
     }
 
-    private static Item nextMagnetTier(ItemStack current) {
-        if (current.isEmpty() || !(current.getItem() instanceof MagnetItem)) {
-            return resolveItem("gatewayexpansion:mana_steel_magnet");
-        }
-        net.minecraft.resources.ResourceLocation id = BuiltInRegistries.ITEM.getKey(current.getItem());
-        String path = id == null ? "" : id.getPath();
-        String nextId = switch (path) {
-            case "mana_steel_magnet" -> "gatewayexpansion:elixrite_magnet";
-            case "elixrite_magnet" -> "gatewayexpansion:astrite_magnet";
-            case "astrite_magnet" -> "gatewayexpansion:lunarium_magnet";
-            case "lunarium_magnet" -> "gatewayexpansion:ignite_magnet";
-            case "ignite_magnet" -> "gatewayexpansion:iridium_magnet";
-            case "iridium_magnet" -> "gatewayexpansion:mythril_magnet";
-            case "mythril_magnet" -> "gatewayexpansion:arcanium_magnet";
-            case "arcanium_magnet" -> "gatewayexpansion:prismatic_steel_magnet";
-            default -> "gatewayexpansion:prismatic_steel_magnet";
-        };
-        Item next = resolveItem(nextId);
-        return next == null ? current.getItem() : next;
-    }
-
-    private static boolean replaceInventoryStack(ServerPlayer player, ItemStack current, ItemStack replacement) {
-        if (current.isEmpty()) {
+    private static boolean equipBeltMagnet(ServerPlayer player, ItemStack stack) {
+        if (!stack.is(com.revilo.gatesofavarice.registry.ModItems.DUNGEON_MAGNET.get()) || !ModCompat.isAnyLoaded("curios")) {
             return false;
         }
-        for (int slot = 0; slot < player.getInventory().items.size(); slot++) {
-            if (player.getInventory().items.get(slot) == current) {
-                player.getInventory().items.set(slot, replacement);
-                return true;
-            }
-        }
-        for (int slot = 0; slot < player.getInventory().offhand.size(); slot++) {
-            if (player.getInventory().offhand.get(slot) == current) {
-                player.getInventory().offhand.set(slot, replacement);
-                return true;
-            }
-        }
-        return false;
+        return CuriosCompat.equipBeltMagnet(player, stack);
     }
 
     private static Item defaultFoodItem(LoadoutDefinition definition) {
@@ -821,9 +787,15 @@ public final class DungeonUpgradeManager {
     }
 
     private static ItemStack findFirstDungeonMagnet(ServerPlayer player) {
+        if (ModCompat.isAnyLoaded("curios")) {
+            ItemStack beltMagnet = CuriosCompat.findBeltMagnet(player);
+            if (!beltMagnet.isEmpty()) {
+                return beltMagnet;
+            }
+        }
         for (ItemStack stack : allInventoryStacks(player)) {
             if (stack.isEmpty()) continue;
-            if (stack.getItem() instanceof MagnetItem) {
+            if (stack.is(com.revilo.gatesofavarice.registry.ModItems.DUNGEON_MAGNET.get())) {
                 return stack;
             }
         }

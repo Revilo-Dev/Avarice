@@ -4,6 +4,8 @@ import com.revilo.gatesofavarice.item.MagnetItem;
 import com.revilo.gatesofavarice.item.RunicItemSupport;
 import com.revilo.gatesofavarice.registry.ModItems;
 import java.util.List;
+import java.util.Optional;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.IEventBus;
@@ -35,7 +37,33 @@ public final class CuriosCompat {
                 ModItems.IRIDIUM_MAGNET.get(),
                 ModItems.MYTHRIL_MAGNET.get(),
                 ModItems.ARCANIUM_MAGNET.get(),
-                ModItems.PRISMATIC_STEEL_MAGNET.get());
+                ModItems.PRISMATIC_STEEL_MAGNET.get(),
+                ModItems.DUNGEON_MAGNET.get());
+    }
+
+    public static boolean equipBeltMagnet(ServerPlayer player, ItemStack stack) {
+        return CuriosApi.getCuriosInventory(player).map(handler -> {
+            Optional<ItemStack> current = handler.findCurio("belt", 0).map(result -> result.stack());
+            if (current.isPresent() && !current.get().isEmpty() && !current.get().is(ModItems.DUNGEON_MAGNET.get())) {
+                return false;
+            }
+            handler.setEquippedCurio("belt", 0, stack);
+            return true;
+        }).orElse(false);
+    }
+
+    public static ItemStack findBeltMagnet(ServerPlayer player) {
+        return CuriosApi.getCuriosInventory(player)
+                .flatMap(handler -> handler.findCurio("belt", 0))
+                .map(result -> result.stack())
+                .filter(stack -> stack.getItem() instanceof MagnetItem)
+                .orElse(ItemStack.EMPTY);
+    }
+
+    public static void clearDungeonBeltMagnet(ServerPlayer player) {
+        CuriosApi.getCuriosInventory(player).ifPresent(handler -> handler.findCurio("belt", 0)
+                .filter(result -> result.stack().is(ModItems.DUNGEON_MAGNET.get()))
+                .ifPresent(result -> handler.setEquippedCurio("belt", 0, ItemStack.EMPTY)));
     }
 
     private static final class MagnetCurio implements ICurioItem {
@@ -46,7 +74,7 @@ public final class CuriosCompat {
                 return;
             }
             RunicItemSupport.ensureRunicData(stack, magnet.runeSlots());
-            MagnetHandler.pullNearbyItems(slotContext.entity(), magnet);
+            MagnetHandler.pullNearbyItems(slotContext.entity(), stack, magnet);
         }
 
         private boolean isBeltSlot(SlotContext slotContext) {

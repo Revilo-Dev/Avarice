@@ -15,7 +15,7 @@ import net.minecraft.world.item.ItemStack;
 
 public final class GatewayWorkbenchBlockEntityRenderer implements BlockEntityRenderer<GatewayWorkbenchBlockEntity> {
 
-    private static final float CRYSTAL_HEIGHT = 1.03F;
+    private static final float CRYSTAL_HEIGHT = 1.25F;
     private static final float CRYSTAL_SCALE = 0.9F;
 
     public GatewayWorkbenchBlockEntityRenderer(BlockEntityRendererProvider.Context context) {
@@ -39,8 +39,8 @@ public final class GatewayWorkbenchBlockEntityRenderer implements BlockEntityRen
     private void renderCrystal(GatewayWorkbenchBlockEntity blockEntity, ItemStack crystal, float time, PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
         Minecraft minecraft = Minecraft.getInstance();
         poseStack.pushPose();
-        poseStack.translate(0.5D, CRYSTAL_HEIGHT + (Mth.sin(time * 0.09F) * 0.01F), 0.5D);
-        poseStack.mulPose(Axis.YP.rotationDegrees((time * 1.8F) % 360.0F));
+        poseStack.translate(0.5D, CRYSTAL_HEIGHT + (Mth.sin(time * 0.09F) * 0.03F), 0.5D);
+        poseStack.mulPose(Axis.YP.rotationDegrees((time * 1.6F) % 360.0F));
         poseStack.scale(CRYSTAL_SCALE, CRYSTAL_SCALE, CRYSTAL_SCALE);
         minecraft.getItemRenderer().renderStatic(
                 crystal,

@@ -1020,7 +1020,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private static ResourceLocation resolveCardIcon(UpgradeCard card) {
         String iconName = switch (card.changeLabel()) {
             case "Restock", "Apple Bundle", "Arrow Bundle", "Food Bundle" -> "capacity";
-            case "Magnet", "Arcane Apples + Magnet" -> "movement_speed";
+            case "Magnet" -> "movement_speed";
             case "Food", "Heart Fragment", "Heart Fragments" -> "health";
             case "Primary" -> "attack_damage";
             case "Secondary" -> "undead_damage";

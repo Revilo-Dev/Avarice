@@ -14,7 +14,10 @@ import com.revilo.gatesofavarice.gateway.pool.EnemyPoolRegistry;
 import com.revilo.gatesofavarice.gateway.pool.EnemyPoolRole;
 import com.revilo.gatesofavarice.gateway.pool.EnemyPoolSet;
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
+import com.revilo.gatesofavarice.integration.CuriosCompat;
+import com.revilo.gatesofavarice.integration.ModCompat;
 import com.revilo.gatesofavarice.entity.MythicCoinOrbEntity;
+import com.revilo.gatesofavarice.item.MagnetItem;
 import com.revilo.gatesofavarice.item.MythicCoinStackData;
 import com.revilo.gatesofavarice.progression.ProgressionSystem;
 import com.revilo.gatesofavarice.item.data.CrystalTheme;
@@ -415,8 +418,344 @@ public final class DungeonRunManager {
         return true;
     }
 
+    public static void debugSendCompletionScreen(ServerPlayer player, boolean survived) {
+        ArrayList<ItemStack> rewards = new ArrayList<>();
+        if (survived) {
+            rewards.add(new ItemStack(ModItems.MANASTONES.get(), 16));
+            rewards.add(new ItemStack(ModItems.RUBY.get(), 2));
+            rewards.add(new ItemStack(ModItems.OPAL.get(), 1));
+            rewards.add(new ItemStack(ModItems.HARDENED_FLESH.get(), 20));
+            rewards.add(new ItemStack(ModItems.PRISMATIC_SHARD.get(), 2));
+            rewards.add(new ItemStack(ModItems.PRISMATIC_DIAMOND.get(), 1));
+        }
+        PacketDistributor.sendToPlayer(player, new DungeonCompletePayload(
+                survived,
+                survived ? 20 : 7,
+                Math.max(getBestWave(player), survived ? 20 : 7),
+                20L * 60L * (survived ? 18L : 6L),
+                survived ? 480 : 0,
+                survived ? 2400 : 340,
+                survived ? 2 : 0,
+                survived ? 186 : 64,
+                survived ? 1240 : 410,
+                survived ? 260 : 580,
+                survived ? 2880 : 0,
+                survived ? 24 : 8,
+                survived ? 38 : 12,
+                survived ? 64 : 28,
+                survived ? 42 : 18,
+                List.copyOf(rewards)));
+    }
+
+    public static boolean debugSetWave(ServerPlayer player, int wave) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        if (run == null) {
+            return false;
+        }
+        run.waveNumber = Math.max(0, wave);
+        syncHud(run, run.phase == RunPhase.IN_WAVE);
+        markStateDirty();
+        forceCriticalSave(player.server);
+        return true;
+    }
+
+    public static boolean debugClearWave(ServerPlayer player) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        ServerLevel dungeon = run == null ? null : getDungeonLevel(run);
+        if (run == null || dungeon == null) {
+            return false;
+        }
+        discardTrackedMobs(run, dungeon);
+        run.toSpawn = 0;
+        run.spawnCooldown = 0;
+        completeWave(run, dungeon);
+        return true;
+    }
+
+    public static boolean debugForceShopPhase(ServerPlayer player) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        ServerLevel dungeon = run == null ? null : getDungeonLevel(run);
+        if (run == null || dungeon == null) {
+            return false;
+        }
+        discardTrackedMobs(run, dungeon);
+        run.toSpawn = 0;
+        run.spawnCooldown = 0;
+        run.phase = RunPhase.SHOP;
+        ensureShopkeeper(run, dungeon);
+        syncHud(run, false);
+        markStateDirty();
+        forceCriticalSave(player.server);
+        return true;
+    }
+
+    public static boolean debugBailAtLevel(ServerPlayer player, int level) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        if (run == null) {
+            return false;
+        }
+        PlayerSnapshot snapshot = run.snapshots.get(player.getUUID());
+        if (snapshot == null) {
+            return false;
+        }
+        run.waveNumber = Math.max(0, level);
+        clearHudToPlayer(player);
+        int levelPoints = awardDungeonExitProgression(player, run);
+        List<ItemStack> rewards = collectCompletionRewards(player, run);
+        ItemStack lootbox = createLootboxFromRewards(player, run, rewards, levelPoints);
+        restoreSnapshot(player, snapshot);
+        if (!lootbox.isEmpty() && !player.getInventory().add(lootbox)) {
+            player.drop(lootbox, false);
+        }
+        DungeonInstanceManager.teleportToSavedLocation(player, snapshot.dimension, snapshot.returnPos, snapshot.yaw, snapshot.pitch);
+        closeNearbyEntryPortals(player.server, snapshot.dimension, snapshot.returnPos, run.ownerId);
+        int cashedOutCoins = cashoutRemainingCoinsOnDungeonExit(player);
+        sendCompletionScreen(player, run, rewards, levelPoints, cashedOutCoins, true);
+        PLAYER_TO_OWNER.remove(player.getUUID());
+        run.participants.remove(player.getUUID());
+        run.snapshots.remove(player.getUUID());
+        if (run.participants.isEmpty()) {
+            finishAndCleanup(run);
+        } else {
+            markStateDirty();
+            forceCriticalSave(player.server);
+        }
+        return true;
+    }
+
+    public static List<Component> debugDropRateLines(ServerPlayer player) {
+        RunState run = getRunForPlayer(player);
+        int avgLevel = run == null ? getEffectivePlayerLevel(player) : averageParticipantLevel(run);
+        int wave = run == null ? 1 : Math.max(1, run.waveNumber);
+        int difficulty = run == null ? 0 : run.totalDifficultySelected;
+        double rarityBonus = run == null ? 0.0D : Math.max(0.0D, run.rarityBonusModifier);
+        double waveFactor = Math.min(0.22D, wave * 0.010D);
+        double levelFactor = Math.min(0.06D, avgLevel / 1600.0D);
+        double difficultyFactor = Math.min(0.12D, difficulty * 0.007D);
+        double epicChance = avgLevel >= 45
+                ? Math.min(0.035D, 0.002D + waveFactor * 0.18D + levelFactor * 0.30D + difficultyFactor * 0.18D + rarityBonus * 0.10D)
+                : 0.0D;
+        double rareChance = Math.min(0.15D, 0.011D + waveFactor * 0.52D + levelFactor * 0.57D + difficultyFactor * 0.43D + rarityBonus * 0.33D);
+        double uncommonChance = Math.min(0.32D, 0.17D + waveFactor * 0.62D + levelFactor * 0.66D + difficultyFactor * 0.52D + rarityBonus * 0.42D);
+        double commonChance = Math.max(0.0D, 1.0D - epicChance - rareChance - uncommonChance);
+        ArrayList<Component> lines = new ArrayList<>();
+        lines.add(Component.literal("Dungeon drop rates per loot roll at wave " + wave + ", level " + avgLevel + ":").withStyle(ChatFormatting.GOLD));
+        addDropRateLines(lines, "Common", COMMON_DROP_POOL, commonChance);
+        addDropRateLines(lines, "Uncommon", UNCOMMON_DROP_POOL, uncommonChance);
+        addDropRateLines(lines, "Rare", RARE_DROP_POOL, rareChance);
+        addDropRateLines(lines, "Epic", EPIC_DROP_POOL, epicChance);
+        lines.add(Component.literal(formatDropRate(new ItemStack(ModItems.DUNGEON_MAGNET.get()).getHoverName().getString(), DUNGEON_MAGNET_DROP_CHANCE) + " per mob death").withStyle(ChatFormatting.AQUA));
+        return List.copyOf(lines);
+    }
+
+    public static int debugSpawnMobs(ServerPlayer player, String poolName, int count) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        ServerLevel dungeon = run == null ? null : getDungeonLevel(run);
+        if (run == null || dungeon == null) {
+            return -1;
+        }
+        WaveArchetype forced = parseWaveArchetype(poolName);
+        if (forced == null && !"random".equalsIgnoreCase(poolName)) {
+            return -2;
+        }
+        if (run.currentWavePools.isEmpty()) {
+            run.currentWavePools = buildWavePools(run);
+        }
+        int spawned = 0;
+        for (int i = 0; i < Math.max(0, count); i++) {
+            if (spawnOneMob(run, dungeon, forced)) {
+                spawned++;
+            }
+        }
+        run.waveTotalMobs = Math.max(run.waveTotalMobs, run.toSpawn + run.aliveMobs.size());
+        syncHud(run, run.phase == RunPhase.IN_WAVE);
+        markStateDirty();
+        forceCriticalSave(player.server);
+        return spawned;
+    }
+
+    public static List<Component> debugRollLootLines(ServerPlayer player, int wave, int rolls) {
+        RunState run = getRunForPlayer(player);
+        RunState sample = run == null ? new RunState(player.getUUID()) : run;
+        sample.server = player.server;
+        int previousWave = sample.waveNumber;
+        sample.waveNumber = Math.max(1, wave);
+        int avgLevel = run == null ? getEffectivePlayerLevel(player) : averageParticipantLevel(run);
+        Map<String, Integer> counts = new java.util.TreeMap<>();
+        int safeRolls = Math.max(0, rolls);
+        for (int i = 0; i < safeRolls; i++) {
+            Item item = pickScaledDrop(sample, avgLevel, player.getRandom());
+            String name = new ItemStack(item).getHoverName().getString();
+            counts.merge(name, 1, Integer::sum);
+        }
+        sample.waveNumber = previousWave;
+        ArrayList<Component> lines = new ArrayList<>();
+        lines.add(Component.literal("Simulated " + safeRolls + " loot rolls at wave " + Math.max(1, wave) + ":").withStyle(ChatFormatting.GOLD));
+        counts.forEach((name, count) -> lines.add(Component.literal(" - " + name + ": " + count).withStyle(ChatFormatting.WHITE)));
+        return List.copyOf(lines);
+    }
+
+    public static boolean debugOpenLoadout(ServerPlayer player) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        if (run == null) {
+            return false;
+        }
+        run.phase = RunPhase.SELECTING_LOOT;
+        rollLoadoutOptions(run, player.getRandom());
+        openWaveMenu(player, run);
+        markStateDirty();
+        forceCriticalSave(player.server);
+        return true;
+    }
+
+    public static List<Component> debugModifierLines(ServerPlayer player) {
+        RunState run = getRunForPlayer(player);
+        if (run == null) {
+            return List.of(Component.literal("No active dungeon run.").withStyle(ChatFormatting.RED));
+        }
+        ArrayList<Component> lines = new ArrayList<>();
+        lines.add(Component.literal("Active dungeon modifiers:").withStyle(ChatFormatting.GOLD));
+        List<String> modifiers = modifiedStatSummary(run);
+        if (modifiers.isEmpty()) {
+            lines.add(Component.literal(" - none").withStyle(ChatFormatting.GRAY));
+        } else {
+            modifiers.forEach(line -> lines.add(Component.literal(" - " + line).withStyle(ChatFormatting.WHITE)));
+        }
+        return List.copyOf(lines);
+    }
+
+    public static int debugSetSpawnRemaining(ServerPlayer player, int count) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        if (run == null) {
+            return -1;
+        }
+        run.toSpawn = Math.max(0, count);
+        run.waveTotalMobs = Math.max(run.waveTotalMobs, run.toSpawn + run.aliveMobs.size());
+        syncHud(run, run.phase == RunPhase.IN_WAVE);
+        markStateDirty();
+        forceCriticalSave(player.server);
+        return run.toSpawn;
+    }
+
+    public static List<Component> debugRewardPreviewLines(ServerPlayer player, int wave) {
+        int safeWave = Math.max(0, wave);
+        List<ItemStack> rewards = rollCompletionBonusRewards(player.getRandom(), safeWave);
+        Map<String, Integer> counts = new java.util.TreeMap<>();
+        for (ItemStack stack : rewards) {
+            if (!stack.isEmpty()) {
+                counts.merge(stack.getHoverName().getString(), stack.getCount(), Integer::sum);
+            }
+        }
+        ArrayList<Component> lines = new ArrayList<>();
+        lines.add(Component.literal("Completion reward preview for wave " + safeWave + ":").withStyle(ChatFormatting.GOLD));
+        if (counts.isEmpty()) {
+            lines.add(Component.literal(" - none").withStyle(ChatFormatting.GRAY));
+        } else {
+            counts.forEach((name, count) -> lines.add(Component.literal(" - " + name + " x" + count).withStyle(ChatFormatting.WHITE)));
+        }
+        return List.copyOf(lines);
+    }
+
+    public static boolean debugRestockShop(ServerPlayer player) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        ServerLevel dungeon = run == null ? null : getDungeonLevel(run);
+        if (run == null || dungeon == null) {
+            return false;
+        }
+        discardRunShopkeeper(run);
+        ensureShopkeeper(run, dungeon);
+        markStateDirty();
+        forceCriticalSave(player.server);
+        return run.shopkeeperId >= 0;
+    }
+
+    public static boolean debugTeleportDungeon(ServerPlayer player) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        UUID ownerId = run == null ? player.getUUID() : run.ownerId;
+        return DungeonInstanceManager.teleportToDungeonInstance(player, ownerId);
+    }
+
+    public static int debugCleanupDungeonItems(ServerPlayer player) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        ServerLevel dungeon = run == null ? player.server.getLevel(ModDimensions.DUNGEON_LEVEL) : getDungeonLevel(run);
+        if (dungeon == null) {
+            return -1;
+        }
+        BlockPos center = run == null && player.level().dimension() == ModDimensions.DUNGEON_LEVEL
+                ? player.blockPosition()
+                : DungeonInstanceManager.instanceCenter(run == null ? player.getUUID() : run.ownerId);
+        AABB bounds = new AABB(center).inflate(96.0D, 48.0D, 96.0D);
+        List<ItemEntity> items = dungeon.getEntitiesOfClass(ItemEntity.class, bounds, ItemEntity::isAlive);
+        for (ItemEntity item : items) {
+            item.discard();
+        }
+        return items.size();
+    }
+
+    public static int debugUpgradeMagnet(ServerPlayer player, int count) {
+        ItemStack magnet = findDebugDungeonMagnet(player);
+        int applied = 0;
+        if (magnet.isEmpty()) {
+            magnet = new ItemStack(ModItems.DUNGEON_MAGNET.get());
+            DungeonGearRoller.rollAndBind(magnet, player.getRandom(), Math.max(1, getEffectivePlayerLevel(player)), 0L, player.registryAccess());
+            DungeonBoundItems.forceMarkDungeonBound(magnet);
+            for (int i = 0; i < Math.max(0, count); i++) {
+                MagnetItem.upgradeDungeonMagnet(magnet);
+                applied++;
+            }
+            if (ModCompat.isAnyLoaded("curios") && CuriosCompat.equipBeltMagnet(player, magnet)) {
+                magnet = CuriosCompat.findBeltMagnet(player);
+            } else if (!player.getInventory().add(magnet)) {
+                player.drop(magnet, false);
+            }
+        } else {
+            for (int i = 0; i < Math.max(0, count); i++) {
+                MagnetItem.upgradeDungeonMagnet(magnet);
+                applied++;
+            }
+        }
+        player.inventoryMenu.broadcastChanges();
+        player.containerMenu.broadcastChanges();
+        return applied;
+    }
+
+    private static ItemStack findDebugDungeonMagnet(ServerPlayer player) {
+        if (ModCompat.isAnyLoaded("curios")) {
+            ItemStack beltMagnet = CuriosCompat.findBeltMagnet(player);
+            if (!beltMagnet.isEmpty()) {
+                return beltMagnet;
+            }
+        }
+        for (ItemStack stack : player.getInventory().items) {
+            if (!stack.isEmpty() && stack.getItem() instanceof MagnetItem) {
+                return stack;
+            }
+        }
+        for (ItemStack stack : player.getInventory().offhand) {
+            if (!stack.isEmpty() && stack.getItem() instanceof MagnetItem) {
+                return stack;
+            }
+        }
+        for (ItemStack stack : player.getInventory().armor) {
+            if (!stack.isEmpty() && stack.getItem() instanceof MagnetItem) {
+                return stack;
+            }
+        }
+        return ItemStack.EMPTY;
+    }
+
     public static ItemStack rollUpgradeMagnetReward(RandomSource random, int playerLevel) {
-        return pickLeveledMagnet(random, playerLevel);
+        return new ItemStack(ModItems.DUNGEON_MAGNET.get());
     }
 
     private static int maxUpgradeRerollsForLevel(int playerLevel) {
@@ -1008,8 +1347,15 @@ public final class DungeonRunManager {
     }
 
     private static boolean spawnOneMob(RunState run, ServerLevel level) {
-        WaveArchetype archetype = pickWeightedArchetype(run, level.random);
+        return spawnOneMob(run, level, null);
+    }
+
+    private static boolean spawnOneMob(RunState run, ServerLevel level, WaveArchetype forcedArchetype) {
+        WaveArchetype archetype = forcedArchetype == null ? pickWeightedArchetype(run, level.random) : forcedArchetype;
         EnemyPoolSet pools = run.currentWavePools.get(archetype);
+        if (pools == null) {
+            return false;
+        }
         EntityType<?> type = pickEntityType(level.random, pools, archetype);
         if (type == null) return false;
         Entity entity = type.create(level);
@@ -1031,6 +1377,14 @@ public final class DungeonRunManager {
             return true;
         }
         return false;
+    }
+
+    private static WaveArchetype parseWaveArchetype(String poolName) {
+        try {
+            return WaveArchetype.valueOf(poolName.toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ignored) {
+            return null;
+        }
     }
 
     private static void rollTarotOptions(RunState run, RandomSource random) {
@@ -1175,7 +1529,9 @@ public final class DungeonRunManager {
         player.setItemSlot(EquipmentSlot.FEET, feet);
         addRoleAware(player, primary);
         addRoleAware(player, secondary);
-        player.getInventory().add(utility);
+        if (!equipUtility(player, utility)) {
+            player.getInventory().add(utility);
+        }
         for (ItemStack food : loadout.food()) {
             ItemStack foodCopy = food.copy();
             DungeonBoundItems.forceMarkDungeonBound(foodCopy);
@@ -1199,6 +1555,13 @@ public final class DungeonRunManager {
         if (!DungeonBoundItems.replaceRoleWeapon(player, stack) && !player.getInventory().add(stack)) {
             player.drop(stack, false);
         }
+    }
+
+    private static boolean equipUtility(ServerPlayer player, ItemStack stack) {
+        if (!stack.is(ModItems.DUNGEON_MAGNET.get()) || !ModCompat.isAnyLoaded("curios")) {
+            return false;
+        }
+        return CuriosCompat.equipBeltMagnet(player, stack);
     }
 
     private static void rollArmorPiece(ServerPlayer player, ItemStack stack, LoadoutModels.LoadoutDefinition definition, EquipmentSlot slot, RandomSource random) {
@@ -1337,15 +1700,7 @@ public final class DungeonRunManager {
         addWeighted(pool, "arsenal:arcanium_machete", 10);
         addWeighted(pool, "arsenal:prismatic_steel_machete", 11);
 
-        addWeighted(pool, "gatewayexpansion:mana_steel_magnet", 2);
-        addWeighted(pool, "gatewayexpansion:elixrite_magnet", 2);
-        addWeighted(pool, "gatewayexpansion:astrite_magnet", 2);
-        addWeighted(pool, "gatewayexpansion:lunarium_magnet", 2);
-        addWeighted(pool, "gatewayexpansion:ignite_magnet", 2);
-        addWeighted(pool, "gatewayexpansion:iridium_magnet", 2);
-        addWeighted(pool, "gatewayexpansion:mythril_magnet", 2);
-        addWeighted(pool, "gatewayexpansion:arcanium_magnet", 2);
-        addWeighted(pool, "gatewayexpansion:prismatic_steel_magnet", 3);
+        addWeighted(pool, "gatesofavarice:dungeon_magnet", 3);
         return List.copyOf(pool);
     }
 
@@ -1486,44 +1841,11 @@ public final class DungeonRunManager {
     }
 
     private static ItemStack pickLeveledMagnet(RandomSource random, int playerLevel) {
-        int level = Math.max(1, playerLevel);
-        Item item;
-        if (level < 15) {
-            item = resolveItem("gatewayexpansion:mana_steel_magnet");
-        } else if (level < 30) {
-            item = random.nextFloat() < 0.8F ? resolveItem("gatewayexpansion:mana_steel_magnet") : resolveItem("gatewayexpansion:elixrite_magnet");
-        } else if (level < 45) {
-            item = random.nextBoolean() ? resolveItem("gatewayexpansion:elixrite_magnet") : resolveItem("gatewayexpansion:astrite_magnet");
-        } else if (level < 60) {
-            item = random.nextBoolean() ? resolveItem("gatewayexpansion:lunarium_magnet") : resolveItem("gatewayexpansion:ignite_magnet");
-        } else if (level < 75) {
-            item = random.nextBoolean() ? resolveItem("gatewayexpansion:iridium_magnet") : resolveItem("gatewayexpansion:mythril_magnet");
-        } else if (level < 90) {
-            item = resolveItem("gatewayexpansion:arcanium_magnet");
-        } else {
-            item = resolveItem("gatewayexpansion:prismatic_steel_magnet");
-        }
-        if (item == null) {
-            item = resolveItem("gatewayexpansion:mana_steel_magnet");
-        }
-        return item == null ? ItemStack.EMPTY : new ItemStack(item);
+        return new ItemStack(ModItems.DUNGEON_MAGNET.get());
     }
 
     private static ItemStack pickLoadoutMagnet(LoadoutModels.LoadoutDefinition definition, RandomSource random, int playerLevel) {
-        String magnetId = switch (definition.id()) {
-            case "assassin", "samurai" -> "gatewayexpansion:elixrite_magnet";
-            case "berserker", "gladiator", "ranger" -> "gatewayexpansion:astrite_magnet";
-            case "vanguard", "reaper" -> "gatewayexpansion:lunarium_magnet";
-            case "marksman", "warlord" -> "gatewayexpansion:ignite_magnet";
-            case "spellblade" -> "gatewayexpansion:iridium_magnet";
-            case "nomad" -> "gatewayexpansion:mana_steel_magnet";
-            default -> null;
-        };
-        Item item = magnetId == null ? null : resolveItem(magnetId);
-        if (item == null) {
-            return pickLeveledMagnet(random, playerLevel);
-        }
-        return new ItemStack(item);
+        return new ItemStack(ModItems.DUNGEON_MAGNET.get());
     }
 
     private static Item resolveItem(String id) {
@@ -1580,6 +1902,31 @@ public final class DungeonRunManager {
     private static RunState getRunForPlayer(Player player) {
         UUID ownerId = PLAYER_TO_OWNER.get(player.getUUID());
         return ownerId == null ? null : RUNS_BY_OWNER.get(ownerId);
+    }
+
+    private static void discardTrackedMobs(RunState run, ServerLevel level) {
+        for (UUID mobId : List.copyOf(run.aliveMobs)) {
+            Entity entity = level.getEntity(mobId);
+            if (entity != null) {
+                entity.discard();
+            }
+        }
+        run.aliveMobs.clear();
+    }
+
+    private static void addDropRateLines(List<Component> lines, String tier, List<Item> pool, double tierChance) {
+        if (pool.isEmpty()) {
+            return;
+        }
+        double itemChance = tierChance / pool.size();
+        lines.add(Component.literal(tier + " pool:").withStyle(ChatFormatting.GRAY));
+        for (Item item : pool) {
+            lines.add(Component.literal(" - " + formatDropRate(new ItemStack(item).getHoverName().getString(), itemChance)).withStyle(ChatFormatting.WHITE));
+        }
+    }
+
+    private static String formatDropRate(String name, double chance) {
+        return String.format(java.util.Locale.ROOT, "%s: %.3f%%", name, Math.max(0.0D, chance) * 100.0D);
     }
 
     private static RunState findRunByTrackedMob(UUID mobId) {
@@ -2011,9 +2358,16 @@ public final class DungeonRunManager {
     }
 
     private static void clearForDungeon(ServerPlayer player) {
+        clearDungeonBeltMagnet(player);
         player.getInventory().clearContent();
         player.inventoryMenu.broadcastChanges();
         player.containerMenu.broadcastChanges();
+    }
+
+    private static void clearDungeonBeltMagnet(ServerPlayer player) {
+        if (ModCompat.isAnyLoaded("curios")) {
+            CuriosCompat.clearDungeonBeltMagnet(player);
+        }
     }
 
     private static List<ItemStack> collectDungeonRewards(ServerPlayer player) {
@@ -2148,6 +2502,7 @@ public final class DungeonRunManager {
     }
 
     private static void restorePlayerSnapshot(ServerPlayer player, PlayerSnapshot snapshot, boolean returnToSavedLocation) {
+        clearDungeonBeltMagnet(player);
         MythicCoinWallet.set(player, 0);
         restoreSnapshot(player, snapshot);
         syncHudToPlayer(player, false, 0, 0, 1);
@@ -2465,9 +2820,6 @@ public final class DungeonRunManager {
         int coins = MythicCoinWallet.get(player);
         int goldCoins = coins / 1000;
         GoldCoinWallet.add(player, goldCoins);
-        if (goldCoins > 0) {
-            player.sendSystemMessage(Component.translatable("message.gatesofavarice.gold_coins_earned", coins, goldCoins));
-        }
         MythicCoinWallet.set(player, 0);
         return coins;
     }
@@ -2515,6 +2867,7 @@ public final class DungeonRunManager {
                 elapsedTicks,
                 levelPoints,
                 cashedOutCoins,
+                survived ? cashedOutCoins / 1000 : 0,
                 run.mobsKilled,
                 Math.round(run.damageDealt),
                 Math.round(run.damageReceived),

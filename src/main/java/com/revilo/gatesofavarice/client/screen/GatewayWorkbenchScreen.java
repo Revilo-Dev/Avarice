@@ -1,6 +1,8 @@
 package com.revilo.gatesofavarice.client.screen;
 
 import com.revilo.gatesofavarice.GatewayExpansion;
+import com.revilo.gatesofavarice.item.data.CrystalForgeData;
+import com.revilo.gatesofavarice.item.data.GatewayCardData;
 import com.revilo.gatesofavarice.menu.GatewayWorkbenchMenu;
 import com.revilo.gatesofavarice.workbench.GatewayWorkbenchSlots;
 import java.util.ArrayList;
@@ -13,6 +15,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.Util;
+import net.minecraft.ChatFormatting;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
@@ -121,7 +124,22 @@ public class GatewayWorkbenchScreen extends AbstractContainerScreen<GatewayWorkb
 
     private void renderCrystalTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         ItemStack crystal = this.menu.getCrystalStack();
-        List<Component> tooltip = new ArrayList<>(Screen.getTooltipFromItem(this.minecraft, crystal));
+        List<Component> tooltip = new ArrayList<>();
+        tooltip.add(Component.literal("Click to forge crystal").withStyle(ChatFormatting.GOLD));
+        List<GatewayCardData.CardModifier> cards = CrystalForgeData.readCards(crystal);
+        if (cards.isEmpty()) {
+            tooltip.add(Component.literal("No card attributes added").withStyle(ChatFormatting.GRAY));
+        } else {
+            tooltip.add(Component.literal("Card attributes:").withStyle(ChatFormatting.LIGHT_PURPLE));
+            int visibleCards = Screen.hasAltDown() ? cards.size() : Math.min(3, cards.size());
+            for (int index = 0; index < visibleCards; index++) {
+                GatewayCardData.CardModifier card = cards.get(index);
+                tooltip.add(Component.literal("- " + card.summary()).withStyle(card.type().color()));
+            }
+            if (cards.size() > visibleCards) {
+                tooltip.add(Component.literal("[alt] read more").withStyle(ChatFormatting.DARK_GRAY));
+            }
+        }
         guiGraphics.renderTooltip(this.font, tooltip, crystal.getTooltipImage(), crystal, mouseX, mouseY);
     }
 

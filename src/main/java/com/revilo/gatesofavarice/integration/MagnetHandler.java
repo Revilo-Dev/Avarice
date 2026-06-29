@@ -26,45 +26,49 @@ public final class MagnetHandler {
             return;
         }
 
-        MagnetItem magnet = strongestMagnet(player);
-        if (magnet == null) {
+        ItemStack magnetStack = strongestMagnet(player);
+        if (magnetStack.isEmpty() || !(magnetStack.getItem() instanceof MagnetItem magnet)) {
             return;
         }
 
-        pullNearbyItems(player, magnet);
+        pullNearbyItems(player, magnetStack, magnet);
     }
 
     public static void pullNearbyItems(LivingEntity entity, MagnetItem magnet) {
+        pullNearbyItems(entity, new ItemStack(magnet), magnet);
+    }
+
+    public static void pullNearbyItems(LivingEntity entity, ItemStack stack, MagnetItem magnet) {
         if (entity.level().isClientSide || !isMagnetEnabled(entity)) {
             return;
         }
 
-        double range = magnet.attractionRange();
+        double range = magnet.attractionRange(stack);
         AABB area = entity.getBoundingBox().inflate(range);
         for (ItemEntity itemEntity : entity.level().getEntitiesOfClass(ItemEntity.class, area, ItemEntity::isAlive)) {
-            pullItem(entity, itemEntity, magnet.attractionForce(), range);
+            pullItem(entity, itemEntity, magnet.attractionForce(stack), range);
         }
     }
 
-    private static MagnetItem strongestMagnet(ServerPlayer player) {
-        MagnetItem best = null;
+    private static ItemStack strongestMagnet(ServerPlayer player) {
+        ItemStack best = ItemStack.EMPTY;
         best = selectBetter(best, player.getMainHandItem());
         best = selectBetter(best, player.getOffhandItem());
         return best;
     }
 
-    private static MagnetItem selectBetter(MagnetItem current, ItemStack stack) {
+    private static ItemStack selectBetter(ItemStack current, ItemStack stack) {
         if (!(stack.getItem() instanceof MagnetItem magnet)) {
             return current;
         }
-        if (current == null) {
-            return magnet;
+        if (current.isEmpty() || !(current.getItem() instanceof MagnetItem currentMagnet)) {
+            return stack;
         }
-        if (magnet.bonusRange() > current.bonusRange()) {
-            return magnet;
+        if (magnet.bonusRange(stack) > currentMagnet.bonusRange(current)) {
+            return stack;
         }
-        if (magnet.bonusRange() == current.bonusRange() && magnet.pullSpeed() > current.pullSpeed()) {
-            return magnet;
+        if (magnet.bonusRange(stack) == currentMagnet.bonusRange(current) && magnet.pullSpeed(stack) > currentMagnet.pullSpeed(current)) {
+            return stack;
         }
         return current;
     }

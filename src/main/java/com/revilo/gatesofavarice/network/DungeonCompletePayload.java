@@ -16,6 +16,7 @@ public record DungeonCompletePayload(
         long timeSpentTicks,
         int levelPointsEarned,
         int coinsEarned,
+        int goldCoinsEarned,
         int mobsKilled,
         int damageDealt,
         int damageReceived,
@@ -40,6 +41,7 @@ public record DungeonCompletePayload(
         buffer.writeVarLong(payload.timeSpentTicks);
         buffer.writeVarInt(payload.levelPointsEarned);
         buffer.writeVarInt(payload.coinsEarned);
+        buffer.writeVarInt(payload.goldCoinsEarned);
         buffer.writeVarInt(payload.mobsKilled);
         buffer.writeVarInt(payload.damageDealt);
         buffer.writeVarInt(payload.damageReceived);
@@ -61,6 +63,7 @@ public record DungeonCompletePayload(
         long timeSpentTicks = buffer.readVarLong();
         int levelPointsEarned = buffer.readVarInt();
         int coinsEarned = buffer.readVarInt();
+        int goldCoinsEarned = buffer.readVarInt();
         int mobsKilled = buffer.readVarInt();
         int damageDealt = buffer.readVarInt();
         int damageReceived = buffer.readVarInt();
@@ -74,7 +77,7 @@ public record DungeonCompletePayload(
         for (int i = 0; i < rewardCount; i++) {
             rewards.add(readStack(buffer));
         }
-        return new DungeonCompletePayload(survived, wavesComplete, bestWave, timeSpentTicks, levelPointsEarned, coinsEarned, mobsKilled, damageDealt,
+        return new DungeonCompletePayload(survived, wavesComplete, bestWave, timeSpentTicks, levelPointsEarned, coinsEarned, goldCoinsEarned, mobsKilled, damageDealt,
                 damageReceived, experienceEarned, rarityLevel, quantityLevel, mobHealth, mobDamage, List.copyOf(rewards));
     }
 
