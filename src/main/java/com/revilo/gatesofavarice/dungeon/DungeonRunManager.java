@@ -113,7 +113,7 @@ public final class DungeonRunManager {
             ModItems.GRIMSTONE.get(), ModItems.MYSTIC_ESSENCE.get(), ModItems.SCRAP_METAL.get(), ModItems.MANA_GEMS.get(),
             ModItems.MANA_STEEL_SCRAP.get(), ModItems.MAGNETITE_SCRAP.get(), ModItems.ARCANE_ESSENCE.get(), ModItems.MANASTONES.get(),
             ModItems.ELIXRITE_SCRAP.get(), ModItems.ASTRITE_SCRAP.get(), ModItems.SOLAR_SHARD.get(), ModItems.DARK_ESSENCE.get(),
-            ModItems.RUSTY_COIN.get(), ModItems.HARDENED_FLESH.get(), ModItems.SHATTERED_BONES.get(), ModItems.HEART_FRAGMENT.get(),
+            ModItems.UPGRADE_BASE.get(), ModItems.RUSTY_COIN.get(), ModItems.HARDENED_FLESH.get(), ModItems.SHATTERED_BONES.get(), ModItems.HEART_FRAGMENT.get(),
             ModItems.PLASMA.get(), ModItems.PETRIFIED_SOUL_SHARD.get(), ModItems.RUBY.get(), ModItems.SAPHIRE.get(), ModItems.OPAL.get()
     );
     private static final List<Item> COMMON_DROP_POOL = List.of(
@@ -123,7 +123,7 @@ public final class DungeonRunManager {
     );
     private static final List<Item> UNCOMMON_DROP_POOL = List.of(
             ModItems.MANA_STEEL_SCRAP.get(), ModItems.ELIXRITE_SCRAP.get(), ModItems.ASTRITE_SCRAP.get(), ModItems.SOLAR_SHARD.get(),
-            ModItems.HEART_FRAGMENT.get(), ModItems.PLASMA.get()
+            ModItems.UPGRADE_BASE.get(), ModItems.HEART_FRAGMENT.get(), ModItems.PLASMA.get()
     );
     private static final List<Item> RARE_DROP_POOL = List.of(
             ModItems.DARK_ESSENCE.get(), ModItems.PETRIFIED_SOUL_SHARD.get(), ModItems.RUBY.get(), ModItems.SAPHIRE.get()

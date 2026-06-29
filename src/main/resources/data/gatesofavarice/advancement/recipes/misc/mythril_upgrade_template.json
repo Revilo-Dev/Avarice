@@ -1,34 +1,34 @@
-{
-  "parent": "minecraft:recipes/root",
-  "criteria": {
-    "has_mythril_ingot": {
-      "trigger": "minecraft:inventory_changed",
-      "conditions": {
-        "items": [
-          {
-            "items": [
-              "gatesofavarice:mythril_ingot"
-            ]
-          }
-        ]
-      }
-    },
-    "has_the_recipe": {
-      "trigger": "minecraft:recipe_unlocked",
-      "conditions": {
-        "recipe": "gatesofavarice:mythril_upgrade_template"
-      }
-    }
-  },
-  "requirements": [
-    [
-      "has_mythril_ingot",
-      "has_the_recipe"
-    ]
-  ],
-  "rewards": {
-    "recipes": [
-      "gatesofavarice:mythril_upgrade_template"
-    ]
-  }
+﻿{
+    "parent":  "minecraft:recipes/root",
+    "criteria":  {
+                     "has_mythril_ingot":  {
+                                               "trigger":  "minecraft:inventory_changed",
+                                               "conditions":  {
+                                                                  "items":  [
+                                                                                {
+                                                                                    "items":  [
+                                                                                                  "gatesofavarice:mythril_ingot"
+                                                                                              ]
+                                                                                }
+                                                                            ]
+                                                              }
+                                           },
+                     "has_the_recipe":  {
+                                            "trigger":  "minecraft:recipe_unlocked",
+                                            "conditions":  {
+                                                               "recipe":  "gatesofavarice:mythril_upgrade_template"
+                                                           }
+                                        }
+                 },
+    "requirements":  [
+                         [
+                             "has_mythril_ingot",
+                             "has_the_recipe"
+                         ]
+                     ],
+    "rewards":  {
+                    "recipes":  [
+                                    "gatesofavarice:mythril_upgrade_template"
+                                ]
+                }
 }

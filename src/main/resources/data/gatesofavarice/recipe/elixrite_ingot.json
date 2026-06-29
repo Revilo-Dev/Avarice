@@ -1,18 +1,21 @@
-{
-  "type": "minecraft:crafting_shaped",
-  "category": "misc",
-  "pattern": [
-    "EEE",
-    "EEE",
-    "EEE"
-  ],
-  "key": {
-    "E": {
-      "item": "gatesofavarice:elixrite_scrap"
-    }
-  },
-  "result": {
-    "id": "gatesofavarice:elixrite_ingot",
-    "count": 1
-  }
+﻿{
+    "type":  "minecraft:crafting_shaped",
+    "category":  "misc",
+    "pattern":  [
+                    "MSM",
+                    "S S",
+                    "MSM"
+                ],
+    "key":  {
+                "M":  {
+                          "item":  "gatesofavarice:elixrite_scrap"
+                      },
+                "S":  {
+                          "item":  "gatesofavarice:scrap_metal"
+                      }
+            },
+    "result":  {
+                   "id":  "gatesofavarice:elixrite_ingot",
+                   "count":  1
+               }
 }

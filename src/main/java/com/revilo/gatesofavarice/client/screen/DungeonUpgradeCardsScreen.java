@@ -12,12 +12,15 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
 import net.neoforged.neoforge.network.PacketDistributor;
+import net.revilodev.runic.stat.RuneStatType;
+import net.revilodev.runic.stat.RuneStats;
 
 public class DungeonUpgradeCardsScreen extends Screen {
     private static final ResourceLocation EFFECT_CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/effect-card.png");
@@ -267,26 +270,72 @@ public class DungeonUpgradeCardsScreen extends Screen {
     }
 
     private void renderPreviewTooltip(GuiGraphics gg, int mouseX, int mouseY) {
-        if (this.runeSlotsCapacity <= 0) {
-            gg.renderTooltip(this.font, this.previewStack, mouseX, mouseY);
-            return;
-        }
-        int available = Math.max(0, this.runeSlotsCapacity - this.runeSlotsUsed);
-        ChatFormatting color = available <= 0 ? ChatFormatting.RED : ChatFormatting.LIGHT_PURPLE;
-        net.minecraft.world.item.TooltipFlag.Default tooltipFlag = this.minecraft != null && this.minecraft.options.advancedItemTooltips
-                ? net.minecraft.world.item.TooltipFlag.Default.ADVANCED
-                : net.minecraft.world.item.TooltipFlag.Default.NORMAL;
-        Item.TooltipContext context = this.minecraft == null || this.minecraft.level == null
-                ? Item.TooltipContext.EMPTY
-                : Item.TooltipContext.of(this.minecraft.level);
-        List<Component> lines = new ArrayList<>(this.previewStack.getTooltipLines(
-                context,
-                this.minecraft == null ? null : this.minecraft.player,
-                net.neoforged.neoforge.client.ClientTooltipFlag.of(tooltipFlag)));
-        lines.add(Component.literal("Rune Slots: " + this.runeSlotsUsed + "/" + this.runeSlotsCapacity).withStyle(color));
+        List<Component> lines = buildModifiedStatsTooltip(this.previewStack, this.runeSlotsUsed, this.runeSlotsCapacity);
+        gg.renderComponentTooltip(this.font, lines, mouseX, liftedTooltipY(mouseY, lines.size()));
+    }
+
+    private static List<Component> buildModifiedStatsTooltip(ItemStack stack, int runeSlotsUsed, int runeSlotsCapacity) {
+        ArrayList<Component> lines = new ArrayList<>();
+        int available = Math.max(0, runeSlotsCapacity - runeSlotsUsed);
+        ChatFormatting color = available <= 0 && runeSlotsCapacity > 0 ? ChatFormatting.RED : ChatFormatting.LIGHT_PURPLE;
+        lines.add(Component.literal("Rune Slots: " + runeSlotsUsed + "/" + runeSlotsCapacity).withStyle(color));
         lines.add(Component.literal("Available Slots: " + available).withStyle(color));
-        lines.add(Component.literal("New rune stats and effects use a slot.").withStyle(ChatFormatting.GRAY));
-        gg.renderComponentTooltip(this.font, lines, mouseX, mouseY);
+        RuneStats stats = RuneStats.get(stack);
+        if (!stats.view().isEmpty()) {
+            lines.add(Component.literal("Modified Stats").withStyle(ChatFormatting.GRAY));
+            stats.view().forEach((type, value) -> lines.add(Component.literal(formatRuneStat(type, value)).withStyle(ChatFormatting.AQUA)));
+        }
+        ItemEnchantments enchantments = stack.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY);
+        if (!enchantments.keySet().isEmpty()) {
+            lines.add(Component.literal("Rune Effects").withStyle(ChatFormatting.GRAY));
+            for (var holder : enchantments.keySet()) {
+                String effectName = holder.unwrapKey()
+                        .map(key -> titleCase(key.location().getPath().replace('_', ' ')))
+                        .orElse("Effect");
+                lines.add(Component.literal(effectName + " " + enchantments.getLevel(holder)).withStyle(ChatFormatting.LIGHT_PURPLE));
+            }
+        }
+        if (lines.size() == 2) {
+            lines.add(Component.literal("No modified stats").withStyle(ChatFormatting.DARK_GRAY));
+        }
+        return lines;
+    }
+
+    private static int liftedTooltipY(int mouseY, int lineCount) {
+        return Math.max(8, mouseY - 18 - lineCount * 10);
+    }
+
+    private static String formatRuneStat(RuneStatType type, float value) {
+        String label = titleCase(type.id().replace('_', ' '));
+        if (isPercentLike(type.id())) {
+            return label + ": +" + String.format(Locale.ROOT, "%.1f%%", value);
+        }
+        return label + ": +" + String.format(Locale.ROOT, "%.1f", value);
+    }
+
+    private static boolean isPercentLike(String id) {
+        return id.contains("chance")
+                || id.contains("resistance")
+                || id.contains("speed")
+                || id.contains("range")
+                || id.contains("jump")
+                || id.contains("knockback")
+                || id.contains("sweeping");
+    }
+
+    private static String titleCase(String raw) {
+        String[] words = raw.split(" ");
+        StringBuilder builder = new StringBuilder();
+        for (String word : words) {
+            if (word.isBlank()) {
+                continue;
+            }
+            if (!builder.isEmpty()) {
+                builder.append(' ');
+            }
+            builder.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+        }
+        return builder.toString();
     }
 
     private int animatedCardX(int baseX, int index) {

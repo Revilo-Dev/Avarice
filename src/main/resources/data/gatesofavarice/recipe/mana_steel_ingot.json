@@ -1,18 +1,21 @@
-{
-  "type": "minecraft:crafting_shaped",
-  "category": "misc",
-  "pattern": [
-    "MMM",
-    "MMM",
-    "MMM"
-  ],
-  "key": {
-    "M": {
-      "item": "gatesofavarice:mana_steel_scrap"
-    }
-  },
-  "result": {
-    "id": "gatesofavarice:mana_steel_ingot",
-    "count": 1
-  }
+﻿{
+    "type":  "minecraft:crafting_shaped",
+    "category":  "misc",
+    "pattern":  [
+                    "MSM",
+                    "S S",
+                    "MSM"
+                ],
+    "key":  {
+                "M":  {
+                          "item":  "gatesofavarice:mana_steel_scrap"
+                      },
+                "S":  {
+                          "item":  "gatesofavarice:scrap_metal"
+                      }
+            },
+    "result":  {
+                   "id":  "gatesofavarice:mana_steel_ingot",
+                   "count":  1
+               }
 }

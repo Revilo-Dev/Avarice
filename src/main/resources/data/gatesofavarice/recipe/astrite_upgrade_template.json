@@ -1,21 +1,21 @@
-{
-  "type": "minecraft:crafting_shaped",
-  "category": "misc",
-  "pattern": [
-    "MMM",
-    "MBM",
-    "MMM"
-  ],
-  "key": {
-    "M": {
-      "item": "gatesofavarice:astrite_scrap"
-    },
-    "B": {
-      "item": "gatesofavarice:upgrade_base"
-    }
-  },
-  "result": {
-    "id": "gatesofavarice:astrite_upgrade_template",
-    "count": 1
-  }
+﻿{
+    "type":  "minecraft:crafting_shaped",
+    "category":  "misc",
+    "pattern":  [
+                    "MMM",
+                    "MBM",
+                    "MMM"
+                ],
+    "key":  {
+                "M":  {
+                          "item":  "gatesofavarice:astrite_ingot"
+                      },
+                "B":  {
+                          "item":  "gatesofavarice:upgrade_base"
+                      }
+            },
+    "result":  {
+                   "id":  "gatesofavarice:astrite_upgrade_template",
+                   "count":  1
+               }
 }
