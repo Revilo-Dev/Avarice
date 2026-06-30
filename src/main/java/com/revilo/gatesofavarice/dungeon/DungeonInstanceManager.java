@@ -78,11 +78,15 @@ public final class DungeonInstanceManager {
     }
 
     public static boolean teleportToSavedLocation(ServerPlayer player, ResourceKey<net.minecraft.world.level.Level> dimension, BlockPos pos, float yaw, float pitch) {
+        return teleportToSavedLocation(player, dimension, Vec3.atBottomCenterOf(pos), yaw, pitch);
+    }
+
+    public static boolean teleportToSavedLocation(ServerPlayer player, ResourceKey<net.minecraft.world.level.Level> dimension, Vec3 pos, float yaw, float pitch) {
         ServerLevel destination = player.server.getLevel(dimension);
         if (destination == null) {
             return false;
         }
-        player.teleportTo(destination, pos.getX() + 0.5D, pos.getY(), pos.getZ() + 0.5D, yaw, pitch);
+        player.teleportTo(destination, pos.x(), pos.y(), pos.z(), yaw, pitch);
         player.setPortalCooldown();
         return true;
     }

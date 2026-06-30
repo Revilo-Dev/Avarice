@@ -302,11 +302,15 @@ public final class RunicUpgradeService {
     }
 
     private static boolean canOfferCardSpec(CardSpec spec, RuneStats current, ItemStack target) {
+        if (spec.effectId() != null) {
+            int currentLevel = currentEffectLevel(target, spec.effectId());
+            if (currentLevel >= maxOfferedEffectLevel(spec.effectId())) {
+                return false;
+            }
+            return target.isEmpty() || RunicLoadoutService.runeSlotsRemaining(target) > 0 || currentLevel > 0;
+        }
         if (target.isEmpty() || RunicLoadoutService.runeSlotsRemaining(target) > 0) {
             return true;
-        }
-        if (spec.effectId() != null) {
-            return hasEffect(target, spec.effectId());
         }
         if (AuraAttributeSupport.isAuraAttributeStatId(spec.statId())) {
             return true;
@@ -317,8 +321,10 @@ public final class RunicUpgradeService {
 
     private static UpgradeCard buildStatCard(CardSpec spec, RuneStats current, UpgradeCategory category, String targetLabel, ItemStack target, RandomSource random, int waveNumber, int playerLevel) {
         if (spec.effectId() != null) {
-            boolean alreadyHasEffect = hasEffect(target, spec.effectId());
-            String currentValue = alreadyHasEffect ? "Lv " + currentEffectLevel(target, spec.effectId()) : "-";
+            int currentLevel = currentEffectLevel(target, spec.effectId());
+            boolean alreadyHasEffect = currentLevel > 0;
+            int nextLevel = alreadyHasEffect ? Math.min(maxOfferedEffectLevel(spec.effectId()), currentLevel + 1) : spec.effectLevel();
+            String currentValue = alreadyHasEffect ? "Lv " + currentLevel : "-";
             return new UpgradeCard(
                     UUID.randomUUID().toString(),
                     UpgradeCardType.ADD_OR_UPGRADE_EFFECT,
@@ -327,7 +333,7 @@ public final class RunicUpgradeService {
                     targetLabel,
                     spec.label(),
                     currentValue,
-                    "Lv " + spec.effectLevel(),
+                    "Lv " + nextLevel,
                     alreadyHasEffect ? 1 : 2,
                     0
             );
@@ -389,6 +395,13 @@ public final class RunicUpgradeService {
             }
         }
         return 0;
+    }
+
+    private static int maxOfferedEffectLevel(String effectId) {
+        return switch (effectId) {
+            case "minecraft:power", "minecraft:punch" -> 2;
+            default -> 1;
+        };
     }
 
     private static List<UpgradeCard> generateItemCards(LoadoutDefinition definition, UpgradeCategory category, RandomSource random) {

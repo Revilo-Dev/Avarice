@@ -398,7 +398,7 @@ public final class DungeonUpgradeManager {
     }
 
     private static int upgradeCost(UpgradeCard card, int waveNumber) {
-        int base = 100;
+        int base = 200;
         int waveScale = Math.max(0, waveNumber - 1) * 35;
         int statLevel = parsedUpgradeLevel(card.currentValue());
         int tierScale = Math.max(0, card.tier() - 1) * 45;
@@ -411,7 +411,30 @@ public final class DungeonUpgradeManager {
             case ITEM_REWARD_FOOD, ITEM_REWARD_RESTOCK, UPGRADE_ITEM_SUPPLY -> 30;
             default -> 0;
         };
-        return base + waveScale + tierScale + (statLevel * 60) + typeScale;
+        int cost = base + waveScale + tierScale + typeScale + arrowBundleTierCost(card.changeLabel());
+        cost = Math.round(cost * (1.0F + statLevel * 0.05F));
+        if (isExpensiveBowEffectUpgrade(card)) {
+            cost = Math.max(cost, 2000 + Math.max(0, statLevel - 1) * 250);
+        }
+        return cost;
+    }
+
+    private static int arrowBundleTierCost(String label) {
+        return switch (label) {
+            case "Copper Arrows" -> 175;
+            case "Iron Arrows" -> 350;
+            case "Amethyst Arrows" -> 600;
+            case "Golden Arrows" -> 850;
+            case "Diamond Arrows" -> 1200;
+            case "Netherite Arrows" -> 1650;
+            default -> 0;
+        };
+    }
+
+    private static boolean isExpensiveBowEffectUpgrade(UpgradeCard card) {
+        return card.type() == UpgradeCardType.ADD_OR_UPGRADE_EFFECT
+                && ("Power".equals(card.changeLabel()) || "Punch".equals(card.changeLabel()))
+                && parsedUpgradeLevel(card.currentValue()) >= 1;
     }
 
     private static int parsedUpgradeLevel(String currentValue) {

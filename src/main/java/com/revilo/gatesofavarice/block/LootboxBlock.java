@@ -13,6 +13,7 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -50,6 +51,7 @@ public class LootboxBlock extends BaseEntityBlock {
             return InteractionResult.PASS;
         }
         lootbox.burstLoot((ServerLevel) level, pos, serverPlayer);
+        level.levelEvent(2001, pos, Block.getId(Blocks.SPRUCE_PLANKS.defaultBlockState()));
         level.removeBlock(pos, false);
         return InteractionResult.CONSUME;
     }

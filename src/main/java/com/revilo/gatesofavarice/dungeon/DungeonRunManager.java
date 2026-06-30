@@ -1423,7 +1423,7 @@ public final class DungeonRunManager {
         if (mob instanceof Mob aiMob) aiMob.finalizeSpawn(level, level.getCurrentDifficultyAt(BlockPos.containing(x, y, z)), MobSpawnType.EVENT, (SpawnGroupData) null);
         mob.getPersistentData().putBoolean(DUNGEON_WAVE_SPAWN_KEY, true);
         mob.skipDropExperience();
-        applyMobScaling(mob, run.healthMultiplier, run.damageMultiplier, run.speedMultiplier);
+        applyMobScaling(mob, effectiveMobHealthMultiplier(run), run.damageMultiplier, run.speedMultiplier);
         if (rollElite(run, level.random)) {
             applyEliteVariant(mob);
         }
@@ -1451,6 +1451,19 @@ public final class DungeonRunManager {
             rolled.add(TarotOption.random(random, difficulty, displayedWave, avgLevel));
         }
         run.tarotOptions = List.copyOf(rolled);
+    }
+
+    public static List<Component> buildDifficultyScaleReport(ServerPlayer player) {
+        int level = Math.max(1, getEffectivePlayerLevel(player));
+        ArrayList<Component> lines = new ArrayList<>();
+        lines.add(Component.literal("Avarice difficulty scaling"));
+        lines.add(Component.literal("Your level: " + level));
+        lines.add(Component.literal("Minimum card difficulty: " + TarotOption.difficultyName(minTarotDifficultyForLevel(level))));
+        lines.add(Component.literal(String.format(java.util.Locale.ROOT, "Base enemy health: x%.2f", baseEnemyHealthMultiplier(level))));
+        lines.add(Component.literal(String.format(java.util.Locale.ROOT, "Zombie sample: %.1f HP", 20.0D * baseEnemyHealthMultiplier(level))));
+        lines.add(Component.literal("Reference: Lv1 20 HP, Lv20 30 HP, Lv50 40 HP, Lv80 50 HP"));
+        lines.add(Component.literal("Bands: Lv30 removes Easy, Lv50 rolls Hard+ only"));
+        return List.copyOf(lines);
     }
 
     private static void rollLootOptions(RunState run, RandomSource random) {
@@ -2347,32 +2360,54 @@ public final class DungeonRunManager {
     private static int rollTarotDifficulty(int displayedWave, int avgLevel, RandomSource random) {
         int levelPressure = Math.min(2, Math.max(0, (avgLevel - 70) / 20));
         int roll = random.nextInt(100);
+        int minDifficulty = minTarotDifficultyForLevel(avgLevel);
+        int difficulty;
         if (displayedWave <= 2) {
-            if (levelPressure >= 2 && roll < 10) return 4;
-            if (roll < 60) return 1;
-            if (roll < 92) return 2;
-            return 3;
-        }
-        if (displayedWave <= 5) {
-            if (levelPressure >= 2 && roll < 8) return 4;
-            if (roll < 35) return 1;
-            if (roll < 78) return 2;
-            if (roll < 97) return 3;
+            if (levelPressure >= 2 && roll < 10) difficulty = 4;
+            else if (roll < 60) difficulty = 1;
+            else if (roll < 92) difficulty = 2;
+            else difficulty = 3;
+        } else if (displayedWave <= 5) {
+            if (levelPressure >= 2 && roll < 8) difficulty = 4;
+            else if (roll < 35) difficulty = 1;
+            else if (roll < 78) difficulty = 2;
+            else if (roll < 97) difficulty = 3;
+            else difficulty = 4;
+        } else if (displayedWave <= 9) {
+            if (levelPressure >= 2 && roll < 10) difficulty = 5;
+            else if (roll < 18) difficulty = 1;
+            else if (roll < 55) difficulty = 2;
+            else if (roll < 86) difficulty = 3;
+            else if (roll < 98) difficulty = 4;
+            else difficulty = 5;
+        } else if (roll < 8) difficulty = 1;
+        else if (roll < 30) difficulty = 2;
+        else if (roll < 62) difficulty = 3;
+        else if (roll < 88) difficulty = 4;
+        else difficulty = 5;
+        return Mth.clamp(Math.max(difficulty, minDifficulty), 1, 5);
+    }
+
+    private static int minTarotDifficultyForLevel(int avgLevel) {
+        if (avgLevel >= 50) {
             return 4;
         }
-        if (displayedWave <= 9) {
-            if (levelPressure >= 2 && roll < 10) return 5;
-            if (roll < 18) return 1;
-            if (roll < 55) return 2;
-            if (roll < 86) return 3;
-            if (roll < 98) return 4;
-            return 5;
+        if (avgLevel >= 30) {
+            return 2;
         }
-        if (roll < 8) return 1;
-        if (roll < 30) return 2;
-        if (roll < 62) return 3;
-        if (roll < 88) return 4;
-        return 5;
+        return 1;
+    }
+
+    private static double effectiveMobHealthMultiplier(RunState run) {
+        return run.healthMultiplier * baseEnemyHealthMultiplier(averageParticipantLevel(run));
+    }
+
+    private static double baseEnemyHealthMultiplier(int avgLevel) {
+        int level = Math.max(1, avgLevel);
+        if (level <= 20) {
+            return 1.0D + (level - 1) * (0.5D / 19.0D);
+        }
+        return 1.5D + (level - 20) * (0.5D / 30.0D);
     }
 
     private static void syncHudToPlayer(ServerPlayer player, boolean active, int wave, int remaining, int total) {

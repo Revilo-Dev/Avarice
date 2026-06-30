@@ -235,13 +235,14 @@ public class DungeonCompleteScreen extends Screen {
 
     private void buildStatLines() {
         this.statLines.clear();
+        String progressVerb = this.payload.survived() ? "earnt" : "gathered";
         this.statLines.add(StatLine.time("Time Spent", this.payload.timeSpentTicks()));
-        this.statLines.add(StatLine.number("Level Points earnt", this.payload.levelPointsEarned(), ""));
-        this.statLines.add(StatLine.number("All Time Coins earnt", this.payload.coinsEarned(), ""));
+        this.statLines.add(StatLine.number("Level Points " + progressVerb, this.payload.levelPointsEarned(), ""));
+        this.statLines.add(StatLine.number("All Time Coins " + progressVerb, this.payload.coinsEarned(), ""));
         this.statLines.add(StatLine.number("Mobs Killed", this.payload.mobsKilled(), ""));
         this.statLines.add(StatLine.number("Damage Delt", this.payload.damageDealt(), ""));
         this.statLines.add(StatLine.number("Damage Receieved", this.payload.damageReceived(), ""));
-        this.statLines.add(StatLine.number("Experience earnt", this.payload.experienceEarned(), ""));
+        this.statLines.add(StatLine.number("Experience " + progressVerb, this.payload.experienceEarned(), ""));
         this.statLines.add(StatLine.number("Rarity level", this.payload.rarityLevel(), "%"));
         this.statLines.add(StatLine.number("Qunatity level", this.payload.quantityLevel(), "%"));
         this.statLines.add(StatLine.number("Mob Health", this.payload.mobHealth(), "%"));

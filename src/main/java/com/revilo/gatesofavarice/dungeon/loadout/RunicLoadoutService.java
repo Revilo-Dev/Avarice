@@ -168,13 +168,11 @@ public final class RunicLoadoutService {
             return stack.getItem() instanceof CrossbowItem;
         }
         if (enchantmentId.equals(ResourceLocation.withDefaultNamespace("swift_sneak"))
-                || enchantmentId.equals(ResourceLocation.withDefaultNamespace("soul_speed"))
-                || enchantmentId.equals(ResourceLocation.withDefaultNamespace("feather_falling"))
                 || enchantmentId.equals(ResourceLocation.fromNamespaceAndPath("combat_roll", "longfooted"))) {
             return stack.getItem() instanceof ArmorItem;
         }
-        if (enchantmentId.equals(ResourceLocation.withDefaultNamespace("flame"))
-                || enchantmentId.equals(ResourceLocation.withDefaultNamespace("infinity"))
+        if (enchantmentId.equals(ResourceLocation.withDefaultNamespace("power"))
+                || enchantmentId.equals(ResourceLocation.withDefaultNamespace("flame"))
                 || enchantmentId.equals(ResourceLocation.withDefaultNamespace("punch"))) {
             return stack.getItem() instanceof BowItem || stack.getItem() instanceof CrossbowItem;
         }
@@ -232,8 +230,8 @@ public final class RunicLoadoutService {
         if (stack.getItem() instanceof ArmorItem) {
             return ARMOR_ALLOWED_STATS.contains(id) && isStatAllowedForArmorPiece(stack, id);
         }
-        if ("power".equals(id)) {
-            return stack.getItem() instanceof BowItem || stack.getItem() instanceof CrossbowItem;
+        if (stack.getItem() instanceof BowItem || stack.getItem() instanceof CrossbowItem) {
+            return "power".equals(id) || "draw_speed".equals(id);
         }
         return WEAPON_ALLOWED_STATS.contains(id);
     }

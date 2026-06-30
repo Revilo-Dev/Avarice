@@ -31,6 +31,8 @@ public class DungeonUpgradeCardsScreen extends Screen {
     private static final ResourceLocation STAT_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/stat-card_hovered.png");
     private static final ResourceLocation UPGRADE_CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/upgrade-card.png");
     private static final ResourceLocation UPGRADE_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/upgrade-card_hovered.png");
+    private static final ResourceLocation ITEM_CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/item-card.png");
+    private static final ResourceLocation ITEM_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/item-card_hovered.png");
     private static final float TRANSITION_STEP = 0.11F;
     private static final int CARD_W = 76;
     private static final int CARD_H = 103;
@@ -160,11 +162,11 @@ public class DungeonUpgradeCardsScreen extends Screen {
         gg.pose().scale(scale, scale, 1.0F);
 
         int center = CARD_W / 2;
-        int rowY = 8;
+        int rowY = 5;
         for (String line : wrap(card.title(), 14)) {
             drawScaledCentered(gg, line, center, rowY, 0.75F, 0xF3D78A);
             rowY += 8;
-            if (rowY > 24) break;
+            if (rowY > 21) break;
         }
 
         ResourceLocation icon = resolveCardIcon(card);
@@ -309,7 +311,7 @@ public class DungeonUpgradeCardsScreen extends Screen {
     }
 
     private static int liftedTooltipY(int mouseY, int lineCount) {
-        return Math.max(8, mouseY - 18 - lineCount * 10);
+        return Math.max(8, mouseY - 28 - lineCount * 10);
     }
 
     private static String formatRuneStat(RuneStatType type, float value) {
@@ -407,6 +409,7 @@ public class DungeonUpgradeCardsScreen extends Screen {
             case "Ability Card" -> hovered ? EFFECT_CARD_HOVERED : EFFECT_CARD;
             case "Skill Card" -> hovered ? STAT_CARD_HOVERED : STAT_CARD;
             case "Restock Card" -> hovered ? STAT_CARD_HOVERED : STAT_CARD;
+            case "Arrow Card" -> hovered ? ITEM_CARD_HOVERED : ITEM_CARD;
             case "Reroll Primary Weapon" -> hovered ? ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/tarrot-card-hovered.png") : ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/tarrot-card.png");
             case "Reroll Secondary Weapon" -> hovered ? DAMAGE_CARD_HOVERED : DAMAGE_CARD;
             default -> hovered ? UPGRADE_CARD_HOVERED : UPGRADE_CARD;
@@ -419,6 +422,9 @@ public class DungeonUpgradeCardsScreen extends Screen {
         }
         if ("Arcane Apples".equals(card.changeLabel()) || "Apple Bundle".equals(card.changeLabel())) {
             return ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/item/loot/arcane_apple.png");
+        }
+        if ("Arrow Card".equals(card.title()) || card.changeLabel().endsWith("Arrows")) {
+            return ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/icons/projectile_resistance.png");
         }
         String iconName = switch (card.changeLabel()) {
             case "Restock", "Arrow Bundle", "Food Bundle" -> "capacity";

@@ -155,13 +155,27 @@ public final class DungeonCommands {
                                         .then(Commands.argument("amount", IntegerArgumentType.integer(0))
                                                 .executes(context -> testCoinsSet(context.getSource(), IntegerArgumentType.getInteger(context, "amount"))))))
                         .then(Commands.literal("droprates")
-                                .executes(context -> testDropRates(context.getSource()))));
+                                .executes(context -> testDropRates(context.getSource())))
+                        .then(Commands.literal("difficulty-scale")
+                                .executes(context -> testDifficultyScale(context.getSource()))));
     }
 
     private static int recover(CommandSourceStack source) {
         int recovered = DungeonRunManager.recoverStalledShops(source.getServer());
         source.sendSuccess(() -> Component.literal("Recovered dungeon runs: " + recovered), true);
         return recovered;
+    }
+
+    private static int testDifficultyScale(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Component.literal("Player required"));
+            return 0;
+        }
+        for (Component line : DungeonRunManager.buildDifficultyScaleReport(player)) {
+            source.sendSuccess(() -> line, false);
+        }
+        return 1;
     }
 
     private static int listLoadouts(CommandSourceStack source) {

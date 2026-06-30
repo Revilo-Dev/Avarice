@@ -3,7 +3,6 @@ package com.revilo.gatesofavarice.dungeon;
 import com.revilo.gatesofavarice.item.MagnetItem;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.component.DataComponents;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.BowItem;
@@ -11,7 +10,6 @@ import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.item.TridentItem;
-import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.item.component.ItemLore;
 import net.minecraft.world.item.component.Unbreakable;
 
@@ -38,12 +36,6 @@ public final class DungeonGearRoller {
         DungeonBoundItems.markIfDungeonBound(stack);
         stack.set(DataComponents.UNBREAKABLE, new Unbreakable(true));
         stack.set(DataComponents.LORE, ItemLore.EMPTY);
-        if (registryAccess != null && stack.getItem() instanceof CrossbowItem) {
-            var multishot = registryAccess.lookupOrThrow(Registries.ENCHANTMENT).get(Enchantments.MULTISHOT).orElse(null);
-            if (multishot != null) {
-                net.minecraft.world.item.enchantment.EnchantmentHelper.updateEnchantments(stack, mutable -> mutable.set(multishot, 1));
-            }
-        }
         // No custom stat/variance/thorns/health modifiers are applied here.
         // RUNIC is the only custom stat/effect system for dungeon loadout gear.
     }
