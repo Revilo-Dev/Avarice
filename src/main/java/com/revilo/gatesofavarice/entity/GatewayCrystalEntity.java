@@ -1,6 +1,7 @@
 package com.revilo.gatesofavarice.entity;
 
 import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
+import com.revilo.gatesofavarice.integration.LevelUpIntegration;
 import com.revilo.gatesofavarice.registry.ModEntities;
 import java.util.List;
 import java.util.UUID;
@@ -68,6 +69,10 @@ public class GatewayCrystalEntity extends Entity {
             if (this.returnPortal) {
                 DungeonRunManager.exitViaBailPortal(player, runOwnerId, this);
             } else {
+                if (!canUseTier(player, this.getCrystalTier())) {
+                    denyTierAccess(player, this.getCrystalTier());
+                    continue;
+                }
                 DungeonRunManager.enterFromGateway(player, runOwnerId);
             }
         }
@@ -137,5 +142,25 @@ public class GatewayCrystalEntity extends Entity {
 
     public void setReturnPortal(boolean returnPortal) {
         this.returnPortal = returnPortal;
+    }
+
+    public static boolean canUseTier(ServerPlayer player, int crystalTier) {
+        return LevelUpIntegration.getEffectiveLevel(player) >= minLevelForTier(crystalTier);
+    }
+
+    public static int minLevelForTier(int crystalTier) {
+        return switch (Math.max(1, crystalTier)) {
+            case 1 -> 0;
+            case 2 -> 20;
+            case 3 -> 50;
+            case 4 -> 70;
+            default -> 90;
+        };
+    }
+
+    public static void denyTierAccess(ServerPlayer player, int crystalTier) {
+        int requiredLevel = minLevelForTier(crystalTier);
+        player.displayClientMessage(Component.literal("Requires level " + requiredLevel + " to enter this gateway."), true);
+        player.setPortalCooldown();
     }
 }

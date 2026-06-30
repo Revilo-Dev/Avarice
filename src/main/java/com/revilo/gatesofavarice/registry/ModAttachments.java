@@ -26,6 +26,12 @@ public final class ModAttachments {
                     .copyOnDeath()
                     .sync(ByteBufCodecs.VAR_INT)
                     .build());
+    public static final DeferredHolder<AttachmentType<?>, AttachmentType<Integer>> TOTAL_GOLD_COINS_EARNED =
+            ATTACHMENTS.register("total_gold_coins_earned", () -> AttachmentType.builder(() -> 0)
+                    .serialize(Codec.INT)
+                    .copyOnDeath()
+                    .sync(ByteBufCodecs.VAR_INT)
+                    .build());
     public static final DeferredHolder<AttachmentType<?>, AttachmentType<Integer>> DUNGEON_TOKENS =
             ATTACHMENTS.register("dungeon_tokens", () -> AttachmentType.builder(() -> 0)
                     .serialize(Codec.INT)

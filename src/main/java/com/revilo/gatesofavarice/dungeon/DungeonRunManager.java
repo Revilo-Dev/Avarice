@@ -30,6 +30,9 @@ import com.revilo.gatesofavarice.registry.ModItems;
 import com.revilo.gatesofavarice.registry.ModAttachments;
 import com.revilo.gatesofavarice.registry.LoadoutArmorRegistry;
 import com.revilo.gatesofavarice.shop.ShopkeeperManager;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -78,10 +81,12 @@ import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
+import net.neoforged.neoforge.event.entity.living.LivingHealEvent;
 import net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
@@ -89,24 +94,26 @@ import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.attachment.AttachmentSync;
 import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.fml.loading.FMLPaths;
 
 public final class DungeonRunManager {
     public static final String DUNGEON_WAVE_SPAWN_KEY = "gatesofavarice.dungeon_wave_spawn";
     private static final Map<UUID, RunState> RUNS_BY_OWNER = new HashMap<>();
     private static final Map<UUID, UUID> PLAYER_TO_OWNER = new HashMap<>();
     private static final Map<UUID, PendingSnapshotRestore> PENDING_SNAPSHOT_RESTORES = new HashMap<>();
+    private static final Map<UUID, DungeonCompletePayload> PENDING_COMPLETION_SCREENS = new HashMap<>();
 
     private static final ResourceLocation MOB_HEALTH_MODIFIER_ID = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_wave_health");
     private static final ResourceLocation MOB_DAMAGE_MODIFIER_ID = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_wave_damage");
     private static final ResourceLocation MOB_SPEED_MODIFIER_ID = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_wave_speed");
     private static final int BASE_REROLL_COST = 1000;
     private static final double BASE_ELITE_CHANCE = 0.03D;
-    private static final float DUNGEON_MAGNET_DROP_CHANCE = 0.04F;
     private static final int LEVEL_POINTS_PER_LOOT_PICKUP = 1;
     private static final int AUTOSAVE_INTERVAL_TICKS = 20 * 30;
     private static final String RUNS_KEY = "runs";
     private static final String PENDING_RESTORES_KEY = "pending_restores";
     private static final String DUNGEON_SHOPKEEPER_OWNER_KEY = "gatesofavarice.dungeon_shopkeeper_owner";
+    private static final String BOUNDLESS_HIDE_QUEST_BOOK_KEY = "hideQuestBookInInventory";
 
     private static boolean persistedStateLoaded = false;
     private static boolean persistedStateDirty = false;
@@ -129,10 +136,11 @@ public final class DungeonRunManager {
             ModItems.UPGRADE_BASE.get(), ModItems.HEART_FRAGMENT.get(), ModItems.PLASMA.get()
     );
     private static final List<Item> RARE_DROP_POOL = List.of(
-            ModItems.DARK_ESSENCE.get(), ModItems.PETRIFIED_SOUL_SHARD.get(), ModItems.RUBY.get(), ModItems.SAPHIRE.get()
+            ModItems.DARK_ESSENCE.get(), ModItems.PETRIFIED_SOUL_SHARD.get(), ModItems.RUBY.get(), ModItems.SAPHIRE.get(),
+            ModItems.GATEWAY_CARD.get()
     );
     private static final List<Item> EPIC_DROP_POOL = List.of(
-            ModItems.PRISMATIC_SHARD.get(), ModItems.OPAL.get(), ModItems.STABILITY_PEARL.get()
+            ModItems.PRISMATIC_SHARD.get(), ModItems.OPAL.get(), ModItems.STABILITY_PEARL.get(), ModItems.GATEWAY_CARD.get()
     );
     private static final List<CompletionReward> COMPLETION_UNCOMMON_REWARDS = List.of(
             completionReward(ModItems.MANASTONES.get(), 3, 5),
@@ -181,6 +189,7 @@ public final class DungeonRunManager {
         RUNS_BY_OWNER.clear();
         PLAYER_TO_OWNER.clear();
         PENDING_SNAPSHOT_RESTORES.clear();
+        PENDING_COMPLETION_SCREENS.clear();
         ServerLevel overworld = server.overworld();
         if (overworld != null) {
             loadPersistedState(DungeonRunStorage.get(overworld).state(), server, overworld.registryAccess());
@@ -216,9 +225,14 @@ public final class DungeonRunManager {
         }
         run.participants.add(player.getUUID());
         PLAYER_TO_OWNER.put(player.getUUID(), ownerId);
-        run.snapshots.putIfAbsent(player.getUUID(), PlayerSnapshot.capture(player));
+        run.snapshots.put(player.getUUID(), PlayerSnapshot.capture(player));
         MythicCoinWallet.set(player, 0);
         clearForDungeon(player);
+        setBoundlessQuestBookHidden(true);
+        ServerLevel dungeon = player.server.getLevel(ModDimensions.DUNGEON_LEVEL);
+        if (dungeon != null) {
+            clearDungeonItems(dungeon, ownerId);
+        }
         DungeonInstanceManager.teleportToDungeonInstance(player, ownerId);
         if (player.getUUID().equals(ownerId) && run.phase == RunPhase.SELECTING_TAROT) {
             rollTarotOptions(run, player.serverLevel().random);
@@ -238,13 +252,14 @@ public final class DungeonRunManager {
         int levelPoints = awardDungeonExitProgression(player, run);
         List<ItemStack> rewards = collectCompletionRewards(player, run);
         ItemStack lootbox = createLootboxFromRewards(player, run, rewards, levelPoints);
+        setBoundlessQuestBookHidden(false);
         restoreSnapshot(player, snapshot);
         if (player.getUUID().equals(run.ownerId)) {
             closeOverworldEntryPortals(player.server, run.ownerId);
         }
         if (!lootbox.isEmpty() && !player.getInventory().add(lootbox)) player.drop(lootbox, false);
         DungeonInstanceManager.teleportToSavedLocation(player, snapshot.dimension, snapshot.returnPos, snapshot.yaw, snapshot.pitch);
-        closeNearbyEntryPortals(player.server, snapshot.dimension, snapshot.returnPos, run.ownerId);
+        closeNearbyEntryPortals(player.server, snapshot.dimension, snapshot.returnBlockPos(), run.ownerId);
         int cashedOutCoins = cashoutRemainingCoinsOnDungeonExit(player);
         sendCompletionScreen(player, run, rewards, levelPoints, cashedOutCoins, true);
         PLAYER_TO_OWNER.remove(player.getUUID());
@@ -507,12 +522,13 @@ public final class DungeonRunManager {
         int levelPoints = awardDungeonExitProgression(player, run);
         List<ItemStack> rewards = collectCompletionRewards(player, run);
         ItemStack lootbox = createLootboxFromRewards(player, run, rewards, levelPoints);
+        setBoundlessQuestBookHidden(false);
         restoreSnapshot(player, snapshot);
         if (!lootbox.isEmpty() && !player.getInventory().add(lootbox)) {
             player.drop(lootbox, false);
         }
         DungeonInstanceManager.teleportToSavedLocation(player, snapshot.dimension, snapshot.returnPos, snapshot.yaw, snapshot.pitch);
-        closeNearbyEntryPortals(player.server, snapshot.dimension, snapshot.returnPos, run.ownerId);
+        closeNearbyEntryPortals(player.server, snapshot.dimension, snapshot.returnBlockPos(), run.ownerId);
         int cashedOutCoins = cashoutRemainingCoinsOnDungeonExit(player);
         sendCompletionScreen(player, run, rewards, levelPoints, cashedOutCoins, true);
         PLAYER_TO_OWNER.remove(player.getUUID());
@@ -548,7 +564,6 @@ public final class DungeonRunManager {
         addDropRateLines(lines, "Uncommon", UNCOMMON_DROP_POOL, uncommonChance);
         addDropRateLines(lines, "Rare", RARE_DROP_POOL, rareChance);
         addDropRateLines(lines, "Epic", EPIC_DROP_POOL, epicChance);
-        lines.add(Component.literal(formatDropRate(new ItemStack(ModItems.DUNGEON_MAGNET.get()).getHoverName().getString(), DUNGEON_MAGNET_DROP_CHANCE) + " per mob death").withStyle(ChatFormatting.AQUA));
         return List.copyOf(lines);
     }
 
@@ -694,6 +709,14 @@ public final class DungeonRunManager {
         BlockPos center = run == null && player.level().dimension() == ModDimensions.DUNGEON_LEVEL
                 ? player.blockPosition()
                 : DungeonInstanceManager.instanceCenter(run == null ? player.getUUID() : run.ownerId);
+        return clearDungeonItems(dungeon, center);
+    }
+
+    private static int clearDungeonItems(ServerLevel dungeon, UUID ownerId) {
+        return clearDungeonItems(dungeon, DungeonInstanceManager.instanceCenter(ownerId));
+    }
+
+    private static int clearDungeonItems(ServerLevel dungeon, BlockPos center) {
         AABB bounds = new AABB(center).inflate(96.0D, 48.0D, 96.0D);
         List<ItemEntity> items = dungeon.getEntitiesOfClass(ItemEntity.class, bounds, ItemEntity::isAlive);
         for (ItemEntity item : items) {
@@ -875,7 +898,8 @@ public final class DungeonRunManager {
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         ensureLoaded(event.getServer());
-        if (RUNS_BY_OWNER.isEmpty() && PENDING_SNAPSHOT_RESTORES.isEmpty()) {
+        flushPendingCompletionScreens(event.getServer());
+        if (RUNS_BY_OWNER.isEmpty() && PENDING_SNAPSHOT_RESTORES.isEmpty() && PENDING_COMPLETION_SCREENS.isEmpty()) {
             return;
         }
         ServerLevel dungeonLevel = event.getServer().getLevel(ModDimensions.DUNGEON_LEVEL);
@@ -925,6 +949,22 @@ public final class DungeonRunManager {
         maybeAutosave(event.getServer(), dungeonLevel != null ? dungeonLevel.getGameTime() : (overworld != null ? overworld.getGameTime() : 0L));
     }
 
+    private static void flushPendingCompletionScreens(MinecraftServer server) {
+        if (PENDING_COMPLETION_SCREENS.isEmpty()) {
+            return;
+        }
+        Iterator<Map.Entry<UUID, DungeonCompletePayload>> iterator = PENDING_COMPLETION_SCREENS.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<UUID, DungeonCompletePayload> entry = iterator.next();
+            ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+            if (player == null) {
+                continue;
+            }
+            PacketDistributor.sendToPlayer(player, entry.getValue());
+            iterator.remove();
+        }
+    }
+
     @SubscribeEvent
     public static void onLivingDamage(LivingDamageEvent.Post event) {
         if (event.getEntity().level().isClientSide) {
@@ -952,6 +992,16 @@ public final class DungeonRunManager {
             if (run != null && run.aliveMobs.contains(mob.getUUID()) && run.mobLeechPercent > 0.0D) {
                 mob.heal((float) (damage * run.mobLeechPercent));
             }
+        }
+    }
+
+    @SubscribeEvent
+    public static void onLivingHeal(LivingHealEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player) || player.level().dimension() != ModDimensions.DUNGEON_LEVEL) {
+            return;
+        }
+        if (getRunForPlayer(player) != null) {
+            event.setAmount(event.getAmount() * 0.25F);
         }
     }
 
@@ -1049,7 +1099,7 @@ public final class DungeonRunManager {
         }
         restorePlayerSnapshot(player, pending.snapshot(), true);
         if (pending.completionPayload() != null) {
-            PacketDistributor.sendToPlayer(player, pending.completionPayload());
+            PENDING_COMPLETION_SCREENS.put(player.getUUID(), pending.completionPayload());
         }
     }
 
@@ -1077,6 +1127,7 @@ public final class DungeonRunManager {
         run.server = player.server;
         run.participants.add(player.getUUID());
         PLAYER_TO_OWNER.put(player.getUUID(), ownerId);
+        setBoundlessQuestBookHidden(true);
         if (player.level().dimension() != ModDimensions.DUNGEON_LEVEL) {
             DungeonInstanceManager.teleportToDungeonInstance(player, ownerId);
         }
@@ -1134,6 +1185,7 @@ public final class DungeonRunManager {
         RUNS_BY_OWNER.clear();
         PLAYER_TO_OWNER.clear();
         PENDING_SNAPSHOT_RESTORES.clear();
+        PENDING_COMPLETION_SCREENS.clear();
         persistedStateLoaded = false;
         persistedStateDirty = false;
         lastAutosaveTick = Long.MIN_VALUE;
@@ -1211,8 +1263,8 @@ public final class DungeonRunManager {
             player.removeAllEffects();
             player.setHealth(player.getMaxHealth());
         }
-        ensureShopkeeper(run, level);
         run.phase = RunPhase.SHOP;
+        ensureShopkeeper(run, level);
         syncHud(run, false);
         markStateDirty();
         forceCriticalSave(run.server);
@@ -1230,6 +1282,9 @@ public final class DungeonRunManager {
     }
 
     private static boolean ensureShopkeeper(RunState run, ServerLevel level) {
+        if (run.phase != RunPhase.SHOP) {
+            return false;
+        }
         GatekeeperEntity existingShopkeeper = findRunShopkeeper(run, level);
         if (existingShopkeeper != null) {
             markDungeonShopkeeper(existingShopkeeper, run.ownerId);
@@ -1425,20 +1480,82 @@ public final class DungeonRunManager {
     private static LoadoutOption buildLoadoutOptionFromDefinition(LoadoutModels.LoadoutDefinition definition, int avgLevel, RandomSource random) {
         ItemStack primary = new ItemStack(pickLoadoutWeapon(random, avgLevel, definition.primaryWeaponKind()));
         ItemStack secondary = new ItemStack(pickLoadoutWeapon(random, avgLevel, definition.secondaryWeaponKind()));
+        ItemStack head = new ItemStack(LoadoutArmorRegistry.get(definition.armorSet().setId(), ArmorItem.Type.HELMET));
+        ItemStack chest = new ItemStack(LoadoutArmorRegistry.get(definition.armorSet().setId(), ArmorItem.Type.CHESTPLATE));
+        ItemStack legs = new ItemStack(LoadoutArmorRegistry.get(definition.armorSet().setId(), ArmorItem.Type.LEGGINGS));
+        ItemStack feet = new ItemStack(LoadoutArmorRegistry.get(definition.armorSet().setId(), ArmorItem.Type.BOOTS));
+        RunicLoadoutService.tagLoadoutIdentity(head, definition.id(), definition.armorSet().displayName(), EquipmentSlot.HEAD.getName());
+        RunicLoadoutService.tagLoadoutIdentity(chest, definition.id(), definition.armorSet().displayName(), EquipmentSlot.CHEST.getName());
+        RunicLoadoutService.tagLoadoutIdentity(legs, definition.id(), definition.armorSet().displayName(), EquipmentSlot.LEGS.getName());
+        RunicLoadoutService.tagLoadoutIdentity(feet, definition.id(), definition.armorSet().displayName(), EquipmentSlot.FEET.getName());
         return new LoadoutOption(
                 definition.id(),
-                Component.literal(definition.displayName() + " loadout"),
-                Component.literal("Armor: " + definition.armorSet().displayName() + "\nTheme: " + definition.theme().name().toLowerCase(java.util.Locale.ROOT) + "\nRunic-enabled preset"),
-                new ItemStack(LoadoutArmorRegistry.get(definition.armorSet().setId(), ArmorItem.Type.HELMET)),
-                new ItemStack(LoadoutArmorRegistry.get(definition.armorSet().setId(), ArmorItem.Type.CHESTPLATE)),
-                new ItemStack(LoadoutArmorRegistry.get(definition.armorSet().setId(), ArmorItem.Type.LEGGINGS)),
-                new ItemStack(LoadoutArmorRegistry.get(definition.armorSet().setId(), ArmorItem.Type.BOOTS)),
+                Component.literal(definition.displayName()),
+                Component.literal("Armor: " + definition.displayName()),
+                head,
+                chest,
+                legs,
+                feet,
                 primary,
                 secondary,
                 pickLoadoutMagnet(definition, random, avgLevel),
                 definition.supplies().stream()
                         .map(spec -> new ItemStack(spec.item(), spec.minCount() + random.nextInt(Math.max(1, spec.maxCount() - spec.minCount() + 1))))
-                        .toList());
+                        .toList(),
+                loadoutSpeedRating(definition),
+                loadoutDamageRating(definition),
+                loadoutDefenceRating(definition),
+                loadoutAttackSpeedRating(definition));
+    }
+
+    private static int loadoutSpeedRating(LoadoutModels.LoadoutDefinition definition) {
+        float speed = maxStat(definition.armorRunicStatPool(), "movement_speed");
+        if (speed >= 0.11F) return 5;
+        if (speed >= 0.08F) return 4;
+        if (speed >= 0.05F) return 3;
+        if (speed >= 0.025F) return 2;
+        return 1;
+    }
+
+    private static int loadoutDamageRating(LoadoutModels.LoadoutDefinition definition) {
+        float weaponDamage = Math.max(maxStat(definition.primaryRunicStatPool(), "attack_damage"), maxStat(definition.secondaryRunicStatPool(), "attack_damage"));
+        float abilityPower = maxStat(definition.armorRunicStatPool(), "aura:ability_power");
+        float score = weaponDamage + abilityPower * 3.0F;
+        if (score >= 5.0F) return 5;
+        if (score >= 4.0F) return 4;
+        if (score >= 3.0F) return 3;
+        if (score >= 1.5F) return 2;
+        return 1;
+    }
+
+    private static int loadoutDefenceRating(LoadoutModels.LoadoutDefinition definition) {
+        float score = definition.armorSet().armorMax() + definition.armorSet().resistanceMax() * 30.0F;
+        if (score >= 19.0F) return 5;
+        if (score >= 15.0F) return 4;
+        if (score >= 11.0F) return 3;
+        if (score >= 8.0F) return 2;
+        return 1;
+    }
+
+    private static int loadoutAttackSpeedRating(LoadoutModels.LoadoutDefinition definition) {
+        float attackSpeed = Math.max(
+                Math.max(maxStat(definition.primaryRunicStatPool(), "attack_speed"), maxStat(definition.secondaryRunicStatPool(), "attack_speed")),
+                Math.max(maxStat(definition.primaryRunicStatPool(), "draw_speed"), maxStat(definition.secondaryRunicStatPool(), "draw_speed")));
+        if (attackSpeed >= 0.075F) return 5;
+        if (attackSpeed >= 0.06F) return 4;
+        if (attackSpeed >= 0.045F) return 3;
+        if (attackSpeed >= 0.025F) return 2;
+        return 1;
+    }
+
+    private static float maxStat(List<LoadoutModels.StatRollRange> stats, String statId) {
+        float max = 0.0F;
+        for (LoadoutModels.StatRollRange stat : stats) {
+            if (stat.statId().equals(statId)) {
+                max = Math.max(max, stat.max());
+            }
+        }
+        return max;
     }
 
     private static void applyTarot(RunState run, TarotOption option) {
@@ -1700,7 +1817,6 @@ public final class DungeonRunManager {
         addWeighted(pool, "arsenal:arcanium_machete", 10);
         addWeighted(pool, "arsenal:prismatic_steel_machete", 11);
 
-        addWeighted(pool, "gatesofavarice:dungeon_magnet", 3);
         return List.copyOf(pool);
     }
 
@@ -1840,10 +1956,6 @@ public final class DungeonRunManager {
         return new ItemStack(item).getHoverName().getString();
     }
 
-    private static ItemStack pickLeveledMagnet(RandomSource random, int playerLevel) {
-        return new ItemStack(ModItems.DUNGEON_MAGNET.get());
-    }
-
     private static ItemStack pickLoadoutMagnet(LoadoutModels.LoadoutDefinition definition, RandomSource random, int playerLevel) {
         return new ItemStack(ModItems.DUNGEON_MAGNET.get());
     }
@@ -1941,7 +2053,7 @@ public final class DungeonRunManager {
         int rolls = Math.max(1, (int) Math.ceil(baseRolls * 0.5D));
         for (int i = 0; i < rolls; i++) {
             Item item = pickScaledDrop(run, avgLevel, level.random);
-            ItemStack drop = new ItemStack(item, rollDungeonDropCount(item, wave, level.random));
+            ItemStack drop = createDungeonDrop(item, avgLevel, wave, level.random);
             if (item == ModItems.HEART_FRAGMENT.get()) {
                 DungeonBoundItems.forceMarkDungeonBound(drop);
             }
@@ -1951,13 +2063,13 @@ public final class DungeonRunManager {
         for (int i = 0; i < 2 + wave / 5; i++) {
             MythicCoinOrbEntity.spawn((ServerLevel) dead.level(), dead.getX(), dead.getY() + 0.35D, dead.getZ(), Math.max(1, coinValue / Math.max(1, 2 + wave / 5)));
         }
-        if (level.random.nextFloat() < DUNGEON_MAGNET_DROP_CHANCE) {
-            ItemStack magnet = pickLeveledMagnet(level.random, avgLevel);
-            if (!magnet.isEmpty()) {
-                DungeonBoundItems.forceMarkDungeonBound(magnet);
-                dead.spawnAtLocation(magnet);
-            }
+    }
+
+    private static ItemStack createDungeonDrop(Item item, int playerLevel, int wave, RandomSource random) {
+        if (item == ModItems.GATEWAY_CARD.get()) {
+            return GatewayCardData.create(ModItems.GATEWAY_CARD.get(), GatewayCardData.CardType.STAT, playerLevel, random);
         }
+        return new ItemStack(item, rollDungeonDropCount(item, wave, random));
     }
 
     private static int computeWaveLootRolls(RunState run, int avgLevel, RandomSource random) {
@@ -2150,24 +2262,32 @@ public final class DungeonRunManager {
     private static void openWaveMenu(ServerPlayer owner, RunState run) {
         List<DungeonWaveMenu.WaveOptionView> views;
         if (run.phase == RunPhase.SELECTING_TAROT) {
-            views = run.tarotOptions.stream().map(option -> new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, option.difficulty, ItemStack.EMPTY, ItemStack.EMPTY)).toList();
+            views = run.tarotOptions.stream().map(option -> new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, option.difficulty, ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, 0, 0, 0, 0)).toList();
         } else if (run.selectingLoadout) {
             ArrayList<DungeonWaveMenu.WaveOptionView> loadoutViews = new ArrayList<>();
             for (LoadoutOption option : run.loadoutOptions) {
-                loadoutViews.add(new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, 0, option.primary().copy(), option.secondary().copy()));
+                loadoutViews.add(new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, 0, option.primary().copy(), option.secondary().copy(), option.head().copy(), option.chest().copy(), option.legs().copy(), option.feet().copy(), option.speedRating(), option.damageRating(), option.defenceRating(), option.attackSpeedRating()));
             }
             loadoutViews.add(new DungeonWaveMenu.WaveOptionView(
-                    Component.literal("Random Loadout"),
-                    Component.literal("Randomly picks any loadout from the full pool"),
+                    Component.literal("Random"),
+                    Component.literal("Selects a random loadout"),
                     100,
                     100,
                     0,
                     ItemStack.EMPTY,
-                    ItemStack.EMPTY
+                    ItemStack.EMPTY,
+                    ItemStack.EMPTY,
+                    ItemStack.EMPTY,
+                    ItemStack.EMPTY,
+                    ItemStack.EMPTY,
+                    0,
+                    0,
+                    0,
+                    0
             ));
             views = List.copyOf(loadoutViews);
         } else {
-            views = run.lootOptions.stream().map(option -> new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, 0, option.stack().copy(), ItemStack.EMPTY)).toList();
+            views = run.lootOptions.stream().map(option -> new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, 0, option.stack().copy(), ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, 0, 0, 0, 0)).toList();
         }
         int rerollsLeft = getUpgradeRerollsLeft(run.ownerId);
         int rerollCost = getUpgradeRerollCost(run.ownerId);
@@ -2288,6 +2408,7 @@ public final class DungeonRunManager {
     }
 
     private static void finishAndCleanup(RunState run) {
+        setBoundlessQuestBookHidden(false);
         syncHud(run, false);
         closeOverworldEntryPortals(run.server, run.ownerId);
         for (Map.Entry<UUID, PlayerSnapshot> entry : run.snapshots.entrySet()) {
@@ -2385,8 +2506,8 @@ public final class DungeonRunManager {
         for (ItemStack stack : rollCompletionBonusRewards(random, Math.max(0, run.waveNumber))) {
             addOrMergeReward(rewards, stack);
         }
-        for (ItemStack card : rollCompletionCards(random, playerLevel, run)) {
-            addOrMergeReward(rewards, card);
+        for (ItemStack boosterPack : rollCompletionBoosterPacks(random, playerLevel, run)) {
+            addOrMergeReward(rewards, boosterPack);
         }
         return List.copyOf(rewards);
     }
@@ -2417,17 +2538,39 @@ public final class DungeonRunManager {
         return lootbox;
     }
 
-    private static List<ItemStack> rollCompletionCards(RandomSource random, int playerLevel, RunState run) {
-        ArrayList<ItemStack> cards = new ArrayList<>();
+    private static List<ItemStack> rollCompletionBoosterPacks(RandomSource random, int playerLevel, RunState run) {
+        ArrayList<ItemStack> packs = new ArrayList<>();
         int guaranteed = Math.max(0, run.waveNumber / 5);
         int extra = random.nextFloat() < Mth.clamp(playerLevel / 140.0F + run.waveNumber * 0.01F, 0.05F, 0.65F) ? 1 : 0;
         for (int i = 0; i < guaranteed + extra; i++) {
-            ItemStack card = rollGatewayCard(random, playerLevel);
-            if (!card.isEmpty()) {
-                cards.add(card);
-            }
+            packs.add(new ItemStack(pickCompletionBoosterPack(random, playerLevel, run.waveNumber)));
         }
-        return List.copyOf(cards);
+        return List.copyOf(packs);
+    }
+
+    private static Item pickCompletionBoosterPack(RandomSource random, int playerLevel, int waveNumber) {
+        double depth = Mth.clamp(waveNumber / 25.0D + playerLevel / 250.0D, 0.0D, 1.0D);
+        double legendaryChance = 0.005D + depth * 0.035D;
+        double epicChance = 0.04D + depth * 0.12D;
+        double rareChance = 0.16D + depth * 0.20D;
+        double uncommonChance = 0.35D + depth * 0.12D;
+        double roll = random.nextDouble();
+        if (roll < legendaryChance) {
+            return ModItems.LEGENDARY_BOOSTER_PACK.get();
+        }
+        roll -= legendaryChance;
+        if (roll < epicChance) {
+            return ModItems.EPIC_BOOSTER_PACK.get();
+        }
+        roll -= epicChance;
+        if (roll < rareChance) {
+            return ModItems.RARE_BOOSTER_PACK.get();
+        }
+        roll -= rareChance;
+        if (roll < uncommonChance) {
+            return ModItems.UNCOMMON_BOOSTER_PACK.get();
+        }
+        return ModItems.COMMON_BOOSTER_PACK.get();
     }
 
     private static List<ItemStack> rollCompletionBonusRewards(RandomSource random, int wavesComplete) {
@@ -2487,7 +2630,14 @@ public final class DungeonRunManager {
     }
 
     public static ItemStack rollGatewayCard(RandomSource random, int playerLevel) {
-        GatewayCardData.CardType[] values = GatewayCardData.CardType.values();
+        GatewayCardData.CardType[] values = {
+                GatewayCardData.CardType.STAT,
+                GatewayCardData.CardType.DAMAGE,
+                GatewayCardData.CardType.EFFECT,
+                GatewayCardData.CardType.ABILITY,
+                GatewayCardData.CardType.RARITY,
+                GatewayCardData.CardType.CHALLENGE
+        };
         GatewayCardData.CardType type = values[random.nextInt(values.length)];
         return GatewayCardData.create(ModItems.GATEWAY_CARD.get(), type, playerLevel, random);
     }
@@ -2504,10 +2654,39 @@ public final class DungeonRunManager {
     private static void restorePlayerSnapshot(ServerPlayer player, PlayerSnapshot snapshot, boolean returnToSavedLocation) {
         clearDungeonBeltMagnet(player);
         MythicCoinWallet.set(player, 0);
+        setBoundlessQuestBookHidden(false);
         restoreSnapshot(player, snapshot);
         syncHudToPlayer(player, false, 0, 0, 1);
         if (returnToSavedLocation) {
             DungeonInstanceManager.teleportToSavedLocation(player, snapshot.dimension, snapshot.returnPos, snapshot.yaw, snapshot.pitch);
+        }
+    }
+
+    private static void setBoundlessQuestBookHidden(boolean hidden) {
+        Path configPath = FMLPaths.CONFIGDIR.get().resolve("boundless-common.toml");
+        if (!Files.isRegularFile(configPath)) {
+            return;
+        }
+        try {
+            List<String> lines = Files.readAllLines(configPath);
+            boolean changed = false;
+            for (int i = 0; i < lines.size(); i++) {
+                String line = lines.get(i);
+                int keyIndex = line.indexOf(BOUNDLESS_HIDE_QUEST_BOOK_KEY);
+                if (keyIndex < 0 || !line.substring(0, keyIndex).trim().isEmpty()) {
+                    continue;
+                }
+                String updated = line.substring(0, keyIndex) + BOUNDLESS_HIDE_QUEST_BOOK_KEY + " = " + hidden;
+                if (!line.equals(updated)) {
+                    lines.set(i, updated);
+                    changed = true;
+                }
+                break;
+            }
+            if (changed) {
+                Files.write(configPath, lines);
+            }
+        } catch (IOException ignored) {
         }
     }
 
@@ -2518,7 +2697,7 @@ public final class DungeonRunManager {
         }
         restorePlayerSnapshot(player, pending.snapshot(), true);
         if (pending.completionPayload() != null) {
-            PacketDistributor.sendToPlayer(player, pending.completionPayload());
+            PENDING_COMPLETION_SCREENS.put(player.getUUID(), pending.completionPayload());
         }
         markStateDirty();
         return true;
@@ -2715,9 +2894,12 @@ public final class DungeonRunManager {
     private static CompoundTag saveSnapshot(PlayerSnapshot snapshot, HolderLookup.Provider registries) {
         CompoundTag tag = new CompoundTag();
         tag.putString("dimension", snapshot.dimension.location().toString());
-        tag.putInt("return_x", snapshot.returnPos.getX());
-        tag.putInt("return_y", snapshot.returnPos.getY());
-        tag.putInt("return_z", snapshot.returnPos.getZ());
+        tag.putDouble("return_x_exact", snapshot.returnPos.x());
+        tag.putDouble("return_y_exact", snapshot.returnPos.y());
+        tag.putDouble("return_z_exact", snapshot.returnPos.z());
+        tag.putInt("return_x", snapshot.returnBlockPos().getX());
+        tag.putInt("return_y", snapshot.returnBlockPos().getY());
+        tag.putInt("return_z", snapshot.returnBlockPos().getZ());
         tag.putFloat("yaw", snapshot.yaw);
         tag.putFloat("pitch", snapshot.pitch);
         tag.putInt("selected_slot", snapshot.selectedSlot);
@@ -2737,7 +2919,9 @@ public final class DungeonRunManager {
         }
         return new PlayerSnapshot(
                 ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION, dimensionId),
-                new BlockPos(tag.getInt("return_x"), tag.getInt("return_y"), tag.getInt("return_z")),
+                tag.contains("return_x_exact")
+                        ? new Vec3(tag.getDouble("return_x_exact"), tag.getDouble("return_y_exact"), tag.getDouble("return_z_exact"))
+                        : Vec3.atBottomCenterOf(new BlockPos(tag.getInt("return_x"), tag.getInt("return_y"), tag.getInt("return_z"))),
                 tag.getFloat("yaw"),
                 tag.getFloat("pitch"),
                 loadItemStacks(tag.getList("items", Tag.TAG_COMPOUND), registries, 36),
@@ -2866,7 +3050,7 @@ public final class DungeonRunManager {
                 bestWave,
                 elapsedTicks,
                 levelPoints,
-                cashedOutCoins,
+                GoldCoinWallet.getTotalEarned(player),
                 survived ? cashedOutCoins / 1000 : 0,
                 run.mobsKilled,
                 Math.round(run.damageDealt),
@@ -2967,7 +3151,7 @@ public final class DungeonRunManager {
 
     private static final class PlayerSnapshot {
         private final ResourceKey<Level> dimension;
-        private final BlockPos returnPos;
+        private final Vec3 returnPos;
         private final float yaw;
         private final float pitch;
         private final List<ItemStack> items;
@@ -2975,7 +3159,7 @@ public final class DungeonRunManager {
         private final List<ItemStack> offhand;
         private final int selectedSlot;
 
-        private PlayerSnapshot(ResourceKey<Level> dimension, BlockPos returnPos, float yaw, float pitch, List<ItemStack> items, List<ItemStack> armor, List<ItemStack> offhand, int selectedSlot) {
+        private PlayerSnapshot(ResourceKey<Level> dimension, Vec3 returnPos, float yaw, float pitch, List<ItemStack> items, List<ItemStack> armor, List<ItemStack> offhand, int selectedSlot) {
             this.dimension = dimension;
             this.returnPos = returnPos;
             this.yaw = yaw;
@@ -2989,7 +3173,7 @@ public final class DungeonRunManager {
         private static PlayerSnapshot capture(ServerPlayer player) {
             return new PlayerSnapshot(
                     player.level().dimension(),
-                    player.blockPosition(),
+                    player.position(),
                     player.getYRot(),
                     player.getXRot(),
                     copyStacks(player.getInventory().items),
@@ -2997,6 +3181,10 @@ public final class DungeonRunManager {
                     copyStacks(player.getInventory().offhand),
                     player.getInventory().selected
             );
+        }
+
+        private BlockPos returnBlockPos() {
+            return BlockPos.containing(this.returnPos);
         }
 
         private static List<ItemStack> copyStacks(List<ItemStack> source) {
@@ -3250,21 +3438,11 @@ public final class DungeonRunManager {
             return new LootOption(Component.literal("Item Upgrade"), Component.literal("Mythic Coins x" + value), stack);
         }
 
-        private static LootOption magnet(RandomSource random, int playerLevel) {
-            ItemStack stack = pickLeveledMagnet(random, playerLevel);
-            if (stack.isEmpty()) {
-                return buff(random);
-            }
-            String name = stack.getHoverName().getString();
-            return new LootOption(Component.literal("Item Upgrade"), Component.literal(name), stack);
-        }
-
         private static LootOption mystery(RandomSource random, int playerLevel) {
-            return switch (random.nextInt(5)) {
+            return switch (random.nextInt(4)) {
                 case 0 -> weapon(random, playerLevel);
                 case 1 -> armor(random);
                 case 2 -> buff(random);
-                case 3 -> magnet(random, playerLevel);
                 default -> coins(random, playerLevel);
             };
         }
@@ -3296,7 +3474,11 @@ public final class DungeonRunManager {
             ItemStack primary,
             ItemStack secondary,
             ItemStack utility,
-            List<ItemStack> food
+            List<ItemStack> food,
+            int speedRating,
+            int damageRating,
+            int defenceRating,
+            int attackSpeedRating
     ) {
     }
 

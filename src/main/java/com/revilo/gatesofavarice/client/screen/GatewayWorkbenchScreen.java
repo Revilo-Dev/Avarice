@@ -29,6 +29,7 @@ public class GatewayWorkbenchScreen extends AbstractContainerScreen<GatewayWorkb
     private int forgeAnimationTicks;
     private boolean pendingForgeSend;
     private final List<ScreenParticle> particles = new ArrayList<>();
+    private final List<FlyingCard> flyingCards = new ArrayList<>();
 
     public GatewayWorkbenchScreen(GatewayWorkbenchMenu menu, Inventory playerInventory, Component title) {
         super(menu, playerInventory, title);
@@ -50,6 +51,7 @@ public class GatewayWorkbenchScreen extends AbstractContainerScreen<GatewayWorkb
         this.crystalHoverScale = Mth.lerp(0.25F, this.crystalHoverScale, 1.0F);
 
         this.renderCenterCrystal(guiGraphics, crystalHovered);
+        this.renderFlyingCards(guiGraphics, partialTick);
         this.renderParticles(guiGraphics, partialTick);
 
         if (!forgeAnimating && crystalHovered && !this.menu.getCrystalStack().isEmpty()) {
@@ -75,6 +77,7 @@ public class GatewayWorkbenchScreen extends AbstractContainerScreen<GatewayWorkb
                 && this.minecraft.gameMode != null
                 && !this.isForgeAnimating()
                 && this.menu.canForge()) {
+            this.captureFlyingCards();
             this.forgeAnimationTicks = FORGE_ANIMATION_TICKS;
             this.pendingForgeSend = true;
             return true;
@@ -94,6 +97,7 @@ public class GatewayWorkbenchScreen extends AbstractContainerScreen<GatewayWorkb
                     this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, GatewayWorkbenchMenu.FORGE_BUTTON_ID);
                 }
                 this.pendingForgeSend = false;
+                this.flyingCards.clear();
                 this.spawnParticleBurst();
             }
         }
@@ -125,22 +129,64 @@ public class GatewayWorkbenchScreen extends AbstractContainerScreen<GatewayWorkb
     private void renderCrystalTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         ItemStack crystal = this.menu.getCrystalStack();
         List<Component> tooltip = new ArrayList<>();
-        tooltip.add(Component.literal("Click to forge crystal").withStyle(ChatFormatting.GOLD));
-        List<GatewayCardData.CardModifier> cards = CrystalForgeData.readCards(crystal);
-        if (cards.isEmpty()) {
-            tooltip.add(Component.literal("No card attributes added").withStyle(ChatFormatting.GRAY));
-        } else {
-            tooltip.add(Component.literal("Card attributes:").withStyle(ChatFormatting.LIGHT_PURPLE));
-            int visibleCards = Screen.hasAltDown() ? cards.size() : Math.min(3, cards.size());
+        tooltip.add(Component.literal(this.menu.canForge() ? "Click to forge crystal" : "Add cards to forge").withStyle(ChatFormatting.GOLD));
+        tooltip.addAll(CrystalForgeData.buildCrystalTooltip(crystal, Screen.hasAltDown()));
+
+        List<ItemStack> pendingCards = this.menu.getCardStacks();
+        if (!pendingCards.isEmpty()) {
+            int visibleCards = Screen.hasAltDown() ? pendingCards.size() : Math.min(3, pendingCards.size());
             for (int index = 0; index < visibleCards; index++) {
-                GatewayCardData.CardModifier card = cards.get(index);
-                tooltip.add(Component.literal("- " + card.summary()).withStyle(card.type().color()));
+                GatewayCardData.CardModifier card = GatewayCardData.read(pendingCards.get(index));
+                tooltip.add(Component.literal("+ " + card.summary()).withStyle(card.type().color()));
             }
-            if (cards.size() > visibleCards) {
+            if (pendingCards.size() > visibleCards) {
                 tooltip.add(Component.literal("[alt] read more").withStyle(ChatFormatting.DARK_GRAY));
             }
         }
         guiGraphics.renderTooltip(this.font, tooltip, crystal.getTooltipImage(), crystal, mouseX, mouseY);
+    }
+
+    private void renderFlyingCards(GuiGraphics guiGraphics, float partialTick) {
+        if (!this.isForgeAnimating() || this.flyingCards.isEmpty()) {
+            return;
+        }
+
+        float forgeProgress = this.getForgeProgress(partialTick);
+        int targetX = this.leftPos + GatewayWorkbenchSlots.DISPLAY_CENTER_X - 8;
+        int targetY = this.topPos + GatewayWorkbenchSlots.DISPLAY_CENTER_Y - 8;
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(0.0F, 0.0F, 350.0F);
+        for (FlyingCard card : this.flyingCards) {
+            float delayed = Mth.clamp((forgeProgress - card.delay) / Math.max(0.01F, 1.0F - card.delay), 0.0F, 1.0F);
+            float eased = 1.0F - (float) Math.pow(1.0F - delayed, 3.0D);
+            float x = Mth.lerp(eased, card.startX, targetX);
+            float y = Mth.lerp(eased, card.startY, targetY);
+            float scale = Mth.lerp(eased, 1.0F, 0.42F);
+            guiGraphics.pose().pushPose();
+            guiGraphics.pose().translate(x, y, 0.0F);
+            guiGraphics.pose().scale(scale, scale, 1.0F);
+            guiGraphics.renderItem(card.stack, 0, 0);
+            guiGraphics.pose().popPose();
+        }
+        guiGraphics.pose().popPose();
+    }
+
+    private void captureFlyingCards() {
+        this.flyingCards.clear();
+        int order = 0;
+        for (int cardIndex = 0; cardIndex < GatewayWorkbenchSlots.CARD_SLOT_COUNT; cardIndex++) {
+            ItemStack stack = this.menu.getSlot(GatewayWorkbenchMenu.FIRST_CARD_SLOT + cardIndex).getItem();
+            if (stack.isEmpty()) {
+                continue;
+            }
+            this.flyingCards.add(new FlyingCard(
+                    stack.copy(),
+                    this.leftPos + GatewayWorkbenchSlots.cardSlotX(cardIndex) + 1,
+                    this.topPos + GatewayWorkbenchSlots.cardSlotY(cardIndex) + 1,
+                    Math.min(0.45F, order * 0.035F)
+            ));
+            order++;
+        }
     }
 
 
@@ -220,5 +266,8 @@ public class GatewayWorkbenchScreen extends AbstractContainerScreen<GatewayWorkb
             this.color = color;
             this.lifetime = lifetime;
         }
+    }
+
+    private record FlyingCard(ItemStack stack, float startX, float startY, float delay) {
     }
 }

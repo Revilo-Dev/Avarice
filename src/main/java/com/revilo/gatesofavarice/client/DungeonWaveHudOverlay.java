@@ -73,8 +73,8 @@ public final class DungeonWaveHudOverlay {
     private static void renderStatsSidebar(GuiGraphics guiGraphics, Minecraft minecraft) {
         int screenWidth = minecraft.getWindow().getGuiScaledWidth();
         int screenHeight = minecraft.getWindow().getGuiScaledHeight();
-        int x = screenWidth - SIDEBAR_WIDTH - 8;
-        int y = 30;
+        int x = screenWidth - SIDEBAR_WIDTH + 12;
+        int y = 40;
         int lineHeight = 11;
         int statCount = Math.max(1, DungeonHudState.statLines().size());
         int height = Math.min(screenHeight - y - 8, SIDEBAR_PADDING * 2 + 12 + lineHeight * (4 + statCount));

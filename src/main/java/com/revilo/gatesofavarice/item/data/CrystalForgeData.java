@@ -97,6 +97,10 @@ public final class CrystalForgeData {
     }
 
     public static List<Component> buildCrystalTooltip(ItemStack stack) {
+        return buildCrystalTooltip(stack, false);
+    }
+
+    public static List<Component> buildCrystalTooltip(ItemStack stack, boolean expanded) {
         List<Component> lines = new ArrayList<>();
         CompoundTag rootTag = getRootTag(stack);
         if (rootTag.contains(LEVEL_KEY)) {
@@ -108,8 +112,13 @@ public final class CrystalForgeData {
         lines.add(Component.literal("Deck").withStyle(ChatFormatting.LIGHT_PURPLE, ChatFormatting.BOLD)
                 .append(Component.literal(": " + cards.size() + "/" + slots + " cards").withStyle(ChatFormatting.LIGHT_PURPLE)));
         if (!cards.isEmpty()) {
-            for (GatewayCardData.CardModifier card : cards) {
+            int visibleCards = expanded ? cards.size() : Math.min(3, cards.size());
+            for (int index = 0; index < visibleCards; index++) {
+                GatewayCardData.CardModifier card = cards.get(index);
                 lines.add(Component.literal("- " + card.summary()).withStyle(card.type().color()));
+            }
+            if (cards.size() > visibleCards) {
+                lines.add(Component.literal("[alt] read more").withStyle(ChatFormatting.DARK_GRAY));
             }
         }
         return lines;

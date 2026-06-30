@@ -14,12 +14,18 @@ public final class GoldCoinWallet {
         return player.getData(ModAttachments.GOLD_COINS);
     }
 
+    public static int getTotalEarned(Player player) {
+        return player.getData(ModAttachments.TOTAL_GOLD_COINS_EARNED);
+    }
+
     public static void add(ServerPlayer player, int amount) {
         if (amount <= 0) {
             return;
         }
         player.setData(ModAttachments.GOLD_COINS, get(player) + amount);
+        player.setData(ModAttachments.TOTAL_GOLD_COINS_EARNED, getTotalEarned(player) + amount);
         AttachmentSync.syncEntityUpdate(player, ModAttachments.GOLD_COINS.get());
+        AttachmentSync.syncEntityUpdate(player, ModAttachments.TOTAL_GOLD_COINS_EARNED.get());
     }
 
     public static void set(ServerPlayer player, int amount) {

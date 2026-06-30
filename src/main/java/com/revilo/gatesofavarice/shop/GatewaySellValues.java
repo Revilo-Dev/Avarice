@@ -33,11 +33,13 @@ public final class GatewaySellValues {
         if (item == Items.BONE) return 2;
         if (item == Items.COAL) return 2;
         if (item == Items.POTATO) return 1;
+        if (item == Items.COPPER_INGOT) return 1;
         if (item == Items.ARROW) return 1;
         if (item == Items.STONE_SWORD) return 1;
         if (item == Items.SLIME_BALL) return 1;
         if (item == Items.SPIDER_EYE) return 2;
         if (item == Items.STRING) return 1;
+        if (ResourceLocation.fromNamespaceAndPath("farmersdelight", "onion").equals(itemId)) return 1;
         if (ResourceLocation.fromNamespaceAndPath("deeperdarker", "resonarium").equals(itemId)) return 15;
         if (item == ModItems.GRIMSTONE.get()) return 7;
         if (item == ModItems.MYSTIC_ESSENCE.get()) return 10;

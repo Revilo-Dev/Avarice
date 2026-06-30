@@ -39,6 +39,42 @@
         "custom_model_data": 6
       },
       "model": "gatesofavarice:item/gateway_card_challenge"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 7
+      },
+      "model": "gatesofavarice:item/gateway_card_stat_multiplier"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 8
+      },
+      "model": "gatesofavarice:item/gateway_card_damage_multiplier"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 9
+      },
+      "model": "gatesofavarice:item/gateway_card_effect_multiplier"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 10
+      },
+      "model": "gatesofavarice:item/gateway_card_ability_multiplier"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 11
+      },
+      "model": "gatesofavarice:item/gateway_card_rarity_multiplier"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 12
+      },
+      "model": "gatesofavarice:item/gateway_card_challenge_multiplier"
     }
   ]
 }

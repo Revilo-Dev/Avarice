@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "gatesofavarice:metal_block"
+    }
+  ],
+  "result": {
+    "id": "gatesofavarice:metal_ingot",
+    "count": 9
+  }
+}

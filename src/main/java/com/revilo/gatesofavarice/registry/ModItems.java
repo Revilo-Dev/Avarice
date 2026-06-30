@@ -2,6 +2,7 @@ package com.revilo.gatesofavarice.registry;
 
 import com.revilo.gatesofavarice.GatewayExpansion;
 import com.revilo.gatesofavarice.item.ArcaneAppleItem;
+import com.revilo.gatesofavarice.item.BoosterPackItem;
 import com.revilo.gatesofavarice.item.CrystalItem;
 import com.revilo.gatesofavarice.item.GatewayCardItem;
 import com.revilo.gatesofavarice.item.GatewaySwordItem;
@@ -15,6 +16,7 @@ import com.revilo.gatesofavarice.item.RarityTintedSmithingTemplateItem;
 import com.revilo.gatesofavarice.item.ShopGatewayPearlItem;
 import com.revilo.gatesofavarice.item.StabilityPearlItem;
 import com.revilo.gatesofavarice.item.data.LootRarity;
+import com.revilo.gatesofavarice.item.data.GatewayCardData;
 import java.util.List;
 import net.minecraft.ChatFormatting;
 import net.minecraft.Util;
@@ -55,6 +57,16 @@ public final class ModItems {
             () -> new StabilityPearlItem(new Item.Properties().stacksTo(16).rarity(Rarity.EPIC)));
     public static final DeferredHolder<Item, GatewayCardItem> GATEWAY_CARD = ITEMS.register("gateway_card",
             () -> new GatewayCardItem(new Item.Properties().stacksTo(16).rarity(Rarity.UNCOMMON)));
+    public static final DeferredHolder<Item, BoosterPackItem> COMMON_BOOSTER_PACK = ITEMS.register("common_booster_pack",
+            () -> new BoosterPackItem(GatewayCardData.BoosterRarity.COMMON, new Item.Properties().stacksTo(16)));
+    public static final DeferredHolder<Item, BoosterPackItem> UNCOMMON_BOOSTER_PACK = ITEMS.register("uncommon_booster_pack",
+            () -> new BoosterPackItem(GatewayCardData.BoosterRarity.UNCOMMON, new Item.Properties().stacksTo(16).rarity(Rarity.UNCOMMON)));
+    public static final DeferredHolder<Item, BoosterPackItem> RARE_BOOSTER_PACK = ITEMS.register("rare_booster_pack",
+            () -> new BoosterPackItem(GatewayCardData.BoosterRarity.RARE, new Item.Properties().stacksTo(16).rarity(Rarity.RARE)));
+    public static final DeferredHolder<Item, BoosterPackItem> EPIC_BOOSTER_PACK = ITEMS.register("epic_booster_pack",
+            () -> new BoosterPackItem(GatewayCardData.BoosterRarity.EPIC, new Item.Properties().stacksTo(16).rarity(Rarity.EPIC)));
+    public static final DeferredHolder<Item, BoosterPackItem> LEGENDARY_BOOSTER_PACK = ITEMS.register("legendary_booster_pack",
+            () -> new BoosterPackItem(GatewayCardData.BoosterRarity.LEGENDARY, new Item.Properties().stacksTo(16).rarity(Rarity.EPIC)));
     public static final DeferredHolder<Item, LootMaterialItem> GRIMSTONE = ITEMS.register("grimstone",
             () -> new LootMaterialItem(LootRarity.COMMON, new Item.Properties().stacksTo(64)));
     public static final DeferredHolder<Item, LootMaterialItem> MYSTIC_ESSENCE = ITEMS.register("mystic_essence",
@@ -77,6 +89,10 @@ public final class ModItems {
             () -> new LootMaterialItem(LootRarity.UNCOMMON, new Item.Properties().stacksTo(64).rarity(Rarity.UNCOMMON)));
     public static final DeferredHolder<Item, LootMaterialItem> SAPHIRE = ITEMS.register("saphire",
             () -> new LootMaterialItem(LootRarity.RARE, new Item.Properties().stacksTo(64).rarity(Rarity.RARE)));
+    public static final DeferredHolder<Item, LootMaterialItem> METAL_NUGGET = ITEMS.register("metal_nugget",
+            () -> new LootMaterialItem(LootRarity.COMMON, new Item.Properties().stacksTo(64)));
+    public static final DeferredHolder<Item, LootMaterialItem> METAL_INGOT = ITEMS.register("metal_ingot",
+            () -> new LootMaterialItem(LootRarity.COMMON, new Item.Properties().stacksTo(64)));
     public static final DeferredHolder<Item, LootMaterialItem> MANA_STEEL_SCRAP = ITEMS.register("mana_steel_scrap",
             () -> new LootMaterialItem(LootRarity.COMMON, new Item.Properties().stacksTo(64)));
     public static final DeferredHolder<Item, LootMaterialItem> MANA_STEEL_INGOT = ITEMS.register("mana_steel_ingot",
@@ -240,6 +256,8 @@ public final class ModItems {
             () -> new BlockItem(ModBlocks.GATEWAY_WORKBENCH.get(), new Item.Properties()));
     public static final DeferredHolder<Item, BlockItem> LOOTBOX = ITEMS.register("lootbox",
             () -> new BlockItem(ModBlocks.LOOTBOX.get(), new Item.Properties()));
+    public static final DeferredHolder<Item, BlockItem> METAL_BLOCK = ITEMS.register("metal_block",
+            () -> new BlockItem(ModBlocks.METAL_BLOCK.get(), new Item.Properties()));
 
     private ModItems() {
     }

@@ -363,11 +363,13 @@ public final class EnemyPoolRegistry {
         if (!ModCompat.isAnyLoaded(DEEPER_DARKER_IDS)) {
             return;
         }
-        if (theme == CrystalTheme.ARCANE || theme == CrystalTheme.UNDEAD) {
+        if (theme == CrystalTheme.BEAST) {
             if (level >= 20) {
-                List<EntityType<?>> darkMobs = ModCompat.hostileEntitiesForNamespaces(DEEPER_DARKER_IDS);
-                pools.pool(EnemyPoolRole.THEME).addAll(darkMobs, 3, "deeperdarker");
-                pools.pool(EnemyPoolRole.ELITE).addAll(ModCompat.findEntitiesMatching(DEEPER_DARKER_IDS, "stalker", "shattered", "sculk"), 2, "deeperdarker");
+                List<EntityType<?>> sludge = ModCompat.findEntitiesMatching(DEEPER_DARKER_IDS, "sludge");
+                pools.pool(EnemyPoolRole.MELEE).addAll(sludge, 3, "deeperdarker");
+                pools.pool(EnemyPoolRole.TANK).addAll(sludge, 2, "deeperdarker");
+                pools.pool(EnemyPoolRole.SUPPORT).addAll(sludge, 2, "deeperdarker");
+                pools.pool(EnemyPoolRole.THEME).addAll(sludge, 3, "deeperdarker");
             }
         }
     }

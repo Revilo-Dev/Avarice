@@ -85,6 +85,7 @@ public class DungeonUpgradeCardsScreen extends Screen {
         this.renderBackground(gg, mouseX, mouseY, partialTick);
         super.render(gg, mouseX, mouseY, partialTick);
         gg.drawCenteredString(this.font, Component.literal("UPGRADE - " + formatCategoryName(this.categoryName)).withStyle(ChatFormatting.BOLD, ChatFormatting.YELLOW), this.centerX, this.top + 4, 0xFFFFFF);
+        boolean renderPreviewTooltip = false;
         if (this.categoryName.equalsIgnoreCase("ITEM")) {
             gg.drawCenteredString(this.font, Component.literal("Item").withStyle(ChatFormatting.GOLD), this.centerX, this.top + 62, 0xF3D78A);
         } else if (!this.previewStack.isEmpty()) {
@@ -97,7 +98,7 @@ public class DungeonUpgradeCardsScreen extends Screen {
             gg.renderFakeItem(this.previewStack, -8, -8);
             gg.pose().popPose();
             if (mouseX >= itemX - 22 && mouseX <= itemX + 22 && mouseY >= itemY - 22 && mouseY <= itemY + 22) {
-                renderPreviewTooltip(gg, mouseX, mouseY);
+                renderPreviewTooltip = true;
             }
         }
 
@@ -115,6 +116,9 @@ public class DungeonUpgradeCardsScreen extends Screen {
             }
         }
         renderSelectionCounter(gg);
+        if (renderPreviewTooltip) {
+            renderPreviewTooltip(gg, mouseX, mouseY);
+        }
     }
 
     private void renderSelectionCounter(GuiGraphics gg) {
@@ -271,7 +275,10 @@ public class DungeonUpgradeCardsScreen extends Screen {
 
     private void renderPreviewTooltip(GuiGraphics gg, int mouseX, int mouseY) {
         List<Component> lines = buildModifiedStatsTooltip(this.previewStack, this.runeSlotsUsed, this.runeSlotsCapacity);
+        gg.pose().pushPose();
+        gg.pose().translate(0.0F, 0.0F, 1200.0F);
         gg.renderComponentTooltip(this.font, lines, mouseX, liftedTooltipY(mouseY, lines.size()));
+        gg.pose().popPose();
     }
 
     private static List<Component> buildModifiedStatsTooltip(ItemStack stack, int runeSlotsUsed, int runeSlotsCapacity) {
@@ -407,9 +414,14 @@ public class DungeonUpgradeCardsScreen extends Screen {
     }
 
     private static ResourceLocation resolveCardIcon(UpgradeCard card) {
+        if ("Dungeon Magnet".equals(card.changeLabel()) || "Magnet".equals(card.changeLabel())) {
+            return ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/item/armor/dungeon_magnet.png");
+        }
+        if ("Arcane Apples".equals(card.changeLabel()) || "Apple Bundle".equals(card.changeLabel())) {
+            return ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/item/loot/arcane_apple.png");
+        }
         String iconName = switch (card.changeLabel()) {
-            case "Restock", "Apple Bundle", "Arrow Bundle", "Food Bundle" -> "capacity";
-            case "Magnet" -> "movement_speed";
+            case "Restock", "Arrow Bundle", "Food Bundle" -> "capacity";
             case "Food", "Heart Fragment", "Heart Fragments" -> "health";
             case "Primary" -> "attack_damage";
             case "Secondary" -> "undead_damage";

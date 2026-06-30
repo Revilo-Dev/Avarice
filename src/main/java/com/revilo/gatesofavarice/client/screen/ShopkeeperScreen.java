@@ -1018,9 +1018,14 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private static ResourceLocation resolveCardIcon(UpgradeCard card) {
+        if ("Dungeon Magnet".equals(card.changeLabel()) || "Magnet".equals(card.changeLabel())) {
+            return ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/item/armor/dungeon_magnet.png");
+        }
+        if ("Arcane Apples".equals(card.changeLabel()) || "Apple Bundle".equals(card.changeLabel())) {
+            return ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/item/loot/arcane_apple.png");
+        }
         String iconName = switch (card.changeLabel()) {
-            case "Restock", "Apple Bundle", "Arrow Bundle", "Food Bundle" -> "capacity";
-            case "Magnet" -> "movement_speed";
+            case "Restock", "Arrow Bundle", "Food Bundle" -> "capacity";
             case "Food", "Heart Fragment", "Heart Fragments" -> "health";
             case "Primary" -> "attack_damage";
             case "Secondary" -> "undead_damage";

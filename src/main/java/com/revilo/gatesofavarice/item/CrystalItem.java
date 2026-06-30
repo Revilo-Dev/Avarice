@@ -2,11 +2,13 @@ package com.revilo.gatesofavarice.item;
 
 import com.revilo.gatesofavarice.item.data.CrystalForgeData;
 import com.revilo.gatesofavarice.entity.GatewayCrystalEntity;
+import java.lang.reflect.Method;
 import java.util.List;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
@@ -36,7 +38,17 @@ public class CrystalItem extends Item {
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltipComponents, TooltipFlag tooltipFlag) {
         tooltipComponents.add(Component.translatable("tooltip.gatesofavarice.crystal.description").withStyle(ChatFormatting.GRAY));
         tooltipComponents.add(Component.translatable("tooltip.gatesofavarice.crystal.tier", this.crystalTier.tier()).withStyle(ChatFormatting.AQUA));
-        tooltipComponents.addAll(CrystalForgeData.buildCrystalTooltip(stack));
+        tooltipComponents.addAll(CrystalForgeData.buildCrystalTooltip(stack, isAltDown()));
+    }
+
+    private static boolean isAltDown() {
+        try {
+            Class<?> screenClass = Class.forName("net.minecraft.client.gui.screens.Screen");
+            Method method = screenClass.getMethod("hasAltDown");
+            return Boolean.TRUE.equals(method.invoke(null));
+        } catch (ReflectiveOperationException | LinkageError ignored) {
+            return false;
+        }
     }
 
     @Override
@@ -52,6 +64,10 @@ public class CrystalItem extends Item {
         ItemStack stack = player.getItemInHand(usedHand);
         if (!(level instanceof ServerLevel serverLevel)) {
             return InteractionResultHolder.sidedSuccess(stack, true);
+        }
+        if (player instanceof ServerPlayer serverPlayer && !GatewayCrystalEntity.canUseTier(serverPlayer, this.crystalTier.tier())) {
+            GatewayCrystalEntity.denyTierAccess(serverPlayer, this.crystalTier.tier());
+            return InteractionResultHolder.fail(stack);
         }
 
         GatewayCrystalEntity gateway = new GatewayCrystalEntity(serverLevel);

@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": [
+    "III",
+    "III",
+    "III"
+  ],
+  "key": {
+    "I": {
+      "item": "gatesofavarice:metal_ingot"
+    }
+  },
+  "result": {
+    "id": "gatesofavarice:metal_block",
+    "count": 1
+  }
+}

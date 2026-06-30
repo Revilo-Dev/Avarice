@@ -6,6 +6,8 @@ import com.revilo.gatesofavarice.registry.ModBlocks;
 import com.revilo.gatesofavarice.registry.ModMenus;
 import com.revilo.gatesofavarice.workbench.GatewayWorkbenchForgeLogic;
 import com.revilo.gatesofavarice.workbench.GatewayWorkbenchSlots;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Predicate;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
@@ -143,6 +145,17 @@ public class GatewayWorkbenchMenu extends AbstractContainerMenu {
 
     public boolean canForge() {
         return GatewayWorkbenchForgeLogic.canForge(this.player, this.container);
+    }
+
+    public List<ItemStack> getCardStacks() {
+        ArrayList<ItemStack> cards = new ArrayList<>();
+        for (int slot = FIRST_CARD_SLOT; slot < FIRST_CARD_SLOT + CARD_SLOT_COUNT; slot++) {
+            ItemStack stack = this.container.getItem(slot);
+            if (stack.getItem() instanceof GatewayCardItem) {
+                cards.add(stack.copy());
+            }
+        }
+        return List.copyOf(cards);
     }
 
     private boolean canAcceptWorkbenchInput() {

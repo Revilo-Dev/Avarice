@@ -1,6 +1,7 @@
 {
   "replace": false,
   "values": [
-    "gatesofavarice:gateway_workbench"
+    "gatesofavarice:gateway_workbench",
+    "gatesofavarice:metal_block"
   ]
 }

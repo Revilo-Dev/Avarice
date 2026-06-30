@@ -14,6 +14,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
 
 public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> {
@@ -24,6 +25,7 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
     private static final ResourceLocation UPGRADE_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/upgrade-card_hovered.png");
     private static final ResourceLocation ITEM_CARD = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/item-card.png");
     private static final ResourceLocation ITEM_CARD_HOVERED = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/item-card_hovered.png");
+    private static final ResourceLocation DICE_ICON = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/icon/dice.png");
     private static final int CARD_W = 76;
     private static final int CARD_H = 103;
     private static final int CARD_GAP = 3;
@@ -202,6 +204,11 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
             rowY += 8;
             if (rowY > 28) break;
         }
+        if (this.menu.stage() == 2) {
+            renderLoadoutCardContents(guiGraphics, option, centerX);
+            guiGraphics.pose().popPose();
+            return;
+        }
         if (!option.displayStack().isEmpty()) {
             int iconY = 29;
             int iconX = option.secondaryDisplayStack().isEmpty() ? centerX - 8 : centerX - 18;
@@ -226,6 +233,42 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
         guiGraphics.pose().popPose();
     }
 
+    private void renderLoadoutCardContents(GuiGraphics guiGraphics, DungeonWaveMenu.WaveOptionView option, int centerX) {
+        if (option.displayStack().isEmpty() && option.secondaryDisplayStack().isEmpty()) {
+            guiGraphics.blit(DICE_ICON, centerX - 8, 39, 0, 0, 16, 16, 16, 16);
+            return;
+        }
+
+        int iconY = 28;
+        guiGraphics.renderItem(option.displayStack(), centerX - 18, iconY);
+        guiGraphics.renderItem(option.secondaryDisplayStack(), centerX + 2, iconY);
+
+        String armorLine = option.details().getString().split("\\n", 2)[0];
+        drawScaledCentered(guiGraphics, armorLine, centerX, 51, 0.56F, 0xFFE36B);
+        renderStatRow(guiGraphics, "Speed", option.speedRating(), 9, 62);
+        renderStatRow(guiGraphics, "Damage", option.damageRating(), 9, 71);
+        renderStatRow(guiGraphics, "Defence", option.defenceRating(), 9, 80);
+        renderStatRow(guiGraphics, "Atk Spd", option.attackSpeedRating(), 9, 89);
+    }
+
+    private void renderStatRow(GuiGraphics guiGraphics, String label, int rating, int x, int y) {
+        drawScaled(guiGraphics, label, x, y, 0.55F, 0xF4F4F4);
+        renderGoldenDots(guiGraphics, rating, CARD_W - 23, y);
+    }
+
+    private void renderGoldenDots(GuiGraphics guiGraphics, int rating, int x, int y) {
+        if (rating <= 0) {
+            return;
+        }
+        String dots = "\u25CF".repeat(Math.max(1, Math.min(5, rating)));
+        int borderColor = 0x7A4A12;
+        drawScaled(guiGraphics, dots, x - 1, y, 0.55F, borderColor);
+        drawScaled(guiGraphics, dots, x + 1, y, 0.55F, borderColor);
+        drawScaled(guiGraphics, dots, x, y - 1, 0.55F, borderColor);
+        drawScaled(guiGraphics, dots, x, y + 1, 0.55F, borderColor);
+        drawScaled(guiGraphics, dots, x, y, 0.55F, 0xFFE36B);
+    }
+
     @Override
     protected void renderTooltip(GuiGraphics guiGraphics, int x, int y) {
         super.renderTooltip(guiGraphics, x, y);
@@ -248,6 +291,23 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
                 }
             }
         }
+        if (this.menu.stage() == 2) {
+            for (int i = 0; i < this.optionButtons.size() && i < this.menu.options().size(); i++) {
+                DungeonWaveMenu.WaveOptionView option = this.menu.options().get(i);
+                if (option.helmetStack().isEmpty()) continue;
+                Button button = this.optionButtons.get(i);
+                String armorLine = option.details().getString().split("\\n", 2)[0];
+                int centerX = button.getX() + CARD_W / 2;
+                int textWidth = Math.max(24, (int) (this.font.width(armorLine) * 0.56F));
+                int left = centerX - textWidth / 2;
+                int top = button.getY() + 51;
+                if (x >= left && x <= left + textWidth && y >= top && y <= top + 7) {
+                    ItemStack stack = armorTooltipStack(option, x, left, textWidth);
+                    guiGraphics.renderTooltip(this.font, stack, x, y);
+                    return;
+                }
+            }
+        }
         for (int i = 0; i < this.optionButtons.size() && i < this.menu.options().size(); i++) {
             DungeonWaveMenu.WaveOptionView option = this.menu.options().get(i);
             if (option.difficultyRating() <= 0) continue;
@@ -262,6 +322,16 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
                 return;
             }
         }
+    }
+
+    private ItemStack armorTooltipStack(DungeonWaveMenu.WaveOptionView option, int mouseX, int left, int width) {
+        int segment = Mth.clamp((int) (((mouseX - left) / (float) Math.max(1, width)) * 4.0F), 0, 3);
+        return switch (segment) {
+            case 0 -> option.helmetStack();
+            case 1 -> option.chestStack();
+            case 2 -> option.legsStack();
+            default -> option.feetStack();
+        };
     }
 
     private void selectOption(int optionIndex) {

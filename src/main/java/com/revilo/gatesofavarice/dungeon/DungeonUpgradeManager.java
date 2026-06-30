@@ -357,7 +357,15 @@ public final class DungeonUpgradeManager {
 
     private static int maxShopSelections(ServerPlayer player) {
         int playerLevel = Math.max(0, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player));
-        return 5 + playerLevel / 5;
+        if (playerLevel <= 5) return 2;
+        if (playerLevel <= 10) return 3;
+        if (playerLevel <= 15) return 4;
+        if (playerLevel <= 20) return 5;
+        if (playerLevel <= 30) return 6;
+        if (playerLevel <= 40) return 7;
+        if (playerLevel <= 50) return 8;
+        if (playerLevel <= 75) return 9;
+        return 10;
     }
 
     private static int getSessionWaveNumber(UpgradeSession session) {
@@ -441,6 +449,9 @@ public final class DungeonUpgradeManager {
             case ADD_OR_UPGRADE_EFFECT -> {
                 String raw = switch (card.changeLabel()) {
                     case "Thorns" -> "minecraft:thorns";
+                    case "Power" -> "minecraft:power";
+                    case "Punch" -> "minecraft:punch";
+                    case "Flame" -> "minecraft:flame";
                     default -> card.changeLabel().startsWith("effect:") ? card.changeLabel().substring("effect:".length()) : null;
                 };
                 if (raw == null) {
@@ -473,6 +484,9 @@ public final class DungeonUpgradeManager {
                 case ADD_OR_UPGRADE_EFFECT -> {
                     String raw = switch (card.changeLabel()) {
                         case "Thorns" -> "minecraft:thorns";
+                        case "Power" -> "minecraft:power";
+                        case "Punch" -> "minecraft:punch";
+                        case "Flame" -> "minecraft:flame";
                         default -> card.changeLabel().startsWith("effect:") ? card.changeLabel().substring("effect:".length()) : null;
                     };
                     if (raw == null) return;
@@ -519,7 +533,7 @@ public final class DungeonUpgradeManager {
             case ITEM_REWARD_ABILITY -> {
                 giveBoundStack(player, new ItemStack(com.revilo.gatesofavarice.registry.ModItems.ARCANE_APPLE.get(), 1 + random.nextInt(3)));
             }
-            case ITEM_REWARD_GATEWAY_CARD -> giveBoundStack(player, DungeonRunManager.rollGatewayCard(random, Math.max(1, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player))));
+            case ITEM_REWARD_GATEWAY_CARD -> giveBoundStack(player, new ItemStack(com.revilo.gatesofavarice.registry.ModItems.RARE_BOOSTER_PACK.get()));
             case UPGRADE_DUNGEON_MAGNET -> upgradeDungeonMagnet(player, random);
             case ITEM_REROLL_PRIMARY_WEAPON -> rerollWeapon(player, definition, true, random);
             case ITEM_REROLL_SECONDARY_WEAPON -> rerollWeapon(player, definition, false, random);
@@ -557,8 +571,8 @@ public final class DungeonUpgradeManager {
     }
 
     private static ItemStack rollRestockReward(RandomSource random, LoadoutDefinition definition, String bundleType) {
-        if ("Arrow Bundle".equals(bundleType)) {
-            return rollArrowBundle(random);
+        if (bundleType.endsWith("Arrows") || "Arrow Bundle".equals(bundleType)) {
+            return rollArrowBundle(random, bundleType);
         }
         if ("Food Bundle".equals(bundleType)) {
             return new ItemStack(defaultFoodItem(definition), 16 + random.nextInt(17));
@@ -569,9 +583,6 @@ public final class DungeonUpgradeManager {
         float roll = random.nextFloat();
         if (roll < 0.18F) {
             return new ItemStack(Items.ENCHANTED_GOLDEN_APPLE, 1);
-        }
-        if (roll < 0.52F) {
-            return new ItemStack(Items.ARROW, 32 + random.nextInt(33));
         }
         return new ItemStack(Items.GOLDEN_APPLE, 5 + random.nextInt(12));
     }
@@ -590,16 +601,17 @@ public final class DungeonUpgradeManager {
         return new ItemStack(Items.GOLDEN_APPLE, 5 + random.nextInt(12));
     }
 
-    private static ItemStack rollArrowBundle(RandomSource random) {
-        String[] arrows = {
-                "arsenal:amethyst_arrow",
-                "arsenal:copper_arrow",
-                "arsenal:iron_arrow",
-                "arsenal:golden_arrow",
-                "arsenal:diamond_arrow",
-                "arsenal:netherite_arrow"
+    private static ItemStack rollArrowBundle(RandomSource random, String bundleType) {
+        String id = switch (bundleType) {
+            case "Copper Arrows" -> "arsenal:copper_arrow";
+            case "Iron Arrows" -> "arsenal:iron_arrow";
+            case "Amethyst Arrows" -> "arsenal:amethyst_arrow";
+            case "Golden Arrows" -> "arsenal:golden_arrow";
+            case "Diamond Arrows" -> "arsenal:diamond_arrow";
+            case "Netherite Arrows" -> "arsenal:netherite_arrow";
+            default -> "minecraft:arrow";
         };
-        Item item = resolveItem(arrows[random.nextInt(arrows.length)]);
+        Item item = resolveItem(id);
         return new ItemStack(item == null ? Items.ARROW : item, 32);
     }
 
@@ -867,6 +879,7 @@ public final class DungeonUpgradeManager {
             case "Undead Damage" -> RuneStatType.byId("undead_damage");
             case "Attack Range" -> RuneStatType.byId("attack_range");
             case "Attack Speed" -> RuneStatType.byId("attack_speed");
+            case "Draw Speed" -> RuneStatType.byId("draw_speed");
             case "Sweeping Range" -> RuneStatType.byId("sweeping_range");
             case "Aegis" -> RuneStatType.byId("aegis");
             case "Stone Skin" -> RuneStatType.byId("stone");

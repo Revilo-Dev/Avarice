@@ -3,6 +3,7 @@ package com.revilo.gatesofavarice.client.screen;
 import com.revilo.gatesofavarice.GatewayExpansion;
 import com.revilo.gatesofavarice.integration.LevelUpClientIntegration;
 import com.revilo.gatesofavarice.network.DungeonCompletePayload;
+import com.revilo.gatesofavarice.registry.ModItems;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -21,8 +22,11 @@ public class DungeonCompleteScreen extends Screen {
     private static final int GUI_W = 200;
     private static final int GUI_H = 166;
     private static final int REWARD_COLS = 4;
-    private static final int REWARD_VISIBLE_ROWS = 6;
+    private static final int REWARD_VISIBLE_ROWS = 5;
     private static final int REWARD_VISIBLE = REWARD_COLS * REWARD_VISIBLE_ROWS;
+    private static final int REWARD_X = 120;
+    private static final int REWARD_Y = 41;
+    private static final int GOLD_COIN_Y = 25;
 
     private final DungeonCompletePayload payload;
     private final List<StatLine> statLines = new ArrayList<>();
@@ -68,6 +72,7 @@ public class DungeonCompleteScreen extends Screen {
         guiGraphics.blit(GUI, this.leftPos, this.topPos, 0, 0, GUI_W, GUI_H, GUI_W, GUI_H);
         renderHeader(guiGraphics);
         renderStats(guiGraphics);
+        renderGoldCoins(guiGraphics);
         renderRewards(guiGraphics);
         renderLevelBar(guiGraphics);
         renderRewardTooltip(guiGraphics, mouseX, mouseY);
@@ -77,13 +82,13 @@ public class DungeonCompleteScreen extends Screen {
     private void renderHeader(GuiGraphics guiGraphics) {
         Component header = Component.literal(this.payload.survived() ? "Survived" : "You Died")
                 .withStyle(this.payload.survived() ? ChatFormatting.GOLD : ChatFormatting.RED, ChatFormatting.BOLD);
-        guiGraphics.drawCenteredString(this.font, header, this.leftPos + 60, this.topPos + 11, 0xFFFFFF);
+        guiGraphics.drawCenteredString(this.font, header, this.leftPos + GUI_W / 2, this.topPos + 11, 0xFFFFFF);
         drawCentered(guiGraphics, "Wave " + this.payload.wavesComplete() + " / Best " + this.payload.bestWave(), 60, 25, 0xFFE36B);
     }
 
     private void renderStats(GuiGraphics guiGraphics) {
         int x = this.leftPos + 10;
-        int y = this.topPos + 42;
+        int y = this.topPos + 41;
         int[] colors = {
                 0xB7C5DD,
                 0x8FD1FF,
@@ -104,7 +109,7 @@ public class DungeonCompleteScreen extends Screen {
             float progress = i < this.revealedStatCount ? 1.0F : statRevealProgress();
             float scale = 0.62F * statScale(progress);
             drawScaled(guiGraphics, this.statLines.get(i).render(progress), x, y, scale, colors[Math.min(i, colors.length - 1)]);
-            y += 8;
+            y += 6;
         }
     }
 
@@ -113,8 +118,8 @@ public class DungeonCompleteScreen extends Screen {
             return;
         }
         List<ItemStack> rewards = this.payload.rewards();
-        int startX = this.leftPos + 120;
-        int startY = this.topPos + 24;
+        int startX = this.leftPos + REWARD_X;
+        int startY = this.topPos + REWARD_Y;
         for (int slot = 0; slot < REWARD_VISIBLE; slot++) {
             int col = slot % REWARD_COLS;
             int row = slot / REWARD_COLS;
@@ -130,6 +135,17 @@ public class DungeonCompleteScreen extends Screen {
             guiGraphics.renderItem(stack, x + 1, y + 1);
             guiGraphics.renderItemDecorations(this.font, stack, x + 1, y + 1);
         }
+    }
+
+    private void renderGoldCoins(GuiGraphics guiGraphics) {
+        if (!this.payload.survived() || this.payload.goldCoinsEarned() <= 0) {
+            return;
+        }
+        int x = this.leftPos + REWARD_X;
+        int y = this.topPos + GOLD_COIN_Y;
+        ItemStack coin = new ItemStack(ModItems.GOLD_COIN.get());
+        guiGraphics.renderItem(coin, x, y - 2);
+        drawScaled(guiGraphics, this.payload.goldCoinsEarned() + " Gold coins", x + 18, y + 4, 0.68F, 0xFFD700);
     }
 
     private void renderLevelBar(GuiGraphics guiGraphics) {
@@ -183,8 +199,8 @@ public class DungeonCompleteScreen extends Screen {
         if (!isInRewardArea(mouseX, mouseY)) {
             return -1;
         }
-        int localX = (int) mouseX - (this.leftPos + 120);
-        int localY = (int) mouseY - (this.topPos + 24);
+        int localX = (int) mouseX - (this.leftPos + REWARD_X);
+        int localY = (int) mouseY - (this.topPos + REWARD_Y);
         int col = localX / 18;
         int row = localY / 18;
         if (col < 0 || col >= REWARD_COLS || row < 0 || row >= REWARD_VISIBLE_ROWS) {
@@ -194,8 +210,8 @@ public class DungeonCompleteScreen extends Screen {
     }
 
     private boolean isInRewardArea(double mouseX, double mouseY) {
-        return mouseX >= this.leftPos + 120 && mouseX < this.leftPos + 120 + REWARD_COLS * 18
-                && mouseY >= this.topPos + 24 && mouseY < this.topPos + 24 + REWARD_VISIBLE_ROWS * 18;
+        return mouseX >= this.leftPos + REWARD_X && mouseX < this.leftPos + REWARD_X + REWARD_COLS * 18
+                && mouseY >= this.topPos + REWARD_Y && mouseY < this.topPos + REWARD_Y + REWARD_VISIBLE_ROWS * 18;
     }
 
     private void drawCentered(GuiGraphics guiGraphics, String text, int centerX, int y, int color) {
@@ -221,10 +237,7 @@ public class DungeonCompleteScreen extends Screen {
         this.statLines.clear();
         this.statLines.add(StatLine.time("Time Spent", this.payload.timeSpentTicks()));
         this.statLines.add(StatLine.number("Level Points earnt", this.payload.levelPointsEarned(), ""));
-        this.statLines.add(StatLine.number("Coins earnt", this.payload.coinsEarned(), ""));
-        if (this.payload.goldCoinsEarned() > 0) {
-            this.statLines.add(StatLine.number("Gold Coins earnt", this.payload.goldCoinsEarned(), ""));
-        }
+        this.statLines.add(StatLine.number("All Time Coins earnt", this.payload.coinsEarned(), ""));
         this.statLines.add(StatLine.number("Mobs Killed", this.payload.mobsKilled(), ""));
         this.statLines.add(StatLine.number("Damage Delt", this.payload.damageDealt(), ""));
         this.statLines.add(StatLine.number("Damage Receieved", this.payload.damageReceived(), ""));

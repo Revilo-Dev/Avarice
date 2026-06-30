@@ -10,7 +10,6 @@ import com.mojang.brigadier.exceptions.SimpleCommandExceptionType;
 import com.revilo.gatesofavarice.currency.GoldCoinWallet;
 import com.revilo.gatesofavarice.currency.MythicCoinWallet;
 import com.revilo.gatesofavarice.item.GoldCoinStackData;
-import com.revilo.gatesofavarice.item.MythicCoinStackData;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
@@ -25,7 +24,6 @@ import java.util.UUID;
 public final class CoinCommands {
 
     private static final SimpleCommandExceptionType PLAYER_ONLY = new SimpleCommandExceptionType(Component.translatable("command.gatesofavarice.coins.player_only"));
-    private static final SimpleCommandExceptionType NOT_ENOUGH_COINS = new SimpleCommandExceptionType(Component.translatable("command.gatesofavarice.coins.not_enough"));
     private static final SimpleCommandExceptionType NOT_ENOUGH_GOLD = new SimpleCommandExceptionType(Component.translatable("command.gatesofavarice.goldcoins.not_enough"));
     private static final SimpleCommandExceptionType DIRECT_ID_ONLY = new SimpleCommandExceptionType(Component.translatable("command.gatesofavarice.coins.direct_id_only"));
     private static final DynamicCommandExceptionType PLAYER_NOT_FOUND = new DynamicCommandExceptionType(id -> Component.translatable("command.gatesofavarice.coins.player_not_found", id));
@@ -139,20 +137,20 @@ public final class CoinCommands {
     }
 
     private static int resetCoins(CommandSourceStack source, ServerPlayer target) {
-        MythicCoinWallet.set(target, 0);
-        source.sendSuccess(() -> Component.translatable("command.gatesofavarice.coins.reset", target.getGameProfile().getName()), true);
+        GoldCoinWallet.set(target, 0);
+        source.sendSuccess(() -> Component.translatable("command.gatesofavarice.goldcoins.reset", target.getGameProfile().getName()), true);
         return 1;
     }
 
     private static int setCoins(CommandSourceStack source, ServerPlayer target, int amount) {
-        MythicCoinWallet.set(target, amount);
-        source.sendSuccess(() -> Component.translatable("command.gatesofavarice.coins.set", amount, target.getGameProfile().getName()), true);
+        GoldCoinWallet.set(target, amount);
+        source.sendSuccess(() -> Component.translatable("command.gatesofavarice.goldcoins.set", amount, target.getGameProfile().getName()), true);
         return amount;
     }
 
     private static int addCoins(CommandSourceStack source, ServerPlayer target, int amount) {
-        MythicCoinWallet.addRaw(target, amount);
-        source.sendSuccess(() -> Component.translatable("command.gatesofavarice.coins.add", amount, target.getGameProfile().getName()), true);
+        GoldCoinWallet.add(target, amount);
+        source.sendSuccess(() -> Component.translatable("command.gatesofavarice.goldcoins.add", amount, target.getGameProfile().getName()), true);
         return amount;
     }
 
@@ -188,17 +186,17 @@ public final class CoinCommands {
             return 0;
         }
 
-        int balance = MythicCoinWallet.get(sender);
+        int balance = GoldCoinWallet.get(sender);
         int amount = requestedAmount <= 0 ? balance : requestedAmount;
         if (amount <= 0 || balance < amount) {
-            throw NOT_ENOUGH_COINS.create();
+            throw NOT_ENOUGH_GOLD.create();
         }
 
-        MythicCoinWallet.set(sender, balance - amount);
-        MythicCoinWallet.addRaw(target, amount);
+        GoldCoinWallet.set(sender, balance - amount);
+        GoldCoinWallet.add(target, amount);
 
-        source.sendSuccess(() -> Component.translatable("command.gatesofavarice.coins.transfer.sent", amount, target.getGameProfile().getName()), false);
-        target.sendSystemMessage(Component.translatable("command.gatesofavarice.coins.transfer.received", amount, sender.getGameProfile().getName()));
+        source.sendSuccess(() -> Component.translatable("command.gatesofavarice.goldcoins.transfer.sent", amount, target.getGameProfile().getName()), false);
+        target.sendSystemMessage(Component.translatable("command.gatesofavarice.goldcoins.transfer.received", amount, sender.getGameProfile().getName()));
         return amount;
     }
 
@@ -247,15 +245,15 @@ public final class CoinCommands {
 
     private static int withdrawCoins(CommandSourceStack source, int requestedAmount) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
-        int balance = MythicCoinWallet.get(player);
+        int balance = GoldCoinWallet.get(player);
         int amount = requestedAmount <= 0 ? balance : requestedAmount;
         if (amount <= 0 || balance < amount) {
-            throw NOT_ENOUGH_COINS.create();
+            throw NOT_ENOUGH_GOLD.create();
         }
 
-        MythicCoinWallet.set(player, balance - amount);
+        GoldCoinWallet.set(player, balance - amount);
         giveCoinsAsItems(player, amount);
-        source.sendSuccess(() -> Component.translatable("command.gatesofavarice.coins.withdraw", amount), false);
+        source.sendSuccess(() -> Component.translatable("command.gatesofavarice.goldcoins.withdraw", amount), false);
         return amount;
     }
 
@@ -276,7 +274,7 @@ public final class CoinCommands {
     private static int giveCoin(CommandSourceStack source, int value) throws CommandSyntaxException {
         ServerPlayer player = source.getPlayerOrException();
         giveCoinsAsItems(player, value);
-        source.sendSuccess(() -> Component.literal("Granted 1 mythic coin worth " + value + "."), false);
+        source.sendSuccess(() -> Component.literal("Granted 1 gold coin worth " + value + "."), false);
         return value;
     }
 
@@ -288,10 +286,7 @@ public final class CoinCommands {
     }
 
     private static void giveCoinsAsItems(ServerPlayer player, int amount) {
-        ItemStack stack = MythicCoinStackData.createStack(amount);
-        if (!player.getInventory().add(stack)) {
-            player.drop(stack, false);
-        }
+        giveGoldCoinsAsItems(player, amount);
     }
 
     private static void giveGoldCoinsAsItems(ServerPlayer player, int amount) {

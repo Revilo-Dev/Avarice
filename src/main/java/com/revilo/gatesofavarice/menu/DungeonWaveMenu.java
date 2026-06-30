@@ -5,16 +5,12 @@ import com.revilo.gatesofavarice.registry.ModMenus;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 
 public class DungeonWaveMenu extends AbstractContainerMenu {
 
@@ -32,7 +28,7 @@ public class DungeonWaveMenu extends AbstractContainerMenu {
     private final List<WaveOptionView> options;
     private final List<Component> runChanges;
 
-    public DungeonWaveMenu(int containerId, Inventory inventory, FriendlyByteBuf data) {
+    public DungeonWaveMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf data) {
         this(
                 containerId,
                 inventory,
@@ -102,7 +98,7 @@ public class DungeonWaveMenu extends AbstractContainerMenu {
         return this.runChanges;
     }
 
-    private static List<WaveOptionView> readOptions(FriendlyByteBuf data) {
+    private static List<WaveOptionView> readOptions(RegistryFriendlyByteBuf data) {
         int size = data.readInt();
         ArrayList<WaveOptionView> options = new ArrayList<>(size);
         for (int index = 0; index < size; index++) {
@@ -113,13 +109,21 @@ public class DungeonWaveMenu extends AbstractContainerMenu {
                     data.readInt(),
                     data.readInt(),
                     readStack(data),
-                    readStack(data)
+                    readStack(data),
+                    readStack(data),
+                    readStack(data),
+                    readStack(data),
+                    readStack(data),
+                    data.readInt(),
+                    data.readInt(),
+                    data.readInt(),
+                    data.readInt()
             ));
         }
         return options;
     }
 
-    public static void writePayload(FriendlyByteBuf buffer, UUID ownerId, int waveNumber, boolean ownerCanSelect, int stage, int rerollsLeft, int rerollCost, List<WaveOptionView> options, List<Component> runChanges) {
+    public static void writePayload(RegistryFriendlyByteBuf buffer, UUID ownerId, int waveNumber, boolean ownerCanSelect, int stage, int rerollsLeft, int rerollCost, List<WaveOptionView> options, List<Component> runChanges) {
         buffer.writeUUID(ownerId);
         buffer.writeInt(waveNumber);
         buffer.writeBoolean(ownerCanSelect);
@@ -135,6 +139,14 @@ public class DungeonWaveMenu extends AbstractContainerMenu {
             buffer.writeInt(option.difficultyRating());
             writeStack(buffer, option.displayStack());
             writeStack(buffer, option.secondaryDisplayStack());
+            writeStack(buffer, option.helmetStack());
+            writeStack(buffer, option.chestStack());
+            writeStack(buffer, option.legsStack());
+            writeStack(buffer, option.feetStack());
+            buffer.writeInt(option.speedRating());
+            buffer.writeInt(option.damageRating());
+            buffer.writeInt(option.defenceRating());
+            buffer.writeInt(option.attackSpeedRating());
         }
         buffer.writeInt(runChanges.size());
         for (Component change : runChanges) {
@@ -142,7 +154,7 @@ public class DungeonWaveMenu extends AbstractContainerMenu {
         }
     }
 
-    private static List<Component> readRunChanges(FriendlyByteBuf data) {
+    private static List<Component> readRunChanges(RegistryFriendlyByteBuf data) {
         int size = data.readInt();
         ArrayList<Component> changes = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
@@ -151,27 +163,12 @@ public class DungeonWaveMenu extends AbstractContainerMenu {
         return changes;
     }
 
-    private static ItemStack readStack(FriendlyByteBuf data) {
-        ResourceLocation id = ResourceLocation.tryParse(data.readUtf());
-        int count = data.readInt();
-        if (id == null) {
-            return ItemStack.EMPTY;
-        }
-        Item item = BuiltInRegistries.ITEM.get(id);
-        if (item == Items.AIR || count <= 0) {
-            return ItemStack.EMPTY;
-        }
-        return new ItemStack(item, count);
+    private static void writeStack(RegistryFriendlyByteBuf buffer, ItemStack stack) {
+        buffer.writeNbt(stack.saveOptional(buffer.registryAccess()));
     }
 
-    private static void writeStack(FriendlyByteBuf buffer, ItemStack stack) {
-        if (stack == null || stack.isEmpty()) {
-            buffer.writeUtf("minecraft:air");
-            buffer.writeInt(0);
-            return;
-        }
-        buffer.writeUtf(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
-        buffer.writeInt(stack.getCount());
+    private static ItemStack readStack(RegistryFriendlyByteBuf buffer) {
+        return ItemStack.parseOptional(buffer.registryAccess(), buffer.readNbt());
     }
 
     public record WaveOptionView(
@@ -181,7 +178,15 @@ public class DungeonWaveMenu extends AbstractContainerMenu {
             int externalRewardPercent,
             int difficultyRating,
             ItemStack displayStack,
-            ItemStack secondaryDisplayStack
+            ItemStack secondaryDisplayStack,
+            ItemStack helmetStack,
+            ItemStack chestStack,
+            ItemStack legsStack,
+            ItemStack feetStack,
+            int speedRating,
+            int damageRating,
+            int defenceRating,
+            int attackSpeedRating
     ) {
     }
 }

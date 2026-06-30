@@ -23,6 +23,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.item.ArmorItem;
+import net.minecraft.world.item.BowItem;
+import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.item.enchantment.Enchantment;
@@ -35,15 +37,15 @@ import net.revilodev.runic.stat.RuneStats;
 public final class RunicUpgradeService {
     public static final int CARD_COUNT = 5;
     private static final List<CardSpec> WEAPON_EFFECT_CARDS = List.of(
-            statCard("poison_chance", "Effect Card", "Toxic", 0.01F, 0.05F),
-            statCard("flame_chance", "Effect Card", "Fire Aspect", 0.01F, 0.04F),
-            statCard("withering_chance", "Effect Card", "Withering", 0.01F, 0.05F),
-            statCard("bleeding_chance", "Effect Card", "Bleeding", 0.01F, 0.06F),
-            statCard("stun_chance", "Effect Card", "Stunning", 0.01F, 0.05F),
-            statCard("shocking_chance", "Effect Card", "Shocking", 0.01F, 0.05F),
+            statCard("poison_chance", "Effect Card", "Toxic", 0.01F, 0.03F),
+            statCard("flame_chance", "Effect Card", "Fire Aspect", 0.01F, 0.03F),
+            statCard("withering_chance", "Effect Card", "Withering", 0.01F, 0.03F),
+            statCard("bleeding_chance", "Effect Card", "Bleeding", 0.01F, 0.03F),
+            statCard("stun_chance", "Effect Card", "Stunning", 0.01F, 0.03F),
+            statCard("shocking_chance", "Effect Card", "Shocking", 0.01F, 0.03F),
             statCard("leeching_chance", "Effect Card", "Leeching", 0.01F, 0.02F),
-            statCard("freezing_chance", "Effect Card", "Freezing", 0.01F, 0.05F),
-            statCard("fangs", "Effect Card", "Fangs", 1.0F, 4.0F)
+            statCard("freezing_chance", "Effect Card", "Freezing", 0.01F, 0.03F),
+            statCard("fangs", "Effect Card", "Fangs", 1.0F, 3.0F)
     );
     private static final List<CardSpec> WEAPON_DAMAGE_CARDS = List.of(
             statCard("attack_damage", "Damage Card", "Attack Damage", 0.6F, 2.4F),
@@ -53,6 +55,15 @@ public final class RunicUpgradeService {
             statCard("attack_range", "Stat Card", "Attack Range", 0.10F, 0.20F),
             statCard("attack_speed", "Stat Card", "Attack Speed", 0.03F, 0.07F),
             statCard("sweeping_range", "Stat Card", "Sweeping Range", 0.10F, 0.18F)
+    );
+    private static final List<CardSpec> BOW_EFFECT_CARDS = List.of(
+            effectCard("minecraft:power", "Bow Card", "Power", 1),
+            effectCard("minecraft:punch", "Bow Card", "Punch", 1),
+            effectCard("minecraft:flame", "Bow Card", "Flame", 1)
+    );
+    private static final List<CardSpec> BOW_STAT_CARDS = List.of(
+            statCard("power", "Bow Card", "Power", 1.0F, 4.0F),
+            statCard("draw_speed", "Bow Card", "Draw Speed", 0.02F, 0.08F)
     );
     private static final List<CardSpec> DEFAULT_ARMOR_EFFECT_CARDS = List.of(
             statCard("health", "Effect Card", "Health Boost", 1.0F, 3.0F),
@@ -175,6 +186,10 @@ public final class RunicUpgradeService {
             appendCardSpecs(cards, weightedForExistingStats(armorEffectCards.isEmpty() ? DEFAULT_ARMOR_EFFECT_CARDS : armorEffectCards, current), current, category, targetLabel, target, usedIds, random, 2, waveNumber, playerLevel);
             appendCardSpecs(cards, weightedForExistingStats(armorStatCards.isEmpty() ? DEFAULT_ARMOR_STAT_CARDS : armorStatCards, current), current, category, targetLabel, target, usedIds, random, 2, waveNumber, playerLevel);
             appendCardSpecs(cards, weightedForExistingStats(armorOffenceCards.isEmpty() ? DEFAULT_ARMOR_OFFENCE_CARDS : armorOffenceCards, current), current, category, targetLabel, target, usedIds, random, 1, waveNumber, playerLevel);
+        } else if (isRangedWeapon(target)) {
+            appendCardSpecs(cards, BOW_EFFECT_CARDS, current, category, targetLabel, target, usedIds, random, 2, waveNumber, playerLevel);
+            appendCardSpecs(cards, weightedForExistingStats(BOW_STAT_CARDS, current), current, category, targetLabel, target, usedIds, random, 2, waveNumber, playerLevel);
+            appendArrowBundleCards(cards, category, definition.displayName(), random, 2);
         } else {
             appendCardSpecs(cards, WEAPON_EFFECT_CARDS, current, category, targetLabel, target, usedIds, random, 3, waveNumber, playerLevel);
             appendCardSpecs(cards, WEAPON_DAMAGE_CARDS, current, category, targetLabel, target, usedIds, random, 1, waveNumber, playerLevel);
@@ -238,7 +253,7 @@ public final class RunicUpgradeService {
             int waveNumber,
             int playerLevel
     ) {
-        List<CardSpec> fallbacks = category == UpgradeCategory.ARMOR ? DEFAULT_ARMOR_STAT_CARDS : WEAPON_DAMAGE_CARDS;
+        List<CardSpec> fallbacks = category == UpgradeCategory.ARMOR ? DEFAULT_ARMOR_STAT_CARDS : (isRangedWeapon(target) ? BOW_STAT_CARDS : WEAPON_DAMAGE_CARDS);
         CardSpec fallback = null;
         int startIndex = fallbacks.isEmpty() ? 0 : random.nextInt(fallbacks.size());
         for (int offset = 0; offset < fallbacks.size(); offset++) {
@@ -252,6 +267,19 @@ public final class RunicUpgradeService {
             return null;
         }
         return buildStatCard(fallback, current, category, targetLabel, target, random, waveNumber, playerLevel);
+    }
+
+    private static void appendArrowBundleCards(List<UpgradeCard> cards, UpgradeCategory category, String targetLabel, RandomSource random, int maxToAdd) {
+        ArrayList<String> bundles = new ArrayList<>(List.of("Standard Arrows", "Copper Arrows", "Iron Arrows", "Amethyst Arrows", "Golden Arrows", "Diamond Arrows", "Netherite Arrows"));
+        while (maxToAdd > 0 && !bundles.isEmpty() && cards.size() < CARD_COUNT) {
+            String label = bundles.remove(random.nextInt(bundles.size()));
+            cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REWARD_RESTOCK, category, "Arrow Card", targetLabel, label, "0", "+32 arrows", 1, 0));
+            maxToAdd--;
+        }
+    }
+
+    private static boolean isRangedWeapon(ItemStack stack) {
+        return stack.getItem() instanceof BowItem || stack.getItem() instanceof CrossbowItem;
     }
 
     private static List<CardSpec> weightedForExistingStats(List<CardSpec> specs, RuneStats current) {
@@ -367,7 +395,7 @@ public final class RunicUpgradeService {
         ArrayList<UpgradeCard> cards = new ArrayList<>(5);
         cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REWARD_FOOD, category, "Food Card", definition.displayName(), "Heart Fragment", "0", "+8-16", 1, 0));
         if (random.nextFloat() < 0.18F) {
-            cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REWARD_GATEWAY_CARD, category, "Deck Card", definition.displayName(), "Gateway Card", "0", "+1 random card", 3, 0));
+            cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REWARD_GATEWAY_CARD, category, "Booster Card", definition.displayName(), "Booster Pack", "0", "+1 rare pack", 3, 0));
         } else {
             cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.UPGRADE_DUNGEON_MAGNET, category, "Magnet Card", definition.displayName(), "Dungeon Magnet", "Current", "+1 distance, +1 speed", 2, 0));
         }
@@ -425,9 +453,21 @@ public final class RunicUpgradeService {
         float levelScale = 1.0F + Math.max(0, playerLevel - 1) * 0.0125F;
         float scaled = base * waveScale * levelScale;
         if (isPercentLike(type)) {
-            return scaled * 100.0F;
+            float percent = scaled * 100.0F;
+            return isReducedEffectAbility(id) ? Math.min(3.0F, percent) : percent;
         }
-        return quantizeValue(scaled, 0.1F);
+        float value = quantizeValue(scaled, 0.1F);
+        return "fangs".equals(id) ? Math.min(3.0F, value) : value;
+    }
+
+    private static boolean isReducedEffectAbility(String statId) {
+        return statId.equals("poison_chance")
+                || statId.equals("flame_chance")
+                || statId.equals("withering_chance")
+                || statId.equals("bleeding_chance")
+                || statId.equals("stun_chance")
+                || statId.equals("shocking_chance")
+                || statId.equals("freezing_chance");
     }
 
     private static float scaledAuraRoll(CardSpec spec, RandomSource random, int waveNumber, int playerLevel) {
@@ -473,12 +513,13 @@ public final class RunicUpgradeService {
                 return false;
             }
             if ("minecraft:thorns".equals(spec.effectId())) {
-                return !stack.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY)
+                return RunicLoadoutService.isEffectAllowedForStack(stack, effectId)
+                        && !stack.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY)
                         .keySet()
                         .stream()
                         .anyMatch(holder -> holder.unwrapKey().map(key -> key.location().equals(effectId)).orElse(false));
             }
-            return true;
+            return RunicLoadoutService.isEffectAllowedForStack(stack, effectId);
         }
         if (AuraAttributeSupport.isAuraAttributeStatId(spec.statId())) {
             return true;

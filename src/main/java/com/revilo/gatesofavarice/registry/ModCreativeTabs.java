@@ -29,6 +29,11 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.GOLD_COIN.get());
                         output.accept(ModItems.STABILITY_PEARL.get());
                         output.accept(ModItems.GATEWAY_CARD.get());
+                        output.accept(ModItems.COMMON_BOOSTER_PACK.get());
+                        output.accept(ModItems.UNCOMMON_BOOSTER_PACK.get());
+                        output.accept(ModItems.RARE_BOOSTER_PACK.get());
+                        output.accept(ModItems.EPIC_BOOSTER_PACK.get());
+                        output.accept(ModItems.LEGENDARY_BOOSTER_PACK.get());
                         output.accept(ModItems.GRIMSTONE.get());
                         output.accept(ModItems.MYSTIC_ESSENCE.get());
                         output.accept(ModItems.HARDENED_FLESH.get());
@@ -40,6 +45,9 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.MANA_GEMS.get());
                         output.accept(ModItems.PLASMA.get());
                         output.accept(ModItems.SAPHIRE.get());
+                        output.accept(ModItems.METAL_NUGGET.get());
+                        output.accept(ModItems.METAL_INGOT.get());
+                        output.accept(ModItems.METAL_BLOCK.get());
                         output.accept(ModItems.MANA_STEEL_SCRAP.get());
                         output.accept(ModItems.MANA_STEEL_INGOT.get());
                         output.accept(ModItems.MAGNETITE_SCRAP.get());

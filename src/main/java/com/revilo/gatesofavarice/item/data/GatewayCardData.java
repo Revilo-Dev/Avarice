@@ -29,6 +29,13 @@ public final class GatewayCardData {
         return stack;
     }
 
+    public static ItemStack createFromBooster(net.minecraft.world.item.Item item, BoosterRarity rarity, int playerLevel, RandomSource random) {
+        CardType type = rollTypeForBooster(rarity, random);
+        ItemStack stack = new ItemStack(item);
+        write(stack, type, rollBoosterValue(type, rarity, random), Math.max(1, playerLevel));
+        return stack;
+    }
+
     public static void ensure(ItemStack stack, RandomSource random) {
         CompoundTag root = root(stack);
         if (root.contains(CARD_TYPE_KEY) && root.contains(CARD_VALUE_KEY)) {
@@ -92,6 +99,25 @@ public final class GatewayCardData {
         return min + random.nextDouble() * Math.max(0.001D, max - min);
     }
 
+    private static CardType rollTypeForBooster(BoosterRarity rarity, RandomSource random) {
+        if (rarity == BoosterRarity.LEGENDARY) {
+            return CardType.MULTIPLIERS[random.nextInt(CardType.MULTIPLIERS.length)];
+        }
+        if (rarity.allowsMultiplier() && random.nextFloat() < rarity.multiplierChance()) {
+            return CardType.MULTIPLIERS[random.nextInt(CardType.MULTIPLIERS.length)];
+        }
+        return CardType.BASE[random.nextInt(CardType.BASE.length)];
+    }
+
+    private static double rollBoosterValue(CardType type, BoosterRarity rarity, RandomSource random) {
+        if (type.multiplier()) {
+            double roll = random.nextDouble();
+            double biased = roll * roll * roll;
+            return 1.2D + biased * (rarity.maxMultiplier() - 1.2D);
+        }
+        return rarity.minPercent() + random.nextDouble() * Math.max(0.001D, rarity.maxPercent() - rarity.minPercent());
+    }
+
     private static CompoundTag root(ItemStack stack) {
         return stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag().getCompound(ROOT_KEY);
     }
@@ -101,25 +127,40 @@ public final class GatewayCardData {
     }
 
     public enum CardType {
-        STAT("Stat Card", ChatFormatting.AQUA, 1, 0.02D, 0.10D),
-        DAMAGE("Damage Card", ChatFormatting.RED, 2, 0.02D, 0.10D),
-        EFFECT("Effect Card", ChatFormatting.GREEN, 3, 0.02D, 0.10D),
+        STAT("Stat Card", ChatFormatting.AQUA, 1, 0.02D, 0.18D),
+        DAMAGE("Damage Card", ChatFormatting.RED, 2, 0.02D, 0.18D),
+        EFFECT("Effect Card", ChatFormatting.GREEN, 3, 0.02D, 0.18D),
         ABILITY("Ability Card", ChatFormatting.LIGHT_PURPLE, 4, 0.05D, 0.20D),
-        RARITY("Rarity Card", ChatFormatting.GOLD, 5, 0.02D, 0.10D),
-        CHALLENGE("Challenge Card", ChatFormatting.DARK_RED, 6, 0.02D, 0.10D);
+        RARITY("Rarity Card", ChatFormatting.GOLD, 5, 0.02D, 0.18D),
+        CHALLENGE("Challenge Card", ChatFormatting.DARK_RED, 6, 0.02D, 0.18D),
+        STAT_MULTIPLIER("Stat Multiplier", ChatFormatting.GOLD, 7, 1.10D, 3.00D, true),
+        DAMAGE_MULTIPLIER("Damage Multiplier", ChatFormatting.GOLD, 8, 1.10D, 3.00D, true),
+        EFFECT_MULTIPLIER("Effect Multiplier", ChatFormatting.GOLD, 9, 1.10D, 3.00D, true),
+        ABILITY_MULTIPLIER("Ability Multiplier", ChatFormatting.GOLD, 10, 1.10D, 3.00D, true),
+        RARITY_MULTIPLIER("Rarity Multiplier", ChatFormatting.GOLD, 11, 1.10D, 3.00D, true),
+        CHALLENGE_MULTIPLIER("Challenge Multiplier", ChatFormatting.GOLD, 12, 1.10D, 3.00D, true);
+
+        private static final CardType[] BASE = { STAT, DAMAGE, EFFECT, ABILITY, RARITY, CHALLENGE };
+        private static final CardType[] MULTIPLIERS = { STAT_MULTIPLIER, DAMAGE_MULTIPLIER, EFFECT_MULTIPLIER, ABILITY_MULTIPLIER, RARITY_MULTIPLIER, CHALLENGE_MULTIPLIER };
 
         private final String displayName;
         private final ChatFormatting color;
         private final int modelData;
         private final double minValue;
         private final double maxValue;
+        private final boolean multiplier;
 
         CardType(String displayName, ChatFormatting color, int modelData, double minValue, double maxValue) {
+            this(displayName, color, modelData, minValue, maxValue, false);
+        }
+
+        CardType(String displayName, ChatFormatting color, int modelData, double minValue, double maxValue, boolean multiplier) {
             this.displayName = displayName;
             this.color = color;
             this.modelData = modelData;
             this.minValue = minValue;
             this.maxValue = maxValue;
+            this.multiplier = multiplier;
         }
 
         public String displayName() {
@@ -141,6 +182,50 @@ public final class GatewayCardData {
         public double maxValue() {
             return this.maxValue;
         }
+
+        public boolean multiplier() {
+            return this.multiplier;
+        }
+    }
+
+    public enum BoosterRarity {
+        COMMON(0.01D, 0.03D, 0.0F, 1.2D),
+        UNCOMMON(0.03D, 0.05D, 0.0F, 1.2D),
+        RARE(0.05D, 0.08D, 0.12F, 1.8D),
+        EPIC(0.08D, 0.12D, 0.35F, 2.3D),
+        LEGENDARY(0.12D, 0.18D, 1.0F, 3.0D);
+
+        private final double minPercent;
+        private final double maxPercent;
+        private final float multiplierChance;
+        private final double maxMultiplier;
+
+        BoosterRarity(double minPercent, double maxPercent, float multiplierChance, double maxMultiplier) {
+            this.minPercent = minPercent;
+            this.maxPercent = maxPercent;
+            this.multiplierChance = multiplierChance;
+            this.maxMultiplier = maxMultiplier;
+        }
+
+        public double minPercent() {
+            return this.minPercent;
+        }
+
+        public double maxPercent() {
+            return this.maxPercent;
+        }
+
+        public boolean allowsMultiplier() {
+            return this.multiplierChance > 0.0F;
+        }
+
+        public float multiplierChance() {
+            return this.multiplierChance;
+        }
+
+        public double maxMultiplier() {
+            return this.maxMultiplier;
+        }
     }
 
     public record CardModifier(CardType type, double value, int playerLevel) {
@@ -153,7 +238,17 @@ public final class GatewayCardData {
                 case ABILITY -> "+" + amount + " ability power";
                 case RARITY -> "+" + amount + " item rarity and quantity";
                 case CHALLENGE -> "+" + amount + " loot rewards, harder mobs";
+                case STAT_MULTIPLIER -> formatMultiplier(this.value) + " stats";
+                case DAMAGE_MULTIPLIER -> formatMultiplier(this.value) + " damage";
+                case EFFECT_MULTIPLIER -> formatMultiplier(this.value) + " effects";
+                case ABILITY_MULTIPLIER -> formatMultiplier(this.value) + " ability";
+                case RARITY_MULTIPLIER -> formatMultiplier(this.value) + " rarity";
+                case CHALLENGE_MULTIPLIER -> formatMultiplier(this.value) + " challenge";
             };
+        }
+
+        private static String formatMultiplier(double value) {
+            return String.format(Locale.ROOT, "x%.1f", value);
         }
     }
 }

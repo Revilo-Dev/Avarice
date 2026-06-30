@@ -5,7 +5,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.revilo.gatesofavarice.block.entity.GatewayWorkbenchBlockEntity;
-import com.revilo.gatesofavarice.currency.MythicCoinWallet;
+import com.revilo.gatesofavarice.currency.GoldCoinWallet;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutPresetRegistry;
 import com.revilo.gatesofavarice.dungeon.loadout.RunicLoadoutService;
 import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
@@ -569,8 +569,8 @@ public final class DungeonCommands {
             source.sendFailure(Component.literal("Player required"));
             return 0;
         }
-        MythicCoinWallet.set(player, amount);
-        source.sendSuccess(() -> Component.literal("Set Mythic Coins to " + amount), true);
+        GoldCoinWallet.set(player, amount);
+        source.sendSuccess(() -> Component.literal("Set Gold Coins to " + amount), true);
         return amount;
     }
 
