@@ -17,6 +17,11 @@ public final class GatewayCrystalRenderer extends EntityRenderer<GatewayCrystalE
 
     private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/entity/gateway.png");
     private static final int FRAME_COUNT = 9;
+    private static final int TIER_1_COLOR = 0x406A82;
+    private static final int TIER_2_COLOR = 0x405082;
+    private static final int TIER_3_COLOR = 0x5F4082;
+    private static final int TIER_4_COLOR = 0x824079;
+    private static final int TIER_5_COLOR = 0x824050;
 
     public GatewayCrystalRenderer(EntityRendererProvider.Context context) {
         super(context);
@@ -40,11 +45,12 @@ public final class GatewayCrystalRenderer extends EntityRenderer<GatewayCrystalE
         VertexConsumer consumer = buffer.getBuffer(RenderType.entityTranslucent(this.getTextureLocation(entity)));
         PoseStack.Pose pose = poseStack.last();
         Matrix4f poseMatrix = pose.pose();
+        int tintColor = tintColorForTier(entity.getCrystalTier());
 
-        addVertex(consumer, pose, poseMatrix, -halfWidth, 0.0F, 0.0F, 0.0F, maxV, packedLight);
-        addVertex(consumer, pose, poseMatrix, halfWidth, 0.0F, 0.0F, 1.0F, maxV, packedLight);
-        addVertex(consumer, pose, poseMatrix, halfWidth, height, 0.0F, 1.0F, minV, packedLight);
-        addVertex(consumer, pose, poseMatrix, -halfWidth, height, 0.0F, 0.0F, minV, packedLight);
+        addVertex(consumer, pose, poseMatrix, -halfWidth, 0.0F, 0.0F, 0.0F, maxV, packedLight, tintColor);
+        addVertex(consumer, pose, poseMatrix, halfWidth, 0.0F, 0.0F, 1.0F, maxV, packedLight, tintColor);
+        addVertex(consumer, pose, poseMatrix, halfWidth, height, 0.0F, 1.0F, minV, packedLight, tintColor);
+        addVertex(consumer, pose, poseMatrix, -halfWidth, height, 0.0F, 0.0F, minV, packedLight, tintColor);
 
         poseStack.popPose();
         super.render(entity, entityYaw, partialTick, poseStack, buffer, packedLight);
@@ -56,12 +62,22 @@ public final class GatewayCrystalRenderer extends EntityRenderer<GatewayCrystalE
     }
 
     private static void addVertex(VertexConsumer consumer, PoseStack.Pose pose, Matrix4f poseMatrix,
-                                  float x, float y, float z, float u, float v, int packedLight) {
+                                  float x, float y, float z, float u, float v, int packedLight, int tintColor) {
         consumer.addVertex(poseMatrix, x, y, z)
-                .setColor(255, 255, 255, 255)
+                .setColor((tintColor >> 16) & 0xFF, (tintColor >> 8) & 0xFF, tintColor & 0xFF, 255)
                 .setUv(u, v)
                 .setOverlay(OverlayTexture.NO_OVERLAY)
                 .setLight(packedLight)
                 .setNormal(pose, 0.0F, 1.0F, 0.0F);
+    }
+
+    private static int tintColorForTier(int tier) {
+        return switch (tier) {
+            case 2 -> TIER_2_COLOR;
+            case 3 -> TIER_3_COLOR;
+            case 4 -> TIER_4_COLOR;
+            case 5 -> TIER_5_COLOR;
+            default -> TIER_1_COLOR;
+        };
     }
 }

@@ -1,5 +1,6 @@
 package com.revilo.gatesofavarice.integration;
 
+import com.revilo.gatesofavarice.dungeon.DungeonBoundItems;
 import com.revilo.gatesofavarice.item.MagnetItem;
 import com.revilo.gatesofavarice.item.RunicItemSupport;
 import com.revilo.gatesofavarice.registry.ModItems;
@@ -62,7 +63,8 @@ public final class CuriosCompat {
 
     public static void clearDungeonBeltMagnet(ServerPlayer player) {
         CuriosApi.getCuriosInventory(player).ifPresent(handler -> handler.findCurio("belt", 0)
-                .filter(result -> result.stack().is(ModItems.DUNGEON_MAGNET.get()))
+                .filter(result -> result.stack().getItem() instanceof MagnetItem)
+                .filter(result -> result.stack().is(ModItems.DUNGEON_MAGNET.get()) || DungeonBoundItems.isDungeonBound(result.stack()))
                 .ifPresent(result -> handler.setEquippedCurio("belt", 0, ItemStack.EMPTY)));
     }
 

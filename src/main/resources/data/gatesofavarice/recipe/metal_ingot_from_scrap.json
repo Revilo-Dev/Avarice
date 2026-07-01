@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "SSS",
+    "SSS",
+    "SSS"
+  ],
+  "key": {
+    "S": {
+      "item": "gatesofavarice:scrap_metal"
+    }
+  },
+  "result": {
+    "id": "gatesofavarice:metal_ingot",
+    "count": 1
+  }
+}

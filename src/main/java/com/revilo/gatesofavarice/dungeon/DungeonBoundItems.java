@@ -28,6 +28,9 @@ public final class DungeonBoundItems {
     }
 
     public static boolean isDungeonBound(ItemStack stack) {
+        if (stack.is(ModItems.HEART_FRAGMENT.get())) {
+            return true;
+        }
         CompoundTag root = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag().getCompound(GatewayExpansion.MOD_ID);
         return root.getBoolean(DUNGEON_BOUND_KEY);
     }

@@ -103,6 +103,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private final List<CoinFlight> coinFlights = new ArrayList<>();
     private Button buyButton;
     private Button nextWaveButton;
+    private Button bailButton;
     private Page activePage = Page.BUY;
     private int lastWalletBalance;
     private int walletPulseTicks;
@@ -126,6 +127,8 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private boolean pendingStateSync = false;
     private float coinTargetX;
     private float coinTargetY;
+    private int limitShakeIndex = -1;
+    private int limitShakeTicks = 0;
 
     public ShopkeeperScreen(ShopkeeperMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
@@ -149,9 +152,14 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
                 .pos(this.leftPos + (this.imageWidth - NEXT_WAVE_BUTTON_WIDTH) / 2, this.topPos + this.imageHeight + 4)
                 .size(NEXT_WAVE_BUTTON_WIDTH, NEXT_WAVE_BUTTON_HEIGHT)
                 .build());
+        this.bailButton = this.addRenderableWidget(Button.builder(Component.literal("Bail").withStyle(ChatFormatting.RED), button -> this.startBail())
+                .pos(this.leftPos + (this.imageWidth - NEXT_WAVE_BUTTON_WIDTH) / 2, this.topPos + this.imageHeight + 28)
+                .size(NEXT_WAVE_BUTTON_WIDTH, NEXT_WAVE_BUTTON_HEIGHT)
+                .build());
         this.applyPageLayout();
         this.updateBuyButton();
         this.updateNextWaveButton();
+        this.updateBailButton();
     }
 
     @Override
@@ -167,6 +175,12 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             this.walletPulseTicks = 8;
         }
         this.lastWalletBalance = walletBalance;
+        if (this.limitShakeTicks > 0) {
+            this.limitShakeTicks--;
+            if (this.limitShakeTicks <= 0) {
+                this.limitShakeIndex = -1;
+            }
+        }
 
         if (this.activePage == Page.SELL && this.sellHolding) {
             Minecraft minecraft = this.minecraft;
@@ -188,6 +202,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         this.tickCoinFlights();
         this.updateBuyButton();
         this.updateNextWaveButton();
+        this.updateBailButton();
     }
 
     public void applyUpgradeCategoryState() {
@@ -216,6 +231,9 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         }
         this.renderCoinFlights(guiGraphics, partialTick);
 
+        if (this.activePage == Page.BUY && this.renderUpgradePreviewTooltipIfHovered(guiGraphics, mouseX, mouseY)) {
+            return;
+        }
         if (this.activePage == Page.BUY && this.renderUpgradeTooltip(guiGraphics, mouseX, mouseY)) {
             return;
         }
@@ -247,6 +265,12 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0) {
             if (this.clickTab(mouseX, mouseY)) {
+                return true;
+            }
+            if (this.getWalletLayout().isMouseOver(mouseX, mouseY)) {
+                this.createWalletClickCoinFlights();
+                this.walletPulseTicks = 8;
+                this.playDing(1.35F);
                 return true;
             }
             if (this.activePage == Page.BUY) {
@@ -297,11 +321,6 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
                 ? Component.literal("Item").withStyle(ChatFormatting.GOLD)
                 : this.upgradePreviewStack.getHoverName().copy().withStyle(ChatFormatting.GOLD);
         guiGraphics.drawCenteredString(this.font, title, this.leftPos + 88, this.topPos + 15, 0xF3D78A);
-        if (!this.upgradePreviewStack.isEmpty()
-                && mouseX >= this.leftPos + 42 && mouseX <= this.leftPos + 134
-                && mouseY >= this.topPos + 8 && mouseY <= this.topPos + 28) {
-            renderUpgradePreviewTooltip(guiGraphics, mouseX, mouseY);
-        }
         this.renderUpgradeCards(guiGraphics, mouseX, mouseY);
         this.renderSelectionCounter(guiGraphics);
     }
@@ -340,14 +359,19 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             UpgradeCard card = this.upgradeCards.get(i);
             int x = startX + Math.round(i * CARD_W * UPGRADE_CARD_SCALE) + (i * UPGRADE_CARD_GAP);
             boolean blocked = this.isBlockedByRuneSlots(card);
-            boolean hovered = !blocked && this.isMouseOverScaledCard(mouseX, mouseY, x, y, UPGRADE_CARD_SCALE);
+            boolean limitReached = this.isSelectionLimitReached();
+            boolean disabled = blocked || limitReached;
+            boolean hovered = !disabled && this.isMouseOverScaledCard(mouseX, mouseY, x, y, UPGRADE_CARD_SCALE);
             float drawScale = hovered && this.animationState == AnimationState.IDLE ? UPGRADE_CARD_SCALE * HOVER_SCALE_MULTIPLIER : UPGRADE_CARD_SCALE;
             int drawX = animatedCardX(x, i, startX, UPGRADE_CARD_SCALE);
+            if (this.limitShakeIndex == i && this.limitShakeTicks > 0) {
+                drawX += Mth.floor(Mth.sin(this.limitShakeTicks * 1.7F) * 3.0F);
+            }
             int drawY = animatedCardY(y, i, UPGRADE_CARD_SCALE);
             this.drawCard(guiGraphics, resolveCardTexture(card, hovered), drawX, drawY, drawScale);
             this.renderUpgradeCardContents(guiGraphics, drawX, drawY, card, drawScale);
-            if (blocked) {
-                guiGraphics.fill(drawX, drawY, drawX + Math.round(CARD_W * drawScale), drawY + Math.round(CARD_H * drawScale), 0x99000000);
+            if (disabled) {
+                guiGraphics.fill(drawX, drawY, drawX + Math.round(CARD_W * drawScale), drawY + Math.round(CARD_H * drawScale), blocked ? 0x99000000 : 0xAA404040);
             }
         }
         guiGraphics.disableScissor();
@@ -438,6 +462,8 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         this.animationTick = 0;
         this.selectedCardIndex = -1;
         this.pendingButtonId = Integer.MIN_VALUE;
+        this.limitShakeIndex = -1;
+        this.limitShakeTicks = 0;
         this.coinTargetX = this.leftPos + BUY_AREA_LEFT + buyAreaWidth() / 2.0F;
         this.coinTargetY = this.topPos + BUY_AREA_TOP + buyAreaHeight() / 2.0F;
     }
@@ -662,7 +688,10 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         if (index < 0 || index >= this.upgradeCards.size()) {
             return;
         }
-        if (this.selectedCardCount >= this.maxCardSelections) {
+        if (this.isSelectionLimitReached()) {
+            this.limitShakeIndex = index;
+            this.limitShakeTicks = 12;
+            this.playDing(0.65F);
             return;
         }
         UpgradeCard card = this.upgradeCards.get(index);
@@ -699,6 +728,15 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         this.nextWaveButton.active = show;
     }
 
+    private void updateBailButton() {
+        if (this.bailButton == null) {
+            return;
+        }
+        boolean show = this.menu.canBailFromDungeon();
+        this.bailButton.visible = show;
+        this.bailButton.active = show;
+    }
+
     private boolean isBlockedByRuneSlots(UpgradeCard card) {
         return (card.type() == com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCardType.ADD_OR_UPGRADE_EFFECT
                 || card.type() == com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCardType.ADD_NEW_RUNE_STAT)
@@ -706,9 +744,26 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
                 && this.runeSlotsUsed >= this.runeSlotsCapacity;
     }
 
+    private boolean isSelectionLimitReached() {
+        return !this.categorySelection && this.selectedCardCount >= this.maxCardSelections;
+    }
+
     private void renderUpgradePreviewTooltip(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         List<Component> lines = buildModifiedStatsTooltip(this.upgradePreviewStack, this.runeSlotsUsed, this.runeSlotsCapacity);
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(0.0F, 0.0F, 1200.0F);
         guiGraphics.renderComponentTooltip(this.font, lines, mouseX, liftedTooltipY(mouseY, lines.size()));
+        guiGraphics.pose().popPose();
+    }
+
+    private boolean renderUpgradePreviewTooltipIfHovered(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        if (this.categorySelection || this.upgradePreviewStack.isEmpty()
+                || mouseX < this.leftPos + 42 || mouseX > this.leftPos + 134
+                || mouseY < this.topPos + 8 || mouseY > this.topPos + 28) {
+            return false;
+        }
+        renderUpgradePreviewTooltip(guiGraphics, mouseX, mouseY);
+        return true;
     }
 
     private static List<Component> buildModifiedStatsTooltip(ItemStack stack, int runeSlotsUsed, int runeSlotsCapacity) {
@@ -782,6 +837,13 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, ShopkeeperMenu.START_NEXT_WAVE_BUTTON_ID);
     }
 
+    private void startBail() {
+        if (this.minecraft == null || this.minecraft.gameMode == null || !this.menu.canBailFromDungeon()) {
+            return;
+        }
+        this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, ShopkeeperMenu.BAIL_BUTTON_ID);
+    }
+
     private void sellStagedItems() {
         if (this.minecraft == null || this.minecraft.gameMode == null) {
             return;
@@ -831,6 +893,24 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         float endY = this.coinTargetY;
         for (int index = 0; index < particles; index++) {
             this.coinFlights.add(new CoinFlight(startX, startY, endX, endY, existing + index, false));
+        }
+    }
+
+    private void createWalletClickCoinFlights() {
+        WalletLayout layout = this.getWalletLayout();
+        int existing = this.coinFlights.size();
+        float startX = layout.iconX() + 4.0F;
+        float startY = layout.iconY() + 4.0F;
+        for (int index = 0; index < 10; index++) {
+            float angle = (Mth.TWO_PI * index) / 10.0F;
+            float distance = 18.0F + (index % 3) * 6.0F;
+            this.coinFlights.add(new CoinFlight(
+                    startX,
+                    startY,
+                    startX + Mth.cos(angle) * distance,
+                    startY + Mth.sin(angle) * distance,
+                    existing + index,
+                    false));
         }
     }
 
@@ -997,6 +1077,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         this.applyPageLayout();
         this.updateBuyButton();
         this.updateNextWaveButton();
+        this.updateBailButton();
     }
 
     private void applyPageLayout() {

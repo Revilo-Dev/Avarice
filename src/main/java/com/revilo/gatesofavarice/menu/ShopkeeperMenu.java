@@ -33,6 +33,7 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
     public static final int SELL_BUTTON_ID = 101;
     public static final int START_NEXT_WAVE_BUTTON_ID = 102;
     public static final int BACK_BUTTON_ID = 103;
+    public static final int BAIL_BUTTON_ID = 104;
     public static final int CATEGORY_BUTTON_ID_OFFSET = 1000;
     public static final int CARD_BUTTON_ID_OFFSET = 1100;
     public static final int BUY_ALL_BUTTON_ID_OFFSET = 200;
@@ -44,7 +45,8 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
     private static final int DATA_STOCK_START = DATA_TEMP_START + TEMP_OFFER_COUNT;
     private static final int DATA_PRICE_START = DATA_STOCK_START + GRID_SLOT_COUNT;
     private static final int DATA_DUNGEON_NEXT_WAVE_AVAILABLE = DATA_PRICE_START + GRID_SLOT_COUNT;
-    private static final int DATA_SIZE = DATA_DUNGEON_NEXT_WAVE_AVAILABLE + 1;
+    private static final int DATA_DUNGEON_BAIL_AVAILABLE = DATA_DUNGEON_NEXT_WAVE_AVAILABLE + 1;
+    private static final int DATA_SIZE = DATA_DUNGEON_BAIL_AVAILABLE + 1;
     private static final int SELL_GRID_X = 8;
     private static final int SELL_GRID_Y = 14;
     private static final int SELL_COLUMNS = 6;
@@ -149,6 +151,9 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
         }
         if (id == START_NEXT_WAVE_BUTTON_ID) {
             return DungeonRunManager.startNextWaveFromShop(serverPlayer, this.shopkeeperId);
+        }
+        if (id == BAIL_BUTTON_ID) {
+            return DungeonRunManager.bailFromShop(serverPlayer, this.shopkeeperId);
         }
         if (id == BACK_BUTTON_ID) {
             return DungeonUpgradeManager.openShopUpgradeScreen(serverPlayer);
@@ -328,6 +333,10 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
         return this.syncedData.get(DATA_DUNGEON_NEXT_WAVE_AVAILABLE) == 1;
     }
 
+    public boolean canBailFromDungeon() {
+        return this.syncedData.get(DATA_DUNGEON_BAIL_AVAILABLE) == 1;
+    }
+
     public boolean usesDungeonTokens() {
         return false;
     }
@@ -397,6 +406,7 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
             this.syncedData.set(DATA_PRICE_START + index, 0);
         }
         this.syncedData.set(DATA_DUNGEON_NEXT_WAVE_AVAILABLE, 0);
+        this.syncedData.set(DATA_DUNGEON_BAIL_AVAILABLE, 0);
         this.refreshOffersFromData();
     }
 
@@ -423,9 +433,11 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
             int value = index < prices.length ? prices[index] : 0;
             this.syncedData.set(DATA_PRICE_START + index, value);
         }
-        int canStartNextWave = this.player instanceof ServerPlayer serverPlayer
-                && DungeonRunManager.canOwnerStartNextWaveFromShop(serverPlayer, this.shopkeeperId) ? 1 : 0;
-        this.syncedData.set(DATA_DUNGEON_NEXT_WAVE_AVAILABLE, canStartNextWave);
+        ServerPlayer menuPlayer = this.player instanceof ServerPlayer serverPlayer ? serverPlayer : null;
+        this.syncedData.set(DATA_DUNGEON_NEXT_WAVE_AVAILABLE,
+                menuPlayer != null && DungeonRunManager.canOwnerStartNextWaveFromShop(menuPlayer, this.shopkeeperId) ? 1 : 0);
+        this.syncedData.set(DATA_DUNGEON_BAIL_AVAILABLE,
+                menuPlayer != null && DungeonRunManager.canOwnerBailFromShop(menuPlayer, this.shopkeeperId) ? 1 : 0);
         this.refreshOffersFromData();
     }
 

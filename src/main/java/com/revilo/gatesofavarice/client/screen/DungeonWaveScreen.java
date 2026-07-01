@@ -31,7 +31,6 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
     private static final int CARD_GAP = 3;
 
     private final List<Button> optionButtons = new ArrayList<>();
-    private Button bailButton;
     private Button rerollButton;
     private Button skipButton;
     private boolean showRunChanges = false;
@@ -89,15 +88,6 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
             button.active = false;
             this.optionButtons.add(button);
         }
-
-        this.bailButton = this.addRenderableWidget(Button.builder(
-                        Component.translatable("screen.gatesofavarice.dungeon_wave.bail").withStyle(ChatFormatting.RED),
-                        click -> this.selectBail())
-                .pos(this.leftPos + 58, this.topPos + 150)
-                .size(224, 20)
-                .build());
-        this.bailButton.visible = this.menu.stage() == 0 && this.menu.waveNumber() > 1;
-        this.bailButton.active = this.menu.ownerCanSelect() && this.menu.stage() == 0 && this.menu.waveNumber() > 1;
 
         this.rerollButton = this.addRenderableWidget(Button.builder(
                         Component.literal("Reroll (" + this.menu.rerollsLeft() + ") - " + this.menu.rerollCost() + " Mythic Coins").withStyle(ChatFormatting.GOLD),
@@ -367,10 +357,6 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
         this.pendingClickButtonId = Integer.MIN_VALUE;
     }
 
-    private void selectBail() {
-        triggerDiscardAndSend(DungeonWaveMenu.BAIL_BUTTON_ID);
-    }
-
     private void selectReroll() {
         triggerDiscardAndSend(DungeonWaveMenu.REROLL_BUTTON_ID);
     }
@@ -603,7 +589,6 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
                 this.hoverScales.set(i, Mth.lerp(0.38F, current, target));
             }
         }
-        this.bailButton.active = idle && this.menu.ownerCanSelect() && this.menu.stage() == 0 && this.menu.waveNumber() > 1;
         this.rerollButton.active = false;
         this.skipButton.active = idle && this.menu.ownerCanSelect() && this.menu.stage() == 1;
 

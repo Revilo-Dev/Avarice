@@ -145,7 +145,7 @@ public class DungeonCompleteScreen extends Screen {
         int y = this.topPos + GOLD_COIN_Y;
         ItemStack coin = new ItemStack(ModItems.GOLD_COIN.get());
         guiGraphics.renderItem(coin, x, y - 2);
-        drawScaled(guiGraphics, this.payload.goldCoinsEarned() + " Gold coins", x + 18, y + 4, 0.68F, 0xFFD700);
+        drawScaled(guiGraphics, this.payload.goldCoinsEarned() + " Gold coins", x + 18, y + 4, 0.68F, 0xAA6C00);
     }
 
     private void renderLevelBar(GuiGraphics guiGraphics) {
@@ -238,7 +238,7 @@ public class DungeonCompleteScreen extends Screen {
         String progressVerb = this.payload.survived() ? "earnt" : "gathered";
         this.statLines.add(StatLine.time("Time Spent", this.payload.timeSpentTicks()));
         this.statLines.add(StatLine.number("Level Points " + progressVerb, this.payload.levelPointsEarned(), ""));
-        this.statLines.add(StatLine.number("All Time Coins " + progressVerb, this.payload.coinsEarned(), ""));
+        this.statLines.add(StatLine.number("Mythic Coins " + progressVerb, this.payload.coinsEarned(), ""));
         this.statLines.add(StatLine.number("Mobs Killed", this.payload.mobsKilled(), ""));
         this.statLines.add(StatLine.number("Damage Delt", this.payload.damageDealt(), ""));
         this.statLines.add(StatLine.number("Damage Receieved", this.payload.damageReceived(), ""));

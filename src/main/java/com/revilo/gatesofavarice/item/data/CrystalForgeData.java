@@ -292,21 +292,11 @@ public final class CrystalForgeData {
     }
 
     private static void syncModelData(ItemStack stack, int level) {
-        int modelData = modelDataForLevel(level);
+        int modelData = 1;
         CustomModelData existing = stack.get(DataComponents.CUSTOM_MODEL_DATA);
         if (existing == null || existing.value() != modelData) {
             stack.set(DataComponents.CUSTOM_MODEL_DATA, new CustomModelData(modelData));
         }
-    }
-
-    private static int modelDataForLevel(int level) {
-        if (level >= 81) {
-            return 3;
-        }
-        if (level >= 51) {
-            return 2;
-        }
-        return 1;
     }
 
     public record CrystalProfile(CrystalTheme theme, int level, long seed) {

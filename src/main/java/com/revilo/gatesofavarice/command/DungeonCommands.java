@@ -154,6 +154,13 @@ public final class DungeonCommands {
                                 .then(Commands.literal("set")
                                         .then(Commands.argument("amount", IntegerArgumentType.integer(0))
                                                 .executes(context -> testCoinsSet(context.getSource(), IntegerArgumentType.getInteger(context, "amount"))))))
+                        .then(Commands.literal("gold-coins")
+                                .then(Commands.literal("set")
+                                        .then(Commands.argument("amount", IntegerArgumentType.integer(0))
+                                                .executes(context -> testGoldCoinsSet(context.getSource(), IntegerArgumentType.getInteger(context, "amount")))))
+                                .then(Commands.literal("add")
+                                        .then(Commands.argument("amount", IntegerArgumentType.integer(1))
+                                                .executes(context -> testGoldCoinsAdd(context.getSource(), IntegerArgumentType.getInteger(context, "amount"))))))
                         .then(Commands.literal("droprates")
                                 .executes(context -> testDropRates(context.getSource())))
                         .then(Commands.literal("difficulty-scale")
@@ -578,6 +585,10 @@ public final class DungeonCommands {
     }
 
     private static int testCoinsSet(CommandSourceStack source, int amount) {
+        return testGoldCoinsSet(source, amount);
+    }
+
+    private static int testGoldCoinsSet(CommandSourceStack source, int amount) {
         ServerPlayer player = requirePlayer(source);
         if (player == null) {
             source.sendFailure(Component.literal("Player required"));
@@ -585,6 +596,17 @@ public final class DungeonCommands {
         }
         GoldCoinWallet.set(player, amount);
         source.sendSuccess(() -> Component.literal("Set Gold Coins to " + amount), true);
+        return amount;
+    }
+
+    private static int testGoldCoinsAdd(CommandSourceStack source, int amount) {
+        ServerPlayer player = requirePlayer(source);
+        if (player == null) {
+            source.sendFailure(Component.literal("Player required"));
+            return 0;
+        }
+        GoldCoinWallet.add(player, amount);
+        source.sendSuccess(() -> Component.literal("Added " + amount + " Gold Coins"), true);
         return amount;
     }
 

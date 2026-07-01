@@ -69,7 +69,7 @@ public final class RunicUpgradeService {
             statCard("health", "Effect Card", "Health Boost", 1.0F, 3.0F),
             statCard("jump_height", "Effect Card", "Leaping", 0.05F, 0.12F),
             statCard("ability_power", "Effect Card", "Ability Power", 1.0F, 5.0F),
-            statCard("movement_speed", "Effect Card", "Movement Speed", 0.04F, 0.10F),
+            statCard("movement_speed", "Effect Card", "Movement Speed", 0.08F, 0.18F),
             statCard("aura:ability_power", "Ability Card", "Ability Power", 0.10F, 0.35F),
             statCard("aura:ability_fire_bonus", "Ability Card", "Fire", 1.0F, 1.0F),
             statCard("aura:ability_ice_bonus", "Ability Card", "Ice", 1.0F, 1.0F),
