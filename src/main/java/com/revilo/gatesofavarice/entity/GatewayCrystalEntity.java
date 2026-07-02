@@ -6,6 +6,7 @@ import com.revilo.gatesofavarice.registry.ModEntities;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -21,11 +22,14 @@ public class GatewayCrystalEntity extends Entity {
     private static final String OWNER_KEY = "Owner";
     private static final String LIFE_KEY = "Life";
     private static final String RETURN_PORTAL_KEY = "ReturnPortal";
+    private static final double DEFAULT_INTERACTION_HORIZONTAL_INFLATE = 0.8D;
+    private static final double DEFAULT_INTERACTION_VERTICAL_INFLATE = 0.2D;
+    private static final double RETURN_PORTAL_VISUAL_SCALE = 4.0D;
     private static final EntityDataAccessor<Integer> CRYSTAL_TIER = SynchedEntityData.defineId(GatewayCrystalEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Boolean> RETURN_PORTAL = SynchedEntityData.defineId(GatewayCrystalEntity.class, EntityDataSerializers.BOOLEAN);
 
     private UUID ownerId;
     private int lifeTicks;
-    private boolean returnPortal;
 
     public GatewayCrystalEntity(EntityType<? extends GatewayCrystalEntity> entityType, Level level) {
         super(entityType, level);
@@ -39,6 +43,7 @@ public class GatewayCrystalEntity extends Entity {
     @Override
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         builder.define(CRYSTAL_TIER, 1);
+        builder.define(RETURN_PORTAL, false);
     }
 
     @Override
@@ -50,7 +55,7 @@ public class GatewayCrystalEntity extends Entity {
             return;
         }
 
-        if (this.lifeTicks >= MAX_LIFETIME_TICKS) {
+        if (!this.isReturnPortal() && this.lifeTicks >= MAX_LIFETIME_TICKS) {
             this.discard();
             return;
         }
@@ -59,11 +64,11 @@ public class GatewayCrystalEntity extends Entity {
             return;
         }
 
-        List<ServerPlayer> players = serverLevel.getEntitiesOfClass(ServerPlayer.class, this.getBoundingBox().inflate(0.2D),
+        List<ServerPlayer> players = serverLevel.getEntitiesOfClass(ServerPlayer.class, this.interactionBounds(),
                 player -> !player.isSpectator() && !player.isPassenger() && !player.isOnPortalCooldown());
         for (ServerPlayer player : players) {
             UUID runOwnerId = this.ownerId == null ? player.getUUID() : this.ownerId;
-            if (this.returnPortal) {
+            if (this.isReturnPortal()) {
                 DungeonRunManager.exitViaBailPortal(player, runOwnerId, this);
             } else {
                 if (!canUseTier(player, this.getCrystalTier())) {
@@ -81,7 +86,7 @@ public class GatewayCrystalEntity extends Entity {
         if (tag.hasUUID(OWNER_KEY)) {
             this.ownerId = tag.getUUID(OWNER_KEY);
         }
-        this.returnPortal = tag.getBoolean(RETURN_PORTAL_KEY);
+        this.setReturnPortal(tag.getBoolean(RETURN_PORTAL_KEY));
         if (tag.contains("CrystalTier")) {
             this.setCrystalTier(tag.getInt("CrystalTier"));
         }
@@ -93,7 +98,7 @@ public class GatewayCrystalEntity extends Entity {
         if (this.ownerId != null) {
             tag.putUUID(OWNER_KEY, this.ownerId);
         }
-        tag.putBoolean(RETURN_PORTAL_KEY, this.returnPortal);
+        tag.putBoolean(RETURN_PORTAL_KEY, this.isReturnPortal());
         tag.putInt("CrystalTier", this.getCrystalTier());
     }
 
@@ -134,11 +139,21 @@ public class GatewayCrystalEntity extends Entity {
     }
 
     public boolean isReturnPortal() {
-        return this.returnPortal;
+        return this.getEntityData().get(RETURN_PORTAL);
     }
 
     public void setReturnPortal(boolean returnPortal) {
-        this.returnPortal = returnPortal;
+        this.getEntityData().set(RETURN_PORTAL, returnPortal);
+    }
+
+    private net.minecraft.world.phys.AABB interactionBounds() {
+        if (this.isReturnPortal()) {
+            double visualSize = this.getBbHeight() * RETURN_PORTAL_VISUAL_SCALE;
+            double horizontalInflate = Math.max(0.0D, (visualSize - this.getBbWidth()) * 0.5D);
+            double verticalInflate = Math.max(0.0D, (visualSize - this.getBbHeight()) * 0.5D);
+            return this.getBoundingBox().inflate(horizontalInflate, verticalInflate, horizontalInflate);
+        }
+        return this.getBoundingBox().inflate(DEFAULT_INTERACTION_HORIZONTAL_INFLATE, DEFAULT_INTERACTION_VERTICAL_INFLATE, DEFAULT_INTERACTION_HORIZONTAL_INFLATE);
     }
 
     public static boolean canUseTier(ServerPlayer player, int crystalTier) {

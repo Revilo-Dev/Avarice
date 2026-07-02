@@ -149,11 +149,11 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
                 .size(1, 1)
                 .build());
         this.nextWaveButton = this.addRenderableWidget(Button.builder(Component.literal("Next Wave"), button -> this.startNextWave())
-                .pos(this.leftPos + (this.imageWidth - NEXT_WAVE_BUTTON_WIDTH) / 2, this.topPos + this.imageHeight + 4)
+                .pos(this.leftPos + (this.imageWidth - NEXT_WAVE_BUTTON_WIDTH) / 2, this.topPos + this.imageHeight + 2)
                 .size(NEXT_WAVE_BUTTON_WIDTH, NEXT_WAVE_BUTTON_HEIGHT)
                 .build());
         this.bailButton = this.addRenderableWidget(Button.builder(Component.literal("Bail").withStyle(ChatFormatting.RED), button -> this.startBail())
-                .pos(this.leftPos + (this.imageWidth - NEXT_WAVE_BUTTON_WIDTH) / 2, this.topPos + this.imageHeight + 28)
+                .pos(this.leftPos + (this.imageWidth - NEXT_WAVE_BUTTON_WIDTH) / 2, this.topPos + this.imageHeight + 24)
                 .size(NEXT_WAVE_BUTTON_WIDTH, NEXT_WAVE_BUTTON_HEIGHT)
                 .build());
         this.applyPageLayout();

@@ -38,7 +38,7 @@ public final class DungeonInstanceManager {
     private static final int INSTANCE_CLEANUP_RADIUS = 96;
     private static final long PLATFORM_LIFETIME_TICKS = 20L * 120L;
     private static final Vec3 PLAYER_SPAWN_OFFSET = new Vec3(29.0D, 2.0D, 0.0D);
-    private static final Vec3 EXIT_PORTAL_OFFSET = new Vec3(-30.0D, 2.0D, 0.0D);
+    private static final Vec3 EXIT_PORTAL_POSITION = new Vec3(4983779.5D, 65.0D, -4828671.5D);
     private static final Vec3 SHOPKEEPER_OFFSET = new Vec3(0.0D, 4.0D, 0.0D);
     private static final double MOB_SPAWN_Y_OFFSET = 2.0D;
     private static final double MOB_SPAWN_RADIUS = 12.0D;
@@ -69,6 +69,7 @@ public final class DungeonInstanceManager {
 
         BlockPos origin = instanceOrigin(instanceOwnerId);
         ensureDungeon(dungeonLevel, origin);
+        clearDungeonItems(dungeonLevel, origin);
         clearBrokenStructureDrops(dungeonLevel, origin);
 
         Vec3 spawnPos = playerSpawnPosition(instanceOwnerId);
@@ -96,7 +97,7 @@ public final class DungeonInstanceManager {
     }
 
     public static Vec3 exitPortalPosition(UUID instanceOwnerId) {
-        return positionedOffset(instanceOwnerId, EXIT_PORTAL_OFFSET);
+        return EXIT_PORTAL_POSITION;
     }
 
     public static Vec3 shopkeeperPosition(UUID instanceOwnerId) {
@@ -278,6 +279,21 @@ public final class DungeonInstanceManager {
         for (ItemEntity itemEntity : level.getEntitiesOfClass(ItemEntity.class, bounds, DungeonInstanceManager::isBrokenStructureDrop)) {
             itemEntity.discard();
         }
+    }
+
+    private static int clearDungeonItems(ServerLevel level, BlockPos origin) {
+        AABB bounds = new AABB(
+                origin.getX() - INSTANCE_CLEANUP_RADIUS,
+                origin.getY() - 32,
+                origin.getZ() - INSTANCE_CLEANUP_RADIUS,
+                origin.getX() + INSTANCE_CLEANUP_RADIUS,
+                origin.getY() + 96,
+                origin.getZ() + INSTANCE_CLEANUP_RADIUS);
+        ArrayList<ItemEntity> items = new ArrayList<>(level.getEntitiesOfClass(ItemEntity.class, bounds, ItemEntity::isAlive));
+        for (ItemEntity itemEntity : items) {
+            itemEntity.discard();
+        }
+        return items.size();
     }
 
     private static boolean isBrokenStructureDrop(ItemEntity itemEntity) {

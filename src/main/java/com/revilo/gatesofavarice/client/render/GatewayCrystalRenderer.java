@@ -17,6 +17,7 @@ public final class GatewayCrystalRenderer extends EntityRenderer<GatewayCrystalE
 
     private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/entity/gateway.png");
     private static final int FRAME_COUNT = 9;
+    private static final float RETURN_PORTAL_SCALE = 4.0F;
     private static final int TIER_1_COLOR = 0x406A82;
     private static final int TIER_2_COLOR = 0x405082;
     private static final int TIER_3_COLOR = 0x5F4082;
@@ -33,8 +34,9 @@ public final class GatewayCrystalRenderer extends EntityRenderer<GatewayCrystalE
         poseStack.mulPose(this.entityRenderDispatcher.cameraOrientation());
         poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
 
-        float width = entity.getBbWidth();
-        float height = entity.getBbHeight();
+        float portalScale = entity.isReturnPortal() ? RETURN_PORTAL_SCALE : 1.0F;
+        float height = entity.getBbHeight() * portalScale;
+        float width = height;
         float halfWidth = width * 0.5F;
 
         int frame = (entity.tickCount / 4) % FRAME_COUNT;

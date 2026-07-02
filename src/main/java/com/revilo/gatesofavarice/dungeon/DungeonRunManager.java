@@ -30,6 +30,7 @@ import com.revilo.gatesofavarice.registry.ModItems;
 import com.revilo.gatesofavarice.registry.ModAttachments;
 import com.revilo.gatesofavarice.registry.LoadoutArmorRegistry;
 import com.revilo.gatesofavarice.shop.ShopkeeperManager;
+import com.mojang.datafixers.util.Pair;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,6 +52,7 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -142,6 +144,9 @@ public final class DungeonRunManager {
     private static final List<Item> EPIC_DROP_POOL = List.of(
             ModItems.PRISMATIC_SHARD.get(), ModItems.OPAL.get(), ModItems.STABILITY_PEARL.get(), ModItems.GATEWAY_CARD.get()
     );
+    private static final int RARE_DROP_MIN_WAVE = 5;
+    private static final int EPIC_DROP_MIN_WAVE = 10;
+    private static final int LEGENDARY_DROP_MIN_WAVE = 15;
     private static final List<CompletionReward> COMPLETION_UNCOMMON_REWARDS = List.of(
             completionReward(ModItems.MANASTONES.get(), 3, 5),
             completionReward(ModItems.MANA_GEMS.get(), 3, 5),
@@ -229,10 +234,6 @@ public final class DungeonRunManager {
         MythicCoinWallet.set(player, 0);
         clearForDungeon(player);
         setBoundlessQuestBookHidden(true);
-        ServerLevel dungeon = player.server.getLevel(ModDimensions.DUNGEON_LEVEL);
-        if (dungeon != null) {
-            clearDungeonItems(dungeon, ownerId);
-        }
         DungeonInstanceManager.teleportToDungeonInstance(player, ownerId);
         restoreDungeonEntryVitals(player);
         if (player.getUUID().equals(ownerId) && run.phase == RunPhase.SELECTING_TAROT) {
@@ -553,10 +554,12 @@ public final class DungeonRunManager {
         double waveFactor = Math.min(0.22D, wave * 0.010D);
         double levelFactor = Math.min(0.06D, avgLevel / 1600.0D);
         double difficultyFactor = Math.min(0.12D, difficulty * 0.007D);
-        double epicChance = avgLevel >= 45
+        double epicChance = wave >= EPIC_DROP_MIN_WAVE && avgLevel >= 45
                 ? Math.min(0.035D, 0.002D + waveFactor * 0.18D + levelFactor * 0.30D + difficultyFactor * 0.18D + rarityBonus * 0.10D)
                 : 0.0D;
-        double rareChance = Math.min(0.15D, 0.011D + waveFactor * 0.52D + levelFactor * 0.57D + difficultyFactor * 0.43D + rarityBonus * 0.33D);
+        double rareChance = wave >= RARE_DROP_MIN_WAVE
+                ? Math.min(0.15D, 0.011D + waveFactor * 0.52D + levelFactor * 0.57D + difficultyFactor * 0.43D + rarityBonus * 0.33D)
+                : 0.0D;
         double uncommonChance = Math.min(0.32D, 0.17D + waveFactor * 0.62D + levelFactor * 0.66D + difficultyFactor * 0.52D + rarityBonus * 0.42D);
         double commonChance = Math.max(0.0D, 1.0D - epicChance - rareChance - uncommonChance);
         ArrayList<Component> lines = new ArrayList<>();
@@ -1727,6 +1730,7 @@ public final class DungeonRunManager {
         player.setItemSlot(EquipmentSlot.CHEST, chest);
         player.setItemSlot(EquipmentSlot.LEGS, legs);
         player.setItemSlot(EquipmentSlot.FEET, feet);
+        resendArmorSlots(player);
         addRoleAware(player, primary);
         addRoleAware(player, secondary);
         if (!equipUtility(player, utility)) {
@@ -1739,6 +1743,20 @@ public final class DungeonRunManager {
         }
         player.inventoryMenu.broadcastChanges();
         player.containerMenu.broadcastChanges();
+    }
+
+    private static void resendArmorSlots(ServerPlayer player) {
+        player.getInventory().setChanged();
+        player.connection.send(new ClientboundSetEquipmentPacket(player.getId(), List.of(
+                Pair.of(EquipmentSlot.HEAD, player.getItemBySlot(EquipmentSlot.HEAD).copy()),
+                Pair.of(EquipmentSlot.CHEST, player.getItemBySlot(EquipmentSlot.CHEST).copy()),
+                Pair.of(EquipmentSlot.LEGS, player.getItemBySlot(EquipmentSlot.LEGS).copy()),
+                Pair.of(EquipmentSlot.FEET, player.getItemBySlot(EquipmentSlot.FEET).copy())
+        )));
+        player.inventoryMenu.broadcastChanges();
+        player.containerMenu.broadcastChanges();
+        player.inventoryMenu.sendAllDataToRemote();
+        player.containerMenu.sendAllDataToRemote();
     }
 
     public static void grantPrimaryWeapon(ServerPlayer player, ItemStack stack) {
@@ -2172,10 +2190,12 @@ public final class DungeonRunManager {
         double levelFactor = Math.min(0.06D, avgLevel / 1600.0D);
         double difficultyFactor = Math.min(0.12D, run.totalDifficultySelected * 0.007D);
         double rarityChanceBonus = Math.max(0.0D, run.rarityBonusModifier);
-        double epicChance = avgLevel >= 45
+        double epicChance = run.waveNumber >= EPIC_DROP_MIN_WAVE && avgLevel >= 45
                 ? Math.min(0.035D, 0.002D + waveFactor * 0.18D + levelFactor * 0.30D + difficultyFactor * 0.18D + rarityChanceBonus * 0.10D)
                 : 0.0D;
-        double rareChance = Math.min(0.15D, 0.011D + waveFactor * 0.52D + levelFactor * 0.57D + difficultyFactor * 0.43D + rarityChanceBonus * 0.33D);
+        double rareChance = run.waveNumber >= RARE_DROP_MIN_WAVE
+                ? Math.min(0.15D, 0.011D + waveFactor * 0.52D + levelFactor * 0.57D + difficultyFactor * 0.43D + rarityChanceBonus * 0.33D)
+                : 0.0D;
         double uncommonChance = Math.min(0.32D, 0.17D + waveFactor * 0.62D + levelFactor * 0.66D + difficultyFactor * 0.52D + rarityChanceBonus * 0.42D);
         if (rarityRoll < epicChance && !EPIC_DROP_POOL.isEmpty()) {
             return EPIC_DROP_POOL.get(random.nextInt(EPIC_DROP_POOL.size()));
@@ -2675,9 +2695,9 @@ public final class DungeonRunManager {
 
     private static Item pickCompletionBoosterPack(RandomSource random, int playerLevel, int waveNumber) {
         double depth = Mth.clamp(waveNumber / 25.0D + playerLevel / 250.0D, 0.0D, 1.0D);
-        double legendaryChance = 0.005D + depth * 0.035D;
-        double epicChance = 0.04D + depth * 0.12D;
-        double rareChance = 0.16D + depth * 0.20D;
+        double legendaryChance = waveNumber >= LEGENDARY_DROP_MIN_WAVE ? 0.005D + depth * 0.035D : 0.0D;
+        double epicChance = waveNumber >= EPIC_DROP_MIN_WAVE ? 0.04D + depth * 0.12D : 0.0D;
+        double rareChance = waveNumber >= RARE_DROP_MIN_WAVE ? 0.16D + depth * 0.20D : 0.0D;
         double uncommonChance = 0.35D + depth * 0.12D;
         double roll = random.nextDouble();
         if (roll < legendaryChance) {
@@ -2712,9 +2732,9 @@ public final class DungeonRunManager {
     private static CompletionReward pickCompletionBonusReward(RandomSource random, int wave, int wavesComplete) {
         double progress = Mth.clamp(wave / 20.0D, 0.0D, 1.0D);
         double runDepth = Mth.clamp(wavesComplete / 20.0D, 0.0D, 1.0D);
-        double legendaryChance = 0.01D + progress * 0.04D + runDepth * 0.05D;
-        double epicChance = 0.04D + progress * 0.14D + runDepth * 0.14D;
-        double rareChance = 0.16D + progress * 0.22D + runDepth * 0.18D;
+        double legendaryChance = wave >= LEGENDARY_DROP_MIN_WAVE ? 0.01D + progress * 0.04D + runDepth * 0.05D : 0.0D;
+        double epicChance = wave >= EPIC_DROP_MIN_WAVE ? 0.04D + progress * 0.14D + runDepth * 0.14D : 0.0D;
+        double rareChance = wave >= RARE_DROP_MIN_WAVE ? 0.16D + progress * 0.22D + runDepth * 0.18D : 0.0D;
         double roll = random.nextDouble();
         if (roll < legendaryChance) {
             return pickCompletionReward(random, COMPLETION_LEGENDARY_REWARDS);

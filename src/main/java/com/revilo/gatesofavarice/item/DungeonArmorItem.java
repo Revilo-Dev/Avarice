@@ -41,6 +41,11 @@ public class DungeonArmorItem extends ArmorItem {
         super.inventoryTick(stack, level, entity, slotId, isSelected);
     }
 
+    @Override
+    public boolean isFoil(ItemStack stack) {
+        return false;
+    }
+
     public static String armorType(ItemStack stack) {
         return dungeonData(stack).getString(ARMOR_TYPE_KEY);
     }
