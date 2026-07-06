@@ -17,6 +17,7 @@ import com.revilo.gatesofavarice.integration.LevelUpIntegration;
 import com.revilo.gatesofavarice.integration.CuriosCompat;
 import com.revilo.gatesofavarice.integration.ModCompat;
 import com.revilo.gatesofavarice.entity.MythicCoinOrbEntity;
+import com.revilo.gatesofavarice.item.HeartFragmentItem;
 import com.revilo.gatesofavarice.item.MagnetItem;
 import com.revilo.gatesofavarice.item.MythicCoinStackData;
 import com.revilo.gatesofavarice.progression.ProgressionSystem;
@@ -125,7 +126,7 @@ public final class DungeonRunManager {
             ModItems.GRIMSTONE.get(), ModItems.MYSTIC_ESSENCE.get(), ModItems.SCRAP_METAL.get(), ModItems.MANA_GEMS.get(),
             ModItems.MANA_STEEL_SCRAP.get(), ModItems.MAGNETITE_SCRAP.get(), ModItems.ARCANE_ESSENCE.get(), ModItems.MANASTONES.get(),
             ModItems.ELIXRITE_SCRAP.get(), ModItems.ASTRITE_SCRAP.get(), ModItems.SOLAR_SHARD.get(), ModItems.DARK_ESSENCE.get(),
-            ModItems.UPGRADE_BASE.get(), ModItems.RUSTY_COIN.get(), ModItems.HARDENED_FLESH.get(), ModItems.SHATTERED_BONES.get(), ModItems.HEART_FRAGMENT.get(),
+            ModItems.UPGRADE_BASE.get(), ModItems.RUSTY_COIN.get(), ModItems.HARDENED_FLESH.get(), ModItems.SHATTERED_BONES.get(), ModItems.HEART_FRAGMENT.get(), ModItems.SILK_SPOOL.get(),
             ModItems.PLASMA.get(), ModItems.PETRIFIED_SOUL_SHARD.get(), ModItems.RUBY.get(), ModItems.SAPHIRE.get(), ModItems.OPAL.get()
     );
     private static final List<Item> COMMON_DROP_POOL = List.of(
@@ -135,7 +136,7 @@ public final class DungeonRunManager {
     );
     private static final List<Item> UNCOMMON_DROP_POOL = List.of(
             ModItems.MANA_STEEL_SCRAP.get(), ModItems.ELIXRITE_SCRAP.get(), ModItems.ASTRITE_SCRAP.get(), ModItems.SOLAR_SHARD.get(),
-            ModItems.UPGRADE_BASE.get(), ModItems.HEART_FRAGMENT.get(), ModItems.PLASMA.get()
+            ModItems.UPGRADE_BASE.get(), ModItems.HEART_FRAGMENT.get(), ModItems.PLASMA.get(), ModItems.SILK_SPOOL.get()
     );
     private static final List<Item> RARE_DROP_POOL = List.of(
             ModItems.DARK_ESSENCE.get(), ModItems.PETRIFIED_SOUL_SHARD.get(), ModItems.RUBY.get(), ModItems.SAPHIRE.get(),
@@ -153,6 +154,7 @@ public final class DungeonRunManager {
             completionReward(ModItems.ARCANE_ESSENCE.get(), 2, 4),
             completionReward(ModItems.HEART_FRAGMENT.get(), 1, 2),
             completionReward(ModItems.PLASMA.get(), 2, 4),
+            completionReward(ModItems.SILK_SPOOL.get(), 2, 4),
             completionReward(ModItems.MAGNETITE_SCRAP.get(), 2, 4),
             completionReward(ModItems.ELIXRITE_SCRAP.get(), 2, 4),
             completionReward(ModItems.ASTRITE_SCRAP.get(), 2, 4)
@@ -247,7 +249,7 @@ public final class DungeonRunManager {
     public static void exitViaBailPortal(ServerPlayer player, UUID ownerId, GatewayCrystalEntity portal) {
         ensureLoaded(player.server);
         RunState run = RUNS_BY_OWNER.get(ownerId);
-        if (run == null || run.exitPortalId != portal.getId()) return;
+        if (run == null || !isRunExitPortal(run, portal)) return;
         PlayerSnapshot snapshot = run.snapshots.get(player.getUUID());
         if (snapshot == null) return;
         clearHudToPlayer(player);
@@ -255,6 +257,7 @@ public final class DungeonRunManager {
         List<ItemStack> rewards = collectCompletionRewards(player, run);
         ItemStack lootbox = createLootboxFromRewards(player, run, rewards, levelPoints);
         setBoundlessQuestBookHidden(false);
+        clearDungeonBeltMagnet(player);
         restoreSnapshot(player, snapshot);
         if (player.getUUID().equals(run.ownerId)) {
             closeOverworldEntryPortals(player.server, run.ownerId);
@@ -273,6 +276,21 @@ public final class DungeonRunManager {
             markStateDirty();
             forceCriticalSave(player.server);
         }
+    }
+
+    private static boolean isRunExitPortal(RunState run, GatewayCrystalEntity portal) {
+        if (portal == null || !portal.isReturnPortal()) {
+            return false;
+        }
+        if (run.exitPortalId == portal.getId()) {
+            return true;
+        }
+        if (run.ownerId.equals(portal.getOwnerId())) {
+            run.exitPortalId = portal.getId();
+            markStateDirty();
+            return true;
+        }
+        return false;
     }
 
     public static boolean handleWaveMenuClick(Player player, UUID ownerId, int buttonId) {
@@ -525,6 +543,7 @@ public final class DungeonRunManager {
         List<ItemStack> rewards = collectCompletionRewards(player, run);
         ItemStack lootbox = createLootboxFromRewards(player, run, rewards, levelPoints);
         setBoundlessQuestBookHidden(false);
+        clearDungeonBeltMagnet(player);
         restoreSnapshot(player, snapshot);
         if (!lootbox.isEmpty() && !player.getInventory().add(lootbox)) {
             player.drop(lootbox, false);
@@ -994,6 +1013,22 @@ public final class DungeonRunManager {
             PacketDistributor.sendToPlayer(player, entry.getValue());
             iterator.remove();
         }
+    }
+
+    @SubscribeEvent
+    public static void onLivingDamagePre(LivingDamageEvent.Pre event) {
+        if (!(event.getEntity() instanceof ServerPlayer player) || player.level().isClientSide) {
+            return;
+        }
+        float survivableHealth = player.getHealth() + player.getAbsorptionAmount();
+        if (event.getNewDamage() < survivableHealth) {
+            return;
+        }
+        if (!consumeHeartFragment(player)) {
+            return;
+        }
+        HeartFragmentItem.playHealEffects(player);
+        event.setNewDamage(Math.max(0.0F, survivableHealth - 1.0F));
     }
 
     @SubscribeEvent
@@ -2164,7 +2199,11 @@ public final class DungeonRunManager {
         int avgLevel = averageParticipantLevel(run);
         int wave = Math.max(1, run.waveNumber);
         int baseRolls = Math.max(1, 1 + wave / 3 + (int) Math.floor(run.quantityBonusModifier));
-        int rolls = Math.max(1, (int) Math.ceil(baseRolls * 0.5D));
+        double reducedRolls = Math.max(1, (int) Math.ceil(baseRolls * 0.5D)) * 0.5D;
+        int rolls = (int) Math.floor(reducedRolls);
+        if (level.random.nextDouble() < reducedRolls - rolls) {
+            rolls++;
+        }
         for (int i = 0; i < rolls; i++) {
             Item item = pickScaledDrop(run, avgLevel, level.random);
             ItemStack drop = createDungeonDrop(item, avgLevel, wave, level.random);
@@ -2647,6 +2686,26 @@ public final class DungeonRunManager {
         if (ModCompat.isAnyLoaded("curios")) {
             CuriosCompat.clearDungeonBeltMagnet(player);
         }
+    }
+
+    private static boolean consumeHeartFragment(ServerPlayer player) {
+        for (ItemStack stack : player.getInventory().items) {
+            if (stack.is(ModItems.HEART_FRAGMENT.get())) {
+                stack.shrink(1);
+                player.inventoryMenu.broadcastChanges();
+                player.containerMenu.broadcastChanges();
+                return true;
+            }
+        }
+        for (ItemStack stack : player.getInventory().offhand) {
+            if (stack.is(ModItems.HEART_FRAGMENT.get())) {
+                stack.shrink(1);
+                player.inventoryMenu.broadcastChanges();
+                player.containerMenu.broadcastChanges();
+                return true;
+            }
+        }
+        return false;
     }
 
     private static List<ItemStack> collectDungeonRewards(ServerPlayer player) {

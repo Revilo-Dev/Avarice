@@ -38,7 +38,7 @@ public final class DungeonInstanceManager {
     private static final int INSTANCE_CLEANUP_RADIUS = 96;
     private static final long PLATFORM_LIFETIME_TICKS = 20L * 120L;
     private static final Vec3 PLAYER_SPAWN_OFFSET = new Vec3(29.0D, 2.0D, 0.0D);
-    private static final Vec3 EXIT_PORTAL_POSITION = new Vec3(4983779.5D, 65.0D, -4828671.5D);
+    private static final Vec3 EXIT_PORTAL_OFFSET = new Vec3(0.0D, 2.0D, 8.0D);
     private static final Vec3 SHOPKEEPER_OFFSET = new Vec3(0.0D, 4.0D, 0.0D);
     private static final double MOB_SPAWN_Y_OFFSET = 2.0D;
     private static final double MOB_SPAWN_RADIUS = 12.0D;
@@ -97,7 +97,7 @@ public final class DungeonInstanceManager {
     }
 
     public static Vec3 exitPortalPosition(UUID instanceOwnerId) {
-        return EXIT_PORTAL_POSITION;
+        return positionedOffset(instanceOwnerId, EXIT_PORTAL_OFFSET);
     }
 
     public static Vec3 shopkeeperPosition(UUID instanceOwnerId) {

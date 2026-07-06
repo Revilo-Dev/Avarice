@@ -13,6 +13,18 @@
         ]
       }
     },
+    "has_opal": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "gatesofavarice:opal"
+            ]
+          }
+        ]
+      }
+    },
     "has_the_recipe": {
       "trigger": "minecraft:recipe_unlocked",
       "conditions": {
@@ -23,6 +35,7 @@
   "requirements": [
     [
       "has_dark_essence",
+      "has_opal",
       "has_the_recipe"
     ]
   ],

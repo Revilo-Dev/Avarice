@@ -50,6 +50,7 @@ public final class GatewaySellValues {
         if (item == ModItems.HEART_FRAGMENT.get()) return 25;
         if (item == ModItems.MANA_GEMS.get()) return 24;
         if (item == ModItems.PLASMA.get()) return 30;
+        if (item == ModItems.SILK_SPOOL.get()) return 30;
         if (item == ModItems.SAPHIRE.get()) return 75;
         if (item == ModItems.MANA_STEEL_SCRAP.get()) return 30;
         if (item == ModItems.MANA_STEEL_INGOT.get()) return 250;

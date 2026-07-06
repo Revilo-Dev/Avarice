@@ -13,7 +13,6 @@ import com.revilo.gatesofavarice.item.MagnetItem;
 import com.revilo.gatesofavarice.item.MythicCoinItem;
 import com.revilo.gatesofavarice.item.PaxelItem;
 import com.revilo.gatesofavarice.item.RarityTintedSmithingTemplateItem;
-import com.revilo.gatesofavarice.item.ShopGatewayPearlItem;
 import com.revilo.gatesofavarice.item.StabilityPearlItem;
 import com.revilo.gatesofavarice.item.data.LootRarity;
 import com.revilo.gatesofavarice.item.data.GatewayCardData;
@@ -86,6 +85,8 @@ public final class ModItems {
     public static final DeferredHolder<Item, LootMaterialItem> MANA_GEMS = ITEMS.register("mana_gems",
             () -> new LootMaterialItem(LootRarity.UNCOMMON, new Item.Properties().stacksTo(64)));
     public static final DeferredHolder<Item, LootMaterialItem> PLASMA = ITEMS.register("plasma",
+            () -> new LootMaterialItem(LootRarity.UNCOMMON, new Item.Properties().stacksTo(64).rarity(Rarity.UNCOMMON)));
+    public static final DeferredHolder<Item, LootMaterialItem> SILK_SPOOL = ITEMS.register("silk_spool",
             () -> new LootMaterialItem(LootRarity.UNCOMMON, new Item.Properties().stacksTo(64).rarity(Rarity.UNCOMMON)));
     public static final DeferredHolder<Item, LootMaterialItem> SAPHIRE = ITEMS.register("saphire",
             () -> new LootMaterialItem(LootRarity.RARE, new Item.Properties().stacksTo(64).rarity(Rarity.RARE)));
@@ -249,9 +250,6 @@ public final class ModItems {
                     List.of(Component.literal("slowness hit"), Component.literal("Fire aspect"), Component.literal("poison hit"))));
     public static final DeferredHolder<Item, PaxelItem> PRISMATIC_STEEL_PAXEL = ITEMS.register("prismatic_steel_paxel",
             () -> new PaxelItem(ModToolTiers.PRISMATIC_STEEL, new Item.Properties().rarity(Rarity.EPIC), LootRarity.LEGENDARY.color(), 9.0F, -2.6F, 11));
-    public static final DeferredHolder<Item, ShopGatewayPearlItem> SHOP_GATEWAY = ITEMS.register("shop_gateway",
-            () -> new ShopGatewayPearlItem(new Item.Properties().stacksTo(16)));
-
     public static final DeferredHolder<Item, BlockItem> GATEWAY_WORKBENCH = ITEMS.register("gateway_workbench",
             () -> new BlockItem(ModBlocks.GATEWAY_WORKBENCH.get(), new Item.Properties()));
     public static final DeferredHolder<Item, BlockItem> LOOTBOX = ITEMS.register("lootbox",

@@ -44,6 +44,7 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.MANASTONES.get());
                         output.accept(ModItems.MANA_GEMS.get());
                         output.accept(ModItems.PLASMA.get());
+                        output.accept(ModItems.SILK_SPOOL.get());
                         output.accept(ModItems.SAPHIRE.get());
                         output.accept(ModItems.METAL_NUGGET.get());
                         output.accept(ModItems.METAL_INGOT.get());
@@ -116,7 +117,6 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.PRISMATIC_STEEL_MAGNET.get());
                         output.accept(ModItems.PRISMATIC_STEEL_SWORD.get());
                         output.accept(ModItems.PRISMATIC_STEEL_PAXEL.get());
-                        output.accept(ModItems.SHOP_GATEWAY.get());
                     })
                     .build());
 

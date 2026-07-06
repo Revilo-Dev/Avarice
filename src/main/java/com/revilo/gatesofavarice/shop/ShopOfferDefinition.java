@@ -95,6 +95,7 @@ public record ShopOfferDefinition(
         addMaterialOffer(offers, "prismatic_core", "prismatic_core", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.PRISMATIC_CORE.get())), 60, MAX_PLAYER_LEVEL, 3, 5, -5, 5, ModItems.PRISMATIC_CORE.get());
         addShopOnlyOffer(offers, "shattered_bones", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.SHATTERED_BONES.get())), 10, MAX_PLAYER_LEVEL, 6, 12, 0, 0, ModItems.SHATTERED_BONES.get(), "Fractured remains from dungeon undead.");
         addShopOnlyOffer(offers, "plasma", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.PLASMA.get())), 20, MAX_PLAYER_LEVEL, 4, 8, 0, 0, ModItems.PLASMA.get(), "Volatile uncommon crafting residue.");
+        addShopOnlyOffer(offers, "silk_spool", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.SILK_SPOOL.get())), 20, MAX_PLAYER_LEVEL, 4, 8, 0, 0, ModItems.SILK_SPOOL.get(), "Uncommon woven dungeon thread.");
         addShopOnlyOffer(offers, "petrified_soul_shard", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.PETRIFIED_SOUL_SHARD.get())), 35, MAX_PLAYER_LEVEL, 2, 5, -5, 5, ModItems.PETRIFIED_SOUL_SHARD.get(), "Rare soulbound remnant.");
         addShopOnlyOffer(offers, "ruby", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.RUBY.get())), 35, MAX_PLAYER_LEVEL, 2, 5, -5, 5, ModItems.RUBY.get(), "Rare dungeon gemstone.");
         addShopOnlyOffer(offers, "saphire", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.SAPHIRE.get())), 35, MAX_PLAYER_LEVEL, 2, 5, -5, 5, ModItems.SAPHIRE.get(), "Rare dungeon gemstone.");
@@ -107,7 +108,6 @@ public record ShopOfferDefinition(
         addPotionOffer(offers, "healing_potion", 620, 0, MAX_PLAYER_LEVEL, 1, 3, 0, 0, Potions.HEALING, "Healing potion.");
         addPotionOffer(offers, "strong_healing_potion", 1300, 20, MAX_PLAYER_LEVEL, 1, 2, 0, 0, Potions.STRONG_HEALING, "Stronger instant healing.");
         addPotionOffer(offers, "regen_potion", 980, 10, MAX_PLAYER_LEVEL, 1, 3, 0, 0, Potions.REGENERATION, "Regeneration over time.");
-        addShopOnlyOffer(offers, "shop_gateway", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.SHOP_GATEWAY.get())), 28, MAX_PLAYER_LEVEL, 8, 14, 0, 0, ModItems.SHOP_GATEWAY.get(), "Summons a dungeon shopkeeper.");
         addOptionalRegistryOffer(offers, "gatewayexpansion:mana_steel_magnet", 250, 0, 24, 1, 2, 0, 0, "Dungeon utility magnet.");
         addOptionalRegistryOffer(offers, "gatewayexpansion:elixrite_magnet", 420, 20, 44, 1, 2, 0, 0, "Dungeon utility magnet.");
         addOptionalRegistryOffer(offers, "gatewayexpansion:astrite_magnet", 680, 35, 59, 1, 2, 0, 0, "Dungeon utility magnet.");

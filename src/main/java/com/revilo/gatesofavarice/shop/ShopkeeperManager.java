@@ -447,6 +447,7 @@ public final class ShopkeeperManager {
                 || preview.is(ModItems.MAGNETITE_SCRAP.get())
                 || preview.is(ModItems.ARCANE_ESSENCE.get())
                 || preview.is(ModItems.MANASTONES.get())
+                || preview.is(ModItems.SILK_SPOOL.get())
                 || preview.is(ModItems.ELIXRITE_SCRAP.get())
                 || preview.is(ModItems.ASTRITE_SCRAP.get())
                 || preview.is(ModItems.SOLAR_SHARD.get())

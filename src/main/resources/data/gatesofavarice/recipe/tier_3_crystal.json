@@ -3,15 +3,15 @@
   "category": "misc",
   "key": {
     "E": {
-      "item": "gatesofavarice:manastones"
-    },
-    "C": {
       "item": "gatesofavarice:arcane_essence"
+    },
+    "G": {
+      "item": "gatesofavarice:saphire"
     }
   },
   "pattern": [
     "EEE",
-    "ECE",
+    "EGE",
     "EEE"
   ],
   "result": {

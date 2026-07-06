@@ -13,6 +13,18 @@
         ]
       }
     },
+    "has_saphire": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "gatesofavarice:saphire"
+            ]
+          }
+        ]
+      }
+    },
     "has_the_recipe": {
       "trigger": "minecraft:recipe_unlocked",
       "conditions": {
@@ -23,6 +35,7 @@
   "requirements": [
     [
       "has_arcane_essence",
+      "has_saphire",
       "has_the_recipe"
     ]
   ],

@@ -34,16 +34,24 @@ public class HeartFragmentItem extends LootMaterialItem {
             return InteractionResultHolder.pass(stack);
         }
         if (!level.isClientSide) {
-            player.heal(1.0F);
+            healHalfHeart(player);
             if (player instanceof ServerPlayer serverPlayer) {
                 serverPlayer.getFoodData().eat(0, 0.0F);
-                ServerLevel serverLevel = serverPlayer.serverLevel();
-                serverLevel.sendParticles(ParticleTypes.HEART, serverPlayer.getX(), serverPlayer.getY() + 1.0D, serverPlayer.getZ(), 4, 0.2D, 0.25D, 0.2D, 0.0D);
-                serverLevel.sendParticles(ParticleTypes.HAPPY_VILLAGER, serverPlayer.getX(), serverPlayer.getY() + 0.75D, serverPlayer.getZ(), 6, 0.25D, 0.3D, 0.25D, 0.0D);
+                playHealEffects(serverPlayer);
             }
             level.playSound(null, player.getX(), player.getY(), player.getZ(), SoundEvents.AMETHYST_BLOCK_CHIME, SoundSource.PLAYERS, 0.45F, 1.35F);
             stack.shrink(1);
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
+    }
+
+    public static void healHalfHeart(Player player) {
+        player.setHealth(Math.min(player.getMaxHealth(), player.getHealth() + 1.0F));
+    }
+
+    public static void playHealEffects(ServerPlayer player) {
+        ServerLevel serverLevel = player.serverLevel();
+        serverLevel.sendParticles(ParticleTypes.HEART, player.getX(), player.getY() + 1.0D, player.getZ(), 4, 0.2D, 0.25D, 0.2D, 0.0D);
+        serverLevel.sendParticles(ParticleTypes.HAPPY_VILLAGER, player.getX(), player.getY() + 0.75D, player.getZ(), 6, 0.25D, 0.3D, 0.25D, 0.0D);
     }
 }

@@ -2,17 +2,17 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "key": {
-    "G": {
-      "item": "gatesofavarice:grimstone"
-    },
-    "C": {
+    "E": {
       "item": "gatesofavarice:mystic_essence"
+    },
+    "G": {
+      "item": "gatesofavarice:ruby"
     }
   },
   "pattern": [
-    "GGG",
-    "GCG",
-    "GGG"
+    "EEE",
+    "EGE",
+    "EEE"
   ],
   "result": {
     "count": 1,

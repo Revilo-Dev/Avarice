@@ -13,6 +13,18 @@
         ]
       }
     },
+    "has_ruby": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "gatesofavarice:ruby"
+            ]
+          }
+        ]
+      }
+    },
     "has_the_recipe": {
       "trigger": "minecraft:recipe_unlocked",
       "conditions": {
@@ -23,6 +35,7 @@
   "requirements": [
     [
       "has_mystic_essence",
+      "has_ruby",
       "has_the_recipe"
     ]
   ],
