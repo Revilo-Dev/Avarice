@@ -1305,14 +1305,23 @@ public final class DungeonRunManager {
     }
 
     private static void spawnExitPortal(RunState run, ServerLevel level) {
-        if (run.exitPortalId >= 0) return;
+        if (run.exitPortalId >= 0) {
+            Entity existing = level.getEntity(run.exitPortalId);
+            if (existing instanceof GatewayCrystalEntity portal && portal.isAlive()) {
+                return;
+            }
+            run.exitPortalId = -1;
+        }
         GatewayCrystalEntity portal = ModEntities.GATEWAY_CRYSTAL.get().create(level);
         if (portal == null) return;
         net.minecraft.world.phys.Vec3 portalPos = DungeonInstanceManager.exitPortalPosition(run.ownerId);
         portal.setOwnerId(run.ownerId);
         portal.setReturnPortal(true);
         portal.moveTo(portalPos.x(), portalPos.y(), portalPos.z(), 0.0F, 0.0F);
-        if (level.addFreshEntity(portal)) run.exitPortalId = portal.getId();
+        if (level.addFreshEntity(portal)) {
+            run.exitPortalId = portal.getId();
+            markStateDirty();
+        }
     }
 
     private static boolean ensureShopkeeper(RunState run, ServerLevel level) {
@@ -1584,7 +1593,7 @@ public final class DungeonRunManager {
                 feet,
                 primary,
                 secondary,
-                pickLoadoutMagnet(definition, random, avgLevel),
+                pickLoadoutUtility(definition),
                 definition.supplies().stream()
                         .map(spec -> new ItemStack(spec.item(), spec.minCount() + random.nextInt(Math.max(1, spec.maxCount() - spec.minCount() + 1))))
                         .toList(),
@@ -1776,6 +1785,10 @@ public final class DungeonRunManager {
     }
 
     private static boolean equipUtility(ServerPlayer player, ItemStack stack) {
+        if (stack.is(Items.SHIELD)) {
+            player.setItemSlot(EquipmentSlot.OFFHAND, stack);
+            return true;
+        }
         if (!stack.is(ModItems.DUNGEON_MAGNET.get()) || !ModCompat.isAnyLoaded("curios")) {
             return false;
         }
@@ -2057,8 +2070,8 @@ public final class DungeonRunManager {
         return new ItemStack(item).getHoverName().getString();
     }
 
-    private static ItemStack pickLoadoutMagnet(LoadoutModels.LoadoutDefinition definition, RandomSource random, int playerLevel) {
-        return new ItemStack(ModItems.DUNGEON_MAGNET.get());
+    private static ItemStack pickLoadoutUtility(LoadoutModels.LoadoutDefinition definition) {
+        return new ItemStack(definition.utilityItem());
     }
 
     private static Item resolveItem(String id) {

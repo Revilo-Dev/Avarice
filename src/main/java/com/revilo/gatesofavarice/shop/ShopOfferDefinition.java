@@ -1,8 +1,6 @@
 package com.revilo.gatesofavarice.shop;
 
 import com.revilo.gatesofavarice.integration.ModCompat;
-import com.revilo.gatesofavarice.item.data.CrystalForgeData;
-import com.revilo.gatesofavarice.item.data.CrystalTheme;
 import com.revilo.gatesofavarice.registry.ModItems;
 import java.util.ArrayList;
 import java.util.List;
@@ -129,7 +127,6 @@ public record ShopOfferDefinition(
 
         appendOptionalRunicOffers(offers);
         appendOptionalModdedOffers(offers);
-        addCrystalThemeOffers(offers);
         addMaterialOffer(offers, "stability_pearl", "stability_pearl", GatewaySellValues.getSuggestedBuyPrice(new ItemStack(ModItems.STABILITY_PEARL.get())), 15, MAX_PLAYER_LEVEL, 1, 2, 0, 0, ModItems.STABILITY_PEARL.get());
         return offers;
     }
@@ -265,50 +262,6 @@ public record ShopOfferDefinition(
         }
         ItemLike item = BuiltInRegistries.ITEM.get(id);
         addShopOnlyOffer(offers, offerId, fixedPrice, minLevel, maxLevel, minStock, maxStock, minFluctuation, maxFluctuation, item, description);
-    }
-
-    private static void addCrystalThemeOffers(List<ShopOfferDefinition> offers) {
-        offers.add(crystalOffer("tier_1_crystal_undead", 8, 0, MAX_PLAYER_LEVEL, ModItems.TIER_1_CRYSTAL.get(), 0, 19, CrystalTheme.UNDEAD));
-        offers.add(crystalOffer("tier_2_crystal_undead", 15, 10, MAX_PLAYER_LEVEL, ModItems.TIER_2_CRYSTAL.get(), 20, 49, CrystalTheme.UNDEAD));
-        offers.add(crystalOffer("tier_2_crystal_nether", 18, 25, MAX_PLAYER_LEVEL, ModItems.TIER_2_CRYSTAL.get(), 20, 49, CrystalTheme.NETHER));
-        offers.add(crystalOffer("tier_3_crystal_undead", 42, 50, MAX_PLAYER_LEVEL, ModItems.TIER_3_CRYSTAL.get(), 50, 69, CrystalTheme.UNDEAD));
-        offers.add(crystalOffer("tier_3_crystal_raider", 46, 50, MAX_PLAYER_LEVEL, ModItems.TIER_3_CRYSTAL.get(), 50, 69, CrystalTheme.RAIDER));
-        offers.add(crystalOffer("tier_3_crystal_nether", 48, 50, MAX_PLAYER_LEVEL, ModItems.TIER_3_CRYSTAL.get(), 50, 69, CrystalTheme.NETHER));
-        offers.add(crystalOffer("tier_3_crystal_arcane", 54, 50, MAX_PLAYER_LEVEL, ModItems.TIER_3_CRYSTAL.get(), 50, 69, CrystalTheme.ARCANE));
-        offers.add(crystalOffer("tier_4_crystal_undead", 68, 50, MAX_PLAYER_LEVEL, ModItems.TIER_4_CRYSTAL.get(), 70, 89, CrystalTheme.UNDEAD));
-        offers.add(crystalOffer("tier_4_crystal_raider", 74, 50, MAX_PLAYER_LEVEL, ModItems.TIER_4_CRYSTAL.get(), 70, 89, CrystalTheme.RAIDER));
-        offers.add(crystalOffer("tier_4_crystal_nether", 76, 50, MAX_PLAYER_LEVEL, ModItems.TIER_4_CRYSTAL.get(), 70, 89, CrystalTheme.NETHER));
-        offers.add(crystalOffer("tier_4_crystal_arcane", 82, 50, MAX_PLAYER_LEVEL, ModItems.TIER_4_CRYSTAL.get(), 70, 89, CrystalTheme.ARCANE));
-        offers.add(crystalOffer("tier_5_crystal_undead", 102, 70, MAX_PLAYER_LEVEL, ModItems.TIER_5_CRYSTAL.get(), 90, 100, CrystalTheme.UNDEAD));
-        offers.add(crystalOffer("tier_5_crystal_raider", 110, 70, MAX_PLAYER_LEVEL, ModItems.TIER_5_CRYSTAL.get(), 90, 100, CrystalTheme.RAIDER));
-        offers.add(crystalOffer("tier_5_crystal_nether", 112, 70, MAX_PLAYER_LEVEL, ModItems.TIER_5_CRYSTAL.get(), 90, 100, CrystalTheme.NETHER));
-        offers.add(crystalOffer("tier_5_crystal_arcane", 120, 70, MAX_PLAYER_LEVEL, ModItems.TIER_5_CRYSTAL.get(), 90, 100, CrystalTheme.ARCANE));
-    }
-
-    private static ShopOfferDefinition crystalOffer(String id, int price, int minLevel, int maxLevel, ItemLike item, int crystalMinLevel, int crystalMaxLevel, CrystalTheme theme) {
-        ItemStack previewStack = new ItemStack(item);
-        CrystalForgeData.ensureProfile(previewStack, crystalMinLevel, crystalMaxLevel, RandomSource.create(0L));
-        CrystalForgeData.attuneTheme(previewStack, theme);
-        return new ShopOfferDefinition(
-                id,
-                price,
-                minLevel,
-                maxLevel,
-                2,
-                4,
-                0,
-                0,
-                false,
-                previewStack,
-                previewStack.getHoverName(),
-                Component.translatable("shop.gatesofavarice.offer." + id + ".desc"),
-                (random, playerLevel) -> {
-                    ItemStack stack = new ItemStack(item);
-                    CrystalForgeData.ensureProfile(stack, crystalMinLevel, crystalMaxLevel, random);
-                    CrystalForgeData.attuneTheme(stack, theme);
-                    return stack;
-                }
-        );
     }
 
     public int rollStock(RandomSource random) {

@@ -35,6 +35,7 @@ public final class LoadoutModels {
             LoadoutTheme theme,
             String primaryWeaponKind,
             String secondaryWeaponKind,
+            Item utilityItem,
             ArmorSetDefinition armorSet,
             List<StatRollRange> armorRunicStatPool,
             List<StatRollRange> primaryRunicStatPool,
