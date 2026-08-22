@@ -2,6 +2,7 @@ package com.revilo.gatesofavarice.registry;
 
 import com.revilo.gatesofavarice.GatewayExpansion;
 import com.revilo.gatesofavarice.item.ArcaneAppleItem;
+import com.revilo.gatesofavarice.item.BailStoneItem;
 import com.revilo.gatesofavarice.item.BoosterPackItem;
 import com.revilo.gatesofavarice.item.CrystalItem;
 import com.revilo.gatesofavarice.item.GatewayCardItem;
@@ -54,6 +55,8 @@ public final class ModItems {
             () -> new GoldCoinItem(new Item.Properties().stacksTo(99).rarity(Rarity.UNCOMMON)));
     public static final DeferredHolder<Item, StabilityPearlItem> STABILITY_PEARL = ITEMS.register("stability_pearl",
             () -> new StabilityPearlItem(new Item.Properties().stacksTo(16).rarity(Rarity.EPIC)));
+    public static final DeferredHolder<Item, BailStoneItem> BAIL_STONE = ITEMS.register("bail_stone",
+            () -> new BailStoneItem(new Item.Properties().rarity(Rarity.UNCOMMON)));
     public static final DeferredHolder<Item, GatewayCardItem> GATEWAY_CARD = ITEMS.register("gateway_card",
             () -> new GatewayCardItem(new Item.Properties().stacksTo(16).rarity(Rarity.UNCOMMON)));
     public static final DeferredHolder<Item, BoosterPackItem> COMMON_BOOSTER_PACK = ITEMS.register("common_booster_pack",
@@ -254,6 +257,8 @@ public final class ModItems {
             () -> new BlockItem(ModBlocks.GATEWAY_WORKBENCH.get(), new Item.Properties()));
     public static final DeferredHolder<Item, BlockItem> LOOTBOX = ITEMS.register("lootbox",
             () -> new BlockItem(ModBlocks.LOOTBOX.get(), new Item.Properties()));
+    public static final DeferredHolder<Item, BlockItem> POI_LOOTBOX = ITEMS.register("poi_lootbox",
+            () -> new BlockItem(ModBlocks.POI_LOOTBOX.get(), new Item.Properties()));
     public static final DeferredHolder<Item, BlockItem> METAL_BLOCK = ITEMS.register("metal_block",
             () -> new BlockItem(ModBlocks.METAL_BLOCK.get(), new Item.Properties()));
 

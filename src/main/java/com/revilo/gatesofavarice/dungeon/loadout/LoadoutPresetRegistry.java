@@ -41,7 +41,7 @@ public final class LoadoutPresetRegistry {
                 List.of(effect("expanded_combat:blocking", 1, 1)),
                 List.of(supply(Items.COOKED_BEEF, 16, 16), supply(Items.GOLDEN_CARROT, 8, 8), supply(Items.ARROW, 32, 32))));
         out.add(preset("berserker", "Berserker", LoadoutTheme.BERSERKER, "axe", "machete", ModItems.DUNGEON_MAGNET.get(), armor("rage_set", "Berserker Set", 7.0F, 10.0F, 0.02F, 0.06F, 0.00F, 0.03F),
-                List.of(stat("resistance", 0.03F, 0.07F), stat("movement_speed", 0.02F, 0.06F), stat("health", 4.0F, 7.0F), stat("aura:ability_power", 0.10F, 0.20F), stat("aura:ability_force_rampage_bonus", 1.0F, 1.0F), stat("aura:skill_strength_bonus", 1.0F, 1.0F)),
+                List.of(stat("resistance", 0.03F, 0.07F), stat("movement_speed", 0.02F, 0.06F), stat("health", 2.0F, 2.0F), stat("aura:ability_power", 0.10F, 0.20F), stat("aura:ability_force_rampage_bonus", 1.0F, 1.0F), stat("aura:skill_strength_bonus", 1.0F, 1.0F)),
                 List.of(stat("attack_damage", 1.0F, 4.0F), stat("attack_speed", 0.01F, 0.05F), stat("health", 2.0F, 5.0F), stat("bleeding_chance", 0.01F, 0.03F), stat("leeching_chance", 0.01F, 0.02F)),
                 List.of(effect("minecraft:thorns", 1, 1)),
                 List.of(effect("twilightforest:destruction", 1, 1)),

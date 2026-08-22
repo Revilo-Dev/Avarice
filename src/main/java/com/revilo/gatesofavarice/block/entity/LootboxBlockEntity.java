@@ -1,6 +1,7 @@
 package com.revilo.gatesofavarice.block.entity;
 
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
+import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
 import com.revilo.gatesofavarice.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.NonNullList;
@@ -15,10 +16,14 @@ import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.Containers;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.component.SeededContainerLoot;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParamSets;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.Vec3;
 
 public class LootboxBlockEntity extends BlockEntity {
@@ -34,7 +39,18 @@ public class LootboxBlockEntity extends BlockEntity {
         super(ModBlockEntities.LOOTBOX.get(), pos, blockState);
     }
 
-    public void readFromItemStack(ItemStack stack) {
+    public void readFromItemStack(ItemStack stack, ServerPlayer placer) {
+        SeededContainerLoot containerLoot = stack.get(DataComponents.CONTAINER_LOOT);
+        if (containerLoot != null && this.level instanceof ServerLevel serverLevel) {
+            LootParams params = new LootParams.Builder(serverLevel)
+                    .withParameter(LootContextParams.ORIGIN, Vec3.atCenterOf(this.worldPosition))
+                    .create(LootContextParamSets.CHEST);
+            this.loot = NonNullList.create();
+            this.loot.addAll(DungeonRunManager.rollLootboxTableForPlayer(placer, containerLoot, params));
+            this.storedLevelOrbs = 0;
+            setChanged();
+            return;
+        }
         CompoundTag root = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag().getCompound(ROOT_KEY);
         this.loot = NonNullList.create();
         this.storedLevelOrbs = root.getInt(LEVEL_ORBS_KEY);

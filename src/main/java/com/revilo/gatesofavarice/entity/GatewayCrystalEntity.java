@@ -22,11 +22,15 @@ public class GatewayCrystalEntity extends Entity {
     private static final String OWNER_KEY = "Owner";
     private static final String LIFE_KEY = "Life";
     private static final String RETURN_PORTAL_KEY = "ReturnPortal";
+    private static final String ADVANCE_PORTAL_KEY = "AdvancePortal";
+    private static final String SHOP_PORTAL_KEY = "ShopPortal";
     private static final double DEFAULT_INTERACTION_HORIZONTAL_INFLATE = 0.8D;
     private static final double DEFAULT_INTERACTION_VERTICAL_INFLATE = 0.2D;
     private static final double RETURN_PORTAL_VISUAL_SCALE = 4.0D;
     private static final EntityDataAccessor<Integer> CRYSTAL_TIER = SynchedEntityData.defineId(GatewayCrystalEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> RETURN_PORTAL = SynchedEntityData.defineId(GatewayCrystalEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> ADVANCE_PORTAL = SynchedEntityData.defineId(GatewayCrystalEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> SHOP_PORTAL = SynchedEntityData.defineId(GatewayCrystalEntity.class, EntityDataSerializers.BOOLEAN);
 
     private UUID ownerId;
     private int lifeTicks;
@@ -44,6 +48,8 @@ public class GatewayCrystalEntity extends Entity {
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         builder.define(CRYSTAL_TIER, 1);
         builder.define(RETURN_PORTAL, false);
+        builder.define(ADVANCE_PORTAL, false);
+        builder.define(SHOP_PORTAL, false);
     }
 
     @Override
@@ -55,7 +61,7 @@ public class GatewayCrystalEntity extends Entity {
             return;
         }
 
-        if (!this.isReturnPortal() && this.lifeTicks >= MAX_LIFETIME_TICKS) {
+        if (!this.isReturnPortal() && !this.isAdvancePortal() && this.lifeTicks >= MAX_LIFETIME_TICKS) {
             this.discard();
             return;
         }
@@ -68,7 +74,11 @@ public class GatewayCrystalEntity extends Entity {
                 player -> !player.isSpectator() && !player.isPassenger() && !player.isOnPortalCooldown());
         for (ServerPlayer player : players) {
             UUID runOwnerId = this.ownerId == null ? player.getUUID() : this.ownerId;
-            if (this.isReturnPortal()) {
+            if (this.isShopPortal()) {
+                DungeonRunManager.enterShopThroughGateway(player, runOwnerId, this);
+            } else if (this.isAdvancePortal()) {
+                DungeonRunManager.advanceThroughFloorGateway(player, runOwnerId, this);
+            } else if (this.isReturnPortal()) {
                 DungeonRunManager.exitViaBailPortal(player, runOwnerId, this);
             } else {
                 if (!canUseTier(player, this.getCrystalTier())) {
@@ -87,6 +97,8 @@ public class GatewayCrystalEntity extends Entity {
             this.ownerId = tag.getUUID(OWNER_KEY);
         }
         this.setReturnPortal(tag.getBoolean(RETURN_PORTAL_KEY));
+        this.setAdvancePortal(tag.getBoolean(ADVANCE_PORTAL_KEY));
+        this.setShopPortal(tag.getBoolean(SHOP_PORTAL_KEY));
         if (tag.contains("CrystalTier")) {
             this.setCrystalTier(tag.getInt("CrystalTier"));
         }
@@ -99,6 +111,8 @@ public class GatewayCrystalEntity extends Entity {
             tag.putUUID(OWNER_KEY, this.ownerId);
         }
         tag.putBoolean(RETURN_PORTAL_KEY, this.isReturnPortal());
+        tag.putBoolean(ADVANCE_PORTAL_KEY, this.isAdvancePortal());
+        tag.putBoolean(SHOP_PORTAL_KEY, this.isShopPortal());
         tag.putInt("CrystalTier", this.getCrystalTier());
     }
 
@@ -144,6 +158,22 @@ public class GatewayCrystalEntity extends Entity {
 
     public void setReturnPortal(boolean returnPortal) {
         this.getEntityData().set(RETURN_PORTAL, returnPortal);
+    }
+
+    public boolean isAdvancePortal() {
+        return this.getEntityData().get(ADVANCE_PORTAL);
+    }
+
+    public void setAdvancePortal(boolean advancePortal) {
+        this.getEntityData().set(ADVANCE_PORTAL, advancePortal);
+    }
+
+    public boolean isShopPortal() {
+        return this.getEntityData().get(SHOP_PORTAL);
+    }
+
+    public void setShopPortal(boolean shopPortal) {
+        this.getEntityData().set(SHOP_PORTAL, shopPortal);
     }
 
     private net.minecraft.world.phys.AABB interactionBounds() {

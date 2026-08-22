@@ -83,7 +83,7 @@ public class DungeonCompleteScreen extends Screen {
         Component header = Component.literal(this.payload.survived() ? "Survived" : "You Died")
                 .withStyle(this.payload.survived() ? ChatFormatting.GOLD : ChatFormatting.RED, ChatFormatting.BOLD);
         guiGraphics.drawCenteredString(this.font, header, this.leftPos + GUI_W / 2, this.topPos + 11, 0xFFFFFF);
-        drawCentered(guiGraphics, "Wave " + this.payload.wavesComplete() + " / Best " + this.payload.bestWave(), 60, 25, 0xFFE36B);
+        drawCentered(guiGraphics, "Floor " + this.payload.wavesComplete() + " / Best " + this.payload.bestWave(), 60, 25, 0xFFE36B);
     }
 
     private void renderStats(GuiGraphics guiGraphics) {
@@ -145,7 +145,7 @@ public class DungeonCompleteScreen extends Screen {
         int y = this.topPos + GOLD_COIN_Y;
         ItemStack coin = new ItemStack(ModItems.GOLD_COIN.get());
         guiGraphics.renderItem(coin, x, y - 2);
-        drawScaled(guiGraphics, this.payload.goldCoinsEarned() + " Gold coins", x + 18, y + 4, 0.68F, 0xAA6C00);
+        drawScaled(guiGraphics, "Converted: " + this.payload.goldCoinsEarned() + " Gold Coins", x + 18, y + 4, 0.58F, 0xAA6C00);
     }
 
     private void renderLevelBar(GuiGraphics guiGraphics) {
@@ -239,6 +239,9 @@ public class DungeonCompleteScreen extends Screen {
         this.statLines.add(StatLine.time("Time Spent", this.payload.timeSpentTicks()));
         this.statLines.add(StatLine.number("Level Points " + progressVerb, this.payload.levelPointsEarned(), ""));
         this.statLines.add(StatLine.number("Mythic Coins " + progressVerb, this.payload.coinsEarned(), ""));
+        if (this.payload.survived() && this.payload.goldCoinsEarned() > 0) {
+            this.statLines.add(StatLine.number("Gold Coins Converted", this.payload.goldCoinsEarned(), ""));
+        }
         this.statLines.add(StatLine.number("Mobs Killed", this.payload.mobsKilled(), ""));
         this.statLines.add(StatLine.number("Damage Delt", this.payload.damageDealt(), ""));
         this.statLines.add(StatLine.number("Damage Receieved", this.payload.damageReceived(), ""));

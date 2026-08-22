@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:chest",
+  "pools": [
+    {
+      "rolls": { "type": "minecraft:uniform", "min": 3, "max": 5 },
+      "entries": [
+        { "type": "minecraft:item", "name": "gatesofavarice:elixrite_scrap", "weight": 28, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 2, "max": 5 } }] },
+        { "type": "minecraft:item", "name": "gatesofavarice:astrite_scrap", "weight": 24, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 1, "max": 4 } }] },
+        { "type": "minecraft:item", "name": "gatesofavarice:solar_shard", "weight": 18, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 1, "max": 3 } }] },
+        { "type": "minecraft:item", "name": "gatesofavarice:dark_essence", "weight": 15, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 1, "max": 2 } }] },
+        { "type": "minecraft:item", "name": "gatesofavarice:heart_fragment", "weight": 10, "functions": [{ "function": "minecraft:set_count", "count": 1 }] },
+        { "type": "minecraft:item", "name": "minecraft:diamond", "weight": 5, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 2, "max": 4 } }] }
+      ]
+    }
+  ]
+}

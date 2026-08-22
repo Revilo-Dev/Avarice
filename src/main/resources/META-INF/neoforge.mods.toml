@@ -38,6 +38,13 @@ ordering="AFTER"
 side="BOTH"
 
 [[dependencies.${mod_id}]]
+modId="runic"
+mandatory=true
+versionRange="[${runic_version},)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.${mod_id}]]
 modId="levelup"
 mandatory=false
 versionRange="[1.0.0,)"

@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:chest",
+  "pools": [{
+    "rolls": 1,
+    "entries": [
+      { "type": "minecraft:item", "name": "gatesofavarice:grimstone", "weight": 12, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 3, "max": 7 } }] },
+      { "type": "minecraft:item", "name": "gatesofavarice:mystic_essence", "weight": 10, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 2, "max": 6 } }] },
+      { "type": "minecraft:item", "name": "gatesofavarice:scrap_metal", "weight": 8, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 2, "max": 5 } }] }
+    ]
+  }]
+}

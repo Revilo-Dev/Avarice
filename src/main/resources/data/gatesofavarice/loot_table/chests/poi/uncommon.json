@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:chest",
+  "pools": [{
+    "rolls": 1,
+    "entries": [
+      { "type": "minecraft:item", "name": "gatesofavarice:mana_gems", "weight": 10, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 2, "max": 5 } }] },
+      { "type": "minecraft:item", "name": "gatesofavarice:manastones", "weight": 8, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 2, "max": 4 } }] },
+      { "type": "minecraft:item", "name": "gatesofavarice:magnetite_scrap", "weight": 6, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 1, "max": 4 } }] }
+    ]
+  }]
+}

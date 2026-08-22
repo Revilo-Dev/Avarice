@@ -58,7 +58,7 @@ public final class DungeonWaveHudOverlay {
 
         Component waveLabel = DungeonHudState.upgradePhase()
                 ? Component.literal("Upgrade phase")
-                : Component.literal("Wave " + DungeonHudState.waveNumber());
+                : Component.literal("Floor " + DungeonHudState.waveNumber());
         int waveTextAreaWidth = WAVE_TEXT_RIGHT - WAVE_TEXT_LEFT;
         int waveTextX = x + WAVE_TEXT_LEFT + (waveTextAreaWidth - minecraft.font.width(waveLabel)) / 2;
         event.getGuiGraphics().drawString(minecraft.font, waveLabel, waveTextX, y + WAVE_TEXT_TOP, 0xFFFFFF, false);

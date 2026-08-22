@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:chest",
+  "pools": [{
+    "rolls": 1,
+    "entries": [
+      { "type": "minecraft:item", "name": "gatesofavarice:prismatic_diamond", "weight": 6, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 1, "max": 2 } }] },
+      { "type": "minecraft:item", "name": "gatesofavarice:prismatic_core", "weight": 3 },
+      { "type": "minecraft:item", "name": "gatesofavarice:stability_pearl", "weight": 3 }
+    ]
+  }]
+}

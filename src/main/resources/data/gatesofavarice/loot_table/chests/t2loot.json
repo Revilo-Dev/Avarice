@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:chest",
+  "pools": [
+    {
+      "rolls": { "type": "minecraft:uniform", "min": 3, "max": 4 },
+      "entries": [
+        { "type": "minecraft:item", "name": "gatesofavarice:mana_steel_scrap", "weight": 30, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 2, "max": 5 } }] },
+        { "type": "minecraft:item", "name": "gatesofavarice:mana_gems", "weight": 24, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 3, "max": 6 } }] },
+        { "type": "minecraft:item", "name": "gatesofavarice:arcane_essence", "weight": 20, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 2, "max": 4 } }] },
+        { "type": "minecraft:item", "name": "gatesofavarice:elixrite_scrap", "weight": 16, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 1, "max": 3 } }] },
+        { "type": "minecraft:item", "name": "minecraft:diamond", "weight": 10, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 1, "max": 2 } }] }
+      ]
+    }
+  ]
+}

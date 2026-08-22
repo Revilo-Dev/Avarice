@@ -143,7 +143,7 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
     @Override
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         String stageTitle = this.menu.stage() == 0 ? "Tarot Selection" : (this.menu.stage() == 2 ? "Loadout Selection" : "Upgrade Selection");
-        guiGraphics.drawCenteredString(this.font, Component.literal("Wave " + this.menu.waveNumber() + " - " + stageTitle).withStyle(ChatFormatting.BOLD), this.imageWidth / 2, 2, 0xFFE36B);
+        guiGraphics.drawCenteredString(this.font, Component.literal("Floor " + this.menu.waveNumber() + " - " + stageTitle).withStyle(ChatFormatting.BOLD), this.imageWidth / 2, 2, 0xFFE36B);
         if (this.menu.ownerCanSelect()) {
             guiGraphics.drawCenteredString(this.font, Component.translatable("screen.gatesofavarice.dungeon_wave.select_prompt"), this.imageWidth / 2, 218, 0x6C6C6C);
         } else {

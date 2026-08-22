@@ -4,6 +4,7 @@ import com.revilo.gatesofavarice.block.entity.LootboxBlockEntity;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.LivingEntity;
@@ -65,8 +66,8 @@ public class LootboxBlock extends BaseEntityBlock {
     public void setPlacedBy(Level level, BlockPos pos, BlockState state, LivingEntity placer, ItemStack stack) {
         super.setPlacedBy(level, pos, state, placer, stack);
         BlockEntity be = level.getBlockEntity(pos);
-        if (be instanceof LootboxBlockEntity lootbox) {
-            lootbox.readFromItemStack(stack);
+        if (be instanceof LootboxBlockEntity lootbox && placer instanceof ServerPlayer serverPlayer) {
+            lootbox.readFromItemStack(stack, serverPlayer);
         }
     }
 

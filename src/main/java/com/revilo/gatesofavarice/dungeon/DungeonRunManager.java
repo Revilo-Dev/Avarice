@@ -8,6 +8,7 @@ import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCategory;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutPresetRegistry;
 import com.revilo.gatesofavarice.dungeon.loadout.AuraAttributeSupport;
 import com.revilo.gatesofavarice.dungeon.loadout.RunicLoadoutService;
+import com.revilo.gatesofavarice.party.PartyManager;
 import com.revilo.gatesofavarice.entity.GatekeeperEntity;
 import com.revilo.gatesofavarice.entity.GatewayCrystalEntity;
 import com.revilo.gatesofavarice.gateway.pool.EnemyPoolRegistry;
@@ -48,6 +49,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -81,7 +83,10 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.component.SeededContainerLoot;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.LootTable;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -132,7 +137,7 @@ public final class DungeonRunManager {
     private static final List<Item> COMMON_DROP_POOL = List.of(
             ModItems.GRIMSTONE.get(), ModItems.MYSTIC_ESSENCE.get(), ModItems.SCRAP_METAL.get(), ModItems.MANA_GEMS.get(),
             ModItems.MAGNETITE_SCRAP.get(), ModItems.ARCANE_ESSENCE.get(), ModItems.MANASTONES.get(), ModItems.RUSTY_COIN.get(), ModItems.HARDENED_FLESH.get(),
-            ModItems.SHATTERED_BONES.get()
+            ModItems.SHATTERED_BONES.get(), Items.COAL, Items.QUARTZ, Items.IRON_INGOT, Items.GOLD_INGOT, Items.DIAMOND
     );
     private static final List<Item> UNCOMMON_DROP_POOL = List.of(
             ModItems.MANA_STEEL_SCRAP.get(), ModItems.ELIXRITE_SCRAP.get(), ModItems.ASTRITE_SCRAP.get(), ModItems.SOLAR_SHARD.get(),
@@ -225,16 +230,25 @@ public final class DungeonRunManager {
 
     public static void enterFromGateway(ServerPlayer player, UUID ownerId) {
         ensureLoaded(player.server);
+        // Solo players always receive their own coordinate-separated instance. Party members share their leader's run.
+        ownerId = PartyManager.dungeonOwner(player, ownerId);
         RunState run = RUNS_BY_OWNER.computeIfAbsent(ownerId, RunState::new);
+        PlayerSnapshot savedDungeonLoadout = run.dungeonLoadouts.get(player.getUUID());
         run.server = player.server;
         if (run.runStartGameTime < 0L) {
             run.runStartGameTime = player.serverLevel().getGameTime();
         }
         run.participants.add(player.getUUID());
         PLAYER_TO_OWNER.put(player.getUUID(), ownerId);
-        saveEntrySnapshot(run, player);
+        if (savedDungeonLoadout == null) {
+            saveEntrySnapshot(run, player);
+        }
         MythicCoinWallet.set(player, 0);
         clearForDungeon(player);
+        if (savedDungeonLoadout != null) {
+            restoreSnapshot(player, savedDungeonLoadout);
+        }
+        ensureBailStone(player);
         setBoundlessQuestBookHidden(true);
         DungeonInstanceManager.teleportToDungeonInstance(player, ownerId);
         restoreDungeonEntryVitals(player);
@@ -278,6 +292,86 @@ public final class DungeonRunManager {
         }
     }
 
+    /** The Bail Stone is only usable between floors, never while enemies are active. */
+    public static boolean canUseBailStone(ServerPlayer player) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        return run != null && run.waveNumber > 0 && run.phase != RunPhase.IN_WAVE;
+    }
+
+    public static boolean bailWithStone(ServerPlayer player) {
+        if (!canUseBailStone(player)) return false;
+        RunState run = getRunForPlayer(player);
+        PlayerSnapshot snapshot = run.snapshots.get(player.getUUID());
+        if (snapshot == null) return false;
+
+        discardTrackedMobs(run, player.serverLevel());
+        run.dungeonLoadouts.put(player.getUUID(), PlayerSnapshot.capture(player));
+        run.toSpawn = 0;
+        run.waveTotalMobs = 0;
+        run.spawnCooldown = 0;
+        run.aliveMobs.clear();
+        run.tarotOptions = List.of();
+        run.lootOptions = List.of();
+        run.loadoutOptions = List.of();
+        run.selectingLoadout = false;
+        run.rerollsUsed = 0;
+        run.phase = run.waveNumber % 5 == 0 ? RunPhase.SHOP : RunPhase.CHECKPOINT;
+        clearHudToPlayer(player);
+        setBoundlessQuestBookHidden(false);
+        clearDungeonBeltMagnet(player);
+        restoreSnapshot(player, snapshot);
+        DungeonInstanceManager.teleportToSavedLocation(player, snapshot.dimension, snapshot.returnPos, snapshot.yaw, snapshot.pitch);
+        PLAYER_TO_OWNER.remove(player.getUUID());
+        run.participants.remove(player.getUUID());
+        markStateDirty();
+        forceCriticalSave(player.server);
+        return true;
+    }
+
+    public static void advanceThroughFloorGateway(ServerPlayer player, UUID ownerId, GatewayCrystalEntity portal) {
+        ensureLoaded(player.server);
+        RunState run = RUNS_BY_OWNER.get(ownerId);
+        if (run == null || (run.phase != RunPhase.CHECKPOINT && run.phase != RunPhase.SHOP) || !run.participants.contains(player.getUUID()) || !isRunAdvancePortal(run, portal)) return;
+        portal.discard();
+        run.advancePortalId = -1;
+        ServerLevel dungeon = getDungeonLevel(run);
+        if (dungeon != null) {
+            DungeonInstanceManager.reloadDungeonFloor(dungeon, run.ownerId, run.waveNumber + 1);
+            for (ServerPlayer participant : run.liveParticipants()) {
+                DungeonInstanceManager.teleportToDungeonInstance(participant, run.ownerId);
+            }
+        }
+        run.phase = RunPhase.SELECTING_TAROT;
+        run.rerollsUsed = 0;
+        rollTarotOptions(run, player.serverLevel().random);
+        if (player.getUUID().equals(run.ownerId)) openWaveMenu(player, run);
+        markStateDirty();
+        forceCriticalSave(player.server);
+    }
+
+    /** Moves the party into the shop only after they physically enter the post-floor gateway. */
+    public static void enterShopThroughGateway(ServerPlayer player, UUID ownerId, GatewayCrystalEntity portal) {
+        ensureLoaded(player.server);
+        RunState run = RUNS_BY_OWNER.get(ownerId);
+        if (run == null || run.phase != RunPhase.SHOP || !run.participants.contains(player.getUUID())
+                || !portal.isShopPortal() || !run.ownerId.equals(portal.getOwnerId())) {
+            return;
+        }
+        portal.discard();
+        run.advancePortalId = -1;
+        for (ServerPlayer participant : run.liveParticipants()) {
+            DungeonInstanceManager.teleportToShopInstance(participant, run.ownerId);
+        }
+        ServerLevel dungeon = getDungeonLevel(run);
+        if (dungeon != null) {
+            ensureShopkeeper(run, dungeon);
+            spawnAdvancePortal(run, dungeon);
+        }
+        markStateDirty();
+        forceCriticalSave(player.server);
+    }
+
     private static boolean isRunExitPortal(RunState run, GatewayCrystalEntity portal) {
         if (portal == null || !portal.isReturnPortal()) {
             return false;
@@ -301,17 +395,12 @@ public final class DungeonRunManager {
 
         if (run.phase == RunPhase.SELECTING_TAROT) {
             if (buttonId == DungeonWaveMenu.BAIL_BUTTON_ID) {
-                if (run.waveNumber <= 0) {
-                    return false;
-                }
-                spawnExitPortal(run, serverPlayer.serverLevel());
-                run.phase = RunPhase.WAITING_EXIT;
-                serverPlayer.closeContainer();
-                return true;
+                // Escaping is intentionally handled only by the Bail Stone so it can be held to confirm.
+                return false;
             }
             if (buttonId < 0 || buttonId >= run.tarotOptions.size()) return false;
             applyTarot(run, run.tarotOptions.get(buttonId));
-            if (run.waveNumber == 0) {
+            if (run.waveNumber == 0 && !run.dungeonLoadouts.containsKey(serverPlayer.getUUID())) {
                 rollLoadoutOptions(run, serverPlayer.serverLevel().random);
                 run.phase = RunPhase.SELECTING_LOOT;
                 openWaveMenu(serverPlayer, run);
@@ -378,6 +467,41 @@ public final class DungeonRunManager {
     public static int getUpgradeWaveNumber(UUID ownerId) {
         RunState run = RUNS_BY_OWNER.get(ownerId);
         return run == null ? 1 : Math.max(1, run.waveNumber + 1);
+    }
+
+    public static int getCurrentFloor(ServerPlayer player) {
+        RunState run = getRunForPlayer(player);
+        return run == null ? 1 : Math.max(1, run.waveNumber);
+    }
+
+    public static int getDungeonPartySize(ServerPlayer player) {
+        RunState run = getRunForPlayer(player);
+        return run == null ? 1 : Math.max(1, run.liveParticipants().size());
+    }
+
+    public static double getLootboxQuantityBonus(ServerPlayer player) {
+        RunState run = getRunForPlayer(player);
+        return run == null ? 0.0D : Math.max(0.0D, run.quantityBonusModifier);
+    }
+
+    public static double getLootboxRarityBonus(ServerPlayer player) {
+        RunState run = getRunForPlayer(player);
+        return run == null ? 0.0D : Math.max(0.0D, run.rarityBonusModifier);
+    }
+
+    /** Amount is a distinct lootbox roll multiplier, granted by reward-roll upgrades. */
+    public static int getLootboxAmountBonus(ServerPlayer player) {
+        RunState run = getRunForPlayer(player);
+        return run == null ? 0 : Math.max(0, run.extraRewardRolls);
+    }
+
+    /**
+     * Synergy cards are milestone rewards for a wave that has just been cleared,
+     * rather than upgrades scaled for the wave about to start.
+     */
+    public static boolean isSynergyCardWave(UUID ownerId) {
+        RunState run = RUNS_BY_OWNER.get(ownerId);
+        return run != null && run.waveNumber > 0 && run.waveNumber % 10 == 0;
     }
 
     public static int getShopUpgradeWaveNumber(ServerPlayer player) {
@@ -588,6 +712,55 @@ public final class DungeonRunManager {
         addDropRateLines(lines, "Rare", RARE_DROP_POOL, rareChance);
         addDropRateLines(lines, "Epic", EPIC_DROP_POOL, epicChance);
         return List.copyOf(lines);
+    }
+
+    /**
+     * Rolls a placed lootbox. Dungeon quantity bonuses increase the resulting stack
+     * sizes, while rarity bonuses can promote a dungeon chest table by one tier.
+     */
+    public static List<ItemStack> rollLootboxTableForPlayer(ServerPlayer player, SeededContainerLoot containerLoot, LootParams params) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        RandomSource random = player.getRandom();
+        ResourceKey<LootTable> lootTableKey = containerLoot.lootTable();
+
+        if (run != null) {
+            lootTableKey = upgradeLootboxTable(lootTableKey, run.rarityBonusModifier, random);
+        }
+
+        LootTable lootTable = player.server.reloadableRegistries().getLootTable(lootTableKey);
+        long seed = containerLoot.seed() == 0L ? random.nextLong() : containerLoot.seed();
+        ArrayList<ItemStack> rolledLoot = new ArrayList<>(lootTable.getRandomItems(params, seed));
+        if (run == null || run.quantityBonusModifier <= 0.0D) {
+            return rolledLoot;
+        }
+
+        double quantityMultiplier = 1.0D + run.quantityBonusModifier;
+        for (ItemStack stack : rolledLoot) {
+            int baseCount = stack.getCount();
+            double scaledCount = baseCount * quantityMultiplier;
+            int count = (int) Math.floor(scaledCount);
+            if (random.nextDouble() < scaledCount - count) {
+                count++;
+            }
+            stack.setCount(Math.min(stack.getMaxStackSize(), Math.max(1, count)));
+        }
+        return rolledLoot;
+    }
+
+    private static ResourceKey<LootTable> upgradeLootboxTable(ResourceKey<LootTable> lootTableKey, double rarityBonus, RandomSource random) {
+        if (rarityBonus <= 0.0D || random.nextDouble() >= Math.min(0.75D, rarityBonus)) {
+            return lootTableKey;
+        }
+        ResourceLocation tableId = lootTableKey.location();
+        if (!"gatesofavarice".equals(tableId.getNamespace())) {
+            return lootTableKey;
+        }
+        return switch (tableId.getPath()) {
+            case "chests/t1loot" -> ResourceKey.create(Registries.LOOT_TABLE, ResourceLocation.fromNamespaceAndPath("gatesofavarice", "chests/t2loot"));
+            case "chests/t2loot" -> ResourceKey.create(Registries.LOOT_TABLE, ResourceLocation.fromNamespaceAndPath("gatesofavarice", "chests/t3loot"));
+            default -> lootTableKey;
+        };
     }
 
     public static int debugSpawnMobs(ServerPlayer player, String poolName, int count) {
@@ -850,68 +1023,14 @@ public final class DungeonRunManager {
         }
         return recovered;
     }
-    public static boolean canOwnerStartNextWaveFromShop(ServerPlayer player, int shopkeeperEntityId) {
-        UUID ownerId = PLAYER_TO_OWNER.get(player.getUUID());
-        if (ownerId == null) return false;
-        RunState run = RUNS_BY_OWNER.get(ownerId);
-        return run != null
-                && player.getUUID().equals(run.ownerId)
-                && isRunShopkeeperInteraction(run, shopkeeperEntityId)
-                && (run.phase == RunPhase.SHOP || run.phase == RunPhase.SELECTING_TAROT || run.phase == RunPhase.SELECTING_LOOT);
-    }
-
     public static boolean canOwnerBailFromShop(ServerPlayer player, int shopkeeperEntityId) {
-        UUID ownerId = PLAYER_TO_OWNER.get(player.getUUID());
-        if (ownerId == null) return false;
-        RunState run = RUNS_BY_OWNER.get(ownerId);
-        return run != null
-                && player.getUUID().equals(run.ownerId)
-                && isRunShopkeeperInteraction(run, shopkeeperEntityId)
-                && run.phase == RunPhase.SHOP
-                && run.waveNumber > 0;
+        // The Bail Stone owns the confirmation flow; shop UI must not bypass its hold requirement.
+        return false;
     }
 
     public static boolean bailFromShop(ServerPlayer player, int shopkeeperEntityId) {
         if (!canOwnerBailFromShop(player, shopkeeperEntityId)) return false;
-        UUID ownerId = PLAYER_TO_OWNER.get(player.getUUID());
-        if (ownerId == null) return false;
-        RunState run = RUNS_BY_OWNER.get(ownerId);
-        if (run == null) return false;
-        for (ServerPlayer participant : run.liveParticipants()) {
-            participant.closeContainer();
-        }
-        spawnExitPortal(run, player.serverLevel());
-        run.phase = RunPhase.WAITING_EXIT;
-        markStateDirty();
-        forceCriticalSave(player.server);
-        return true;
-    }
-
-    public static boolean startNextWaveFromShop(ServerPlayer player, int shopkeeperEntityId) {
-        if (!canOwnerStartNextWaveFromShop(player, shopkeeperEntityId)) return false;
-        UUID ownerId = PLAYER_TO_OWNER.get(player.getUUID());
-        if (ownerId == null) return false;
-        RunState run = RUNS_BY_OWNER.get(ownerId);
-        if (run == null) return false;
-        if (run.phase == RunPhase.SELECTING_TAROT || run.phase == RunPhase.SELECTING_LOOT) {
-            for (ServerPlayer participant : run.liveParticipants()) {
-                participant.closeContainer();
-            }
-            openWaveMenu(player, run);
-            markStateDirty();
-            forceCriticalSave(player.server);
-            return true;
-        }
-        run.rerollsUsed = 0;
-        for (ServerPlayer participant : run.liveParticipants()) {
-            participant.closeContainer();
-        }
-        run.phase = RunPhase.SELECTING_TAROT;
-        rollTarotOptions(run, player.serverLevel().random);
-        openWaveMenu(player, run);
-        markStateDirty();
-        forceCriticalSave(player.server);
-        return true;
+        return bailWithStone(player);
     }
 
     public static boolean tryResumePendingWaveMenu(ServerPlayer player, int shopkeeperEntityId) {
@@ -961,6 +1080,9 @@ public final class DungeonRunManager {
             ServerLevel dungeon = dungeonLevel;
             if (dungeon == null) continue;
             DungeonInstanceManager.keepInstanceAlive(run.ownerId, dungeon);
+            for (ServerPlayer participant : run.liveParticipants()) {
+                ensureBailStone(participant);
+            }
 
             if (run.phase == RunPhase.SELECTING_TAROT && run.tarotOptions.isEmpty()) {
                 rollTarotOptions(run, dungeon.random);
@@ -989,8 +1111,16 @@ public final class DungeonRunManager {
                     run.currentWavePools = buildWavePools(run);
                 }
                 tickWave(run, dungeon);
+            } else if (run.phase == RunPhase.INTERMISSION) {
+                if (run.intermissionTicks > 0) {
+                    run.intermissionTicks--;
+                } else {
+                    startWave(run);
+                }
             } else if (run.phase == RunPhase.SHOP) {
                 ensureShopkeeper(run, dungeon);
+            } else if (run.phase == RunPhase.CHECKPOINT) {
+                spawnAdvancePortal(run, dungeon);
             } else if (run.phase == RunPhase.WAITING_EXIT) {
                 spawnExitPortal(run, dungeon);
             }
@@ -1079,22 +1209,14 @@ public final class DungeonRunManager {
             if (ownerId == null) return;
             RunState run = RUNS_BY_OWNER.get(ownerId);
             if (run == null) return;
-            PlayerSnapshot snapshot = run.snapshots.get(player.getUUID());
+            PlayerSnapshot snapshot = run.snapshots.remove(player.getUUID());
             if (snapshot != null) {
                 PENDING_SNAPSHOT_RESTORES.put(player.getUUID(), new PendingSnapshotRestore(snapshot, createDeathSummary(run, player)));
             }
             run.participants.remove(player.getUUID());
-            run.snapshots.remove(player.getUUID());
-            if (player.getUUID().equals(run.ownerId)) {
-                closeOverworldEntryPortals(player.server, run.ownerId);
-            }
-            clearForDungeon(player);
             clearHudToPlayer(player);
-            if (run.liveParticipants().isEmpty()) {
-                finishAndCleanup(run);
-            } else {
-                markStateDirty();
-            }
+            // Death ends the entire run: room, mobs, modifiers, rewards, and all participant state are reset.
+            finishAndCleanup(run);
             forceCriticalSave(player.server);
             return;
         }
@@ -1200,10 +1322,16 @@ public final class DungeonRunManager {
         syncHudToPlayer(player, run.phase == RunPhase.IN_WAVE, run.waveNumber, Math.max(0, run.toSpawn + run.aliveMobs.size()), Math.max(1, run.waveTotalMobs));
         if (player.getUUID().equals(run.ownerId) && (run.phase == RunPhase.SELECTING_TAROT || run.phase == RunPhase.SELECTING_LOOT)) {
             openWaveMenu(player, run);
-        } else if (player.getUUID().equals(run.ownerId) && run.phase == RunPhase.SHOP) {
+        } else if (run.phase == RunPhase.SHOP) {
             ServerLevel dungeon = getDungeonLevel(run);
             if (dungeon != null) {
+                DungeonInstanceManager.teleportToShopInstance(player, ownerId);
                 ensureShopkeeper(run, dungeon);
+            }
+        } else if (run.phase == RunPhase.CHECKPOINT) {
+            ServerLevel dungeon = getDungeonLevel(run);
+            if (dungeon != null) {
+                spawnAdvancePortal(run, dungeon);
             }
         }
         markStateDirty();
@@ -1259,8 +1387,13 @@ public final class DungeonRunManager {
 
     private static void startWave(RunState run) {
         discardRunShopkeeper(run);
-        run.waveNumber++;
+        discardAdvancePortal(run);
+        if (run.waveNumber == 0 || run.wavesCompletedOnFloor >= run.waveNumber) {
+            run.waveNumber++;
+            run.wavesCompletedOnFloor = 0;
+        }
         run.phase = RunPhase.IN_WAVE;
+        run.intermissionTicks = 0;
         run.aliveMobs.clear();
         run.spawnCooldown = 0;
         run.tarotOptions = List.of();
@@ -1270,7 +1403,7 @@ public final class DungeonRunManager {
         int extraPlayers = Math.max(0, run.liveParticipants().size() - 1);
         int avgLevel = averageParticipantLevel(run);
         double progressionDifficulty = ProgressionSystem.dungeonDifficultyScalar(avgLevel, Math.max(1, run.waveNumber));
-        int baseCount = 6 + run.waveNumber * 2 + extraPlayers * 3;
+        int baseCount = 6 + waveStrength(run) * 2 + extraPlayers * 6;
         run.toSpawn = Math.max(4, (int) Math.round(baseCount * run.enemyCountMultiplier * progressionDifficulty));
         run.waveTotalMobs = run.toSpawn;
         run.currentWavePools = buildWavePools(run);
@@ -1301,15 +1434,9 @@ public final class DungeonRunManager {
         if (run.toSpawn > 0) {
             if (run.spawnCooldown > 0) run.spawnCooldown--;
             else {
-                int batch = Math.min(run.toSpawn, 2 + level.random.nextInt(2));
-                int spawned = 0;
-                for (int i = 0; i < batch; i++) {
-                    if (spawnOneMob(run, level)) {
-                        spawned++;
-                    }
-                }
+                int spawned = spawnOneMob(run, level) ? 1 : 0;
                 run.toSpawn -= spawned;
-                run.spawnCooldown = 10;
+                run.spawnCooldown = 25;
                 if (spawned > 0) {
                     markStateDirty();
                 }
@@ -1326,14 +1453,28 @@ public final class DungeonRunManager {
         for (ServerPlayer player : run.liveParticipants()) {
             MythicCoinWallet.addRaw(player, Math.max(5, scaledCoins));
         }
-        int lootRolls = computeWaveLootRolls(run, avgLevel, level.random);
-        spawnWaveLootBurst(run, level, lootRolls);
         for (ServerPlayer player : run.liveParticipants()) {
             player.removeAllEffects();
             player.setHealth(player.getMaxHealth());
         }
-        run.phase = RunPhase.SHOP;
-        ensureShopkeeper(run, level);
+        run.wavesCompletedOnFloor++;
+        if (run.wavesCompletedOnFloor < wave) {
+            run.phase = RunPhase.INTERMISSION;
+            run.intermissionTicks = 20 * 10;
+            for (ServerPlayer player : run.liveParticipants()) {
+                player.displayClientMessage(Component.literal("Next wave begins in 10 seconds. Bail Stone is available.").withStyle(ChatFormatting.GOLD), true);
+            }
+            syncHud(run, false);
+            markStateDirty();
+            forceCriticalSave(run.server);
+            return;
+        }
+        run.phase = wave % 5 == 0 ? RunPhase.SHOP : RunPhase.CHECKPOINT;
+        if (run.phase == RunPhase.SHOP) {
+            spawnShopPortal(run, level);
+        } else {
+            spawnAdvancePortal(run, level);
+        }
         syncHud(run, false);
         markStateDirty();
         forceCriticalSave(run.server);
@@ -1357,6 +1498,61 @@ public final class DungeonRunManager {
             run.exitPortalId = portal.getId();
             markStateDirty();
         }
+    }
+
+    private static boolean isRunAdvancePortal(RunState run, GatewayCrystalEntity portal) {
+        if (portal == null || !portal.isAdvancePortal() || !run.ownerId.equals(portal.getOwnerId())) return false;
+        if (run.advancePortalId != portal.getId()) {
+            run.advancePortalId = portal.getId();
+            markStateDirty();
+        }
+        return true;
+    }
+
+    private static void spawnAdvancePortal(RunState run, ServerLevel level) {
+        if (run.advancePortalId >= 0) {
+            Entity existing = level.getEntity(run.advancePortalId);
+            if (existing instanceof GatewayCrystalEntity portal && portal.isAlive() && portal.isAdvancePortal()) return;
+            run.advancePortalId = -1;
+        }
+        GatewayCrystalEntity portal = ModEntities.GATEWAY_CRYSTAL.get().create(level);
+        if (portal == null) return;
+        Vec3 pos = DungeonInstanceManager.advancePortalPosition(run.ownerId);
+        portal.setOwnerId(run.ownerId);
+        portal.setAdvancePortal(true);
+        portal.moveTo(pos.x(), pos.y(), pos.z(), 0.0F, 0.0F);
+        if (level.addFreshEntity(portal)) {
+            run.advancePortalId = portal.getId();
+            markStateDirty();
+        }
+    }
+
+    private static void spawnShopPortal(RunState run, ServerLevel level) {
+        if (run.advancePortalId >= 0) {
+            Entity existing = level.getEntity(run.advancePortalId);
+            if (existing instanceof GatewayCrystalEntity portal && portal.isAlive() && portal.isShopPortal()) return;
+            run.advancePortalId = -1;
+        }
+        GatewayCrystalEntity portal = ModEntities.GATEWAY_CRYSTAL.get().create(level);
+        if (portal == null) return;
+        Vec3 pos = DungeonInstanceManager.advancePortalPosition(run.ownerId);
+        portal.setOwnerId(run.ownerId);
+        portal.setAdvancePortal(true);
+        portal.setShopPortal(true);
+        portal.moveTo(pos.x(), pos.y(), pos.z(), 0.0F, 0.0F);
+        if (level.addFreshEntity(portal)) {
+            run.advancePortalId = portal.getId();
+            markStateDirty();
+        }
+    }
+
+    private static void discardAdvancePortal(RunState run) {
+        ServerLevel dungeon = getDungeonLevel(run);
+        if (dungeon != null && run.advancePortalId >= 0) {
+            Entity portal = dungeon.getEntity(run.advancePortalId);
+            if (portal != null) portal.discard();
+        }
+        run.advancePortalId = -1;
     }
 
     private static boolean ensureShopkeeper(RunState run, ServerLevel level) {
@@ -1505,19 +1701,6 @@ public final class DungeonRunManager {
         run.shopkeeperUuid = null;
     }
 
-    private static void spawnWaveLootBurst(RunState run, ServerLevel level, int rolls) {
-        BlockPos center = DungeonInstanceManager.instanceCenter(run.ownerId);
-        for (int i = 0; i < rolls; i++) {
-            Item item = pickScaledDrop(run, averageParticipantLevel(run), level.random);
-            int stackCount = Math.max(1, 1 + level.random.nextInt(2) + Math.max(0, run.waveNumber / 5) + (int) Math.floor(run.quantityBonusModifier * 2.0D));
-            ItemStack stack = new ItemStack(item, stackCount);
-            ItemEntity entity = new ItemEntity(level, center.getX() + 0.5D, center.getY() + 1.0D, center.getZ() + 0.5D, stack);
-            entity.setDeltaMovement(level.random.nextDouble() * 0.3D - 0.15D, 0.25D, level.random.nextDouble() * 0.3D - 0.15D);
-            entity.setNoPickUpDelay();
-            level.addFreshEntity(entity);
-        }
-    }
-
     private static boolean spawnOneMob(RunState run, ServerLevel level) {
         return spawnOneMob(run, level, null);
     }
@@ -1532,7 +1715,8 @@ public final class DungeonRunManager {
         if (type == null) return false;
         Entity entity = type.create(level);
         if (!(entity instanceof LivingEntity mob)) return false;
-        net.minecraft.world.phys.Vec3 spawnPos = DungeonInstanceManager.randomMobSpawnPosition(run.ownerId, level.random);
+        net.minecraft.world.phys.Vec3 spawnPos = DungeonInstanceManager.randomMobSpawnPosition(level, run.ownerId, level.random);
+        if (spawnPos == null) return false;
         double x = spawnPos.x();
         double y = spawnPos.y();
         double z = spawnPos.z();
@@ -1785,6 +1969,7 @@ public final class DungeonRunManager {
             DungeonBoundItems.forceMarkDungeonBound(foodCopy);
             player.getInventory().add(foodCopy);
         }
+        ensureBailStone(player);
         player.inventoryMenu.broadcastChanges();
         player.containerMenu.broadcastChanges();
     }
@@ -2094,10 +2279,10 @@ public final class DungeonRunManager {
     private static int weaponTier(ResourceLocation id) {
         if (id == null) return 1;
         String p = id.getPath();
-        if (p.contains("mana_steel")) return 1;
-        if (p.contains("elixrite")) return 2;
-        if (p.contains("astrite") || p.contains("lunarium")) return 3;
-        if (p.contains("ignite") || p.contains("iridium")) return 4;
+        if (p.contains("mana_steel") || p.contains("elixrite")) return 1;
+        if (p.contains("astrite") || p.contains("lunarium")) return 2;
+        if (p.contains("ignite") || p.contains("iridium")) return 3;
+        if (p.contains("mythril") || p.contains("arcanium")) return 4;
         return 5;
     }
 
@@ -2128,6 +2313,7 @@ public final class DungeonRunManager {
             case 1 -> equipRanger(player);
             default -> equipSpellblade(player);
         }
+        ensureBailStone(player);
         player.inventoryMenu.broadcastChanges();
         player.containerMenu.broadcastChanges();
     }
@@ -2196,14 +2382,12 @@ public final class DungeonRunManager {
     }
 
     private static void spawnDungeonMobDrops(ServerLevel level, LivingEntity dead, RunState run) {
+        if (level.random.nextFloat() >= 0.22F) {
+            return;
+        }
         int avgLevel = averageParticipantLevel(run);
         int wave = Math.max(1, run.waveNumber);
-        int baseRolls = Math.max(1, 1 + wave / 3 + (int) Math.floor(run.quantityBonusModifier));
-        double reducedRolls = Math.max(1, (int) Math.ceil(baseRolls * 0.5D)) * 0.5D;
-        int rolls = (int) Math.floor(reducedRolls);
-        if (level.random.nextDouble() < reducedRolls - rolls) {
-            rolls++;
-        }
+        int rolls = 1 + (int) Math.floor(Math.max(0.0D, run.quantityBonusModifier));
         for (int i = 0; i < rolls; i++) {
             Item item = pickScaledDrop(run, avgLevel, level.random);
             ItemStack drop = createDungeonDrop(item, avgLevel, wave, level.random);
@@ -2215,9 +2399,7 @@ public final class DungeonRunManager {
             }
         }
         int coinValue = 2 + wave * 2 + avgLevel / 8 + (int) Math.floor(run.quantityBonusModifier * 3.0D);
-        for (int i = 0; i < 2 + wave / 5; i++) {
-            MythicCoinOrbEntity.spawn((ServerLevel) dead.level(), dead.getX(), dead.getY() + 0.35D, dead.getZ(), Math.max(1, coinValue / Math.max(1, 2 + wave / 5)));
-        }
+        MythicCoinOrbEntity.spawn((ServerLevel) dead.level(), dead.getX(), dead.getY() + 0.35D, dead.getZ(), Math.max(1, coinValue));
     }
 
     private static ItemStack createDungeonDrop(Item item, int playerLevel, int wave, RandomSource random) {
@@ -2227,13 +2409,11 @@ public final class DungeonRunManager {
             }
             return rollGatewayCard(random, playerLevel);
         }
-        return new ItemStack(item, rollDungeonDropCount(item, wave, random));
-    }
-
-    private static int computeWaveLootRolls(RunState run, int avgLevel, RandomSource random) {
-        int base = ProgressionSystem.dungeonLootRolls(avgLevel, Math.max(1, run.waveNumber), run.extraRewardRolls, run.quantityBonusModifier);
-        int difficultyBonus = Math.max(0, run.totalDifficultySelected - Math.max(0, run.waveNumber - 1) * 2);
-        return base + difficultyBonus / 4 + random.nextInt(2 + Math.max(1, Math.max(1, run.waveNumber) / 6));
+        ItemStack stack = new ItemStack(item, rollDungeonDropCount(item, wave, random));
+        if (isDungeonCommonVanillaDrop(item)) {
+            DungeonBoundItems.markDungeonLootRarity(stack, "common");
+        }
+        return stack;
     }
 
     private static Item pickScaledDrop(RunState run, int avgLevel, RandomSource random) {
@@ -2275,6 +2455,14 @@ public final class DungeonRunManager {
             return 1 + random.nextInt(2) + Math.max(0, wave / 20);
         }
         return 1 + random.nextInt(1 + Math.max(1, wave / 20));
+    }
+
+    private static boolean isDungeonCommonVanillaDrop(Item item) {
+        return item == Items.COAL
+                || item == Items.QUARTZ
+                || item == Items.IRON_INGOT
+                || item == Items.GOLD_INGOT
+                || item == Items.DIAMOND;
     }
 
     private static int averageParticipantLevel(RunState run) {
@@ -2470,6 +2658,7 @@ public final class DungeonRunManager {
         addRunChange(changes, "elite spawns", (run.eliteChanceBonus + run.eliteWeightBonus * 0.01D) * 100.0D);
         addRunChange(changes, "quantity", run.quantityBonusModifier * 100.0D);
         addRunChange(changes, "rarity", run.rarityBonusModifier * 100.0D);
+        addRunChange(changes, "lootbox amount", run.extraRewardRolls);
         addRunChange(changes, "coins", run.coinBonusModifier * 100.0D);
         addRunChange(changes, "levels", Math.max(0.0D, (run.levelMultiplier - 1.0D) * 100.0D));
         return List.copyOf(changes);
@@ -2485,6 +2674,7 @@ public final class DungeonRunManager {
         addModifiedStat(changes, "Elite Chance", (run.eliteChanceBonus + run.eliteWeightBonus * 0.01D) * 100.0D);
         addModifiedStat(changes, "Quantity", run.quantityBonusModifier * 100.0D);
         addModifiedStat(changes, "Rarity", run.rarityBonusModifier * 100.0D);
+        addModifiedStat(changes, "Lootbox Amount", run.extraRewardRolls);
         addModifiedStat(changes, "Coins", run.coinBonusModifier * 100.0D);
         addModifiedStat(changes, "Levels", Math.max(0.0D, (run.levelMultiplier - 1.0D) * 100.0D));
         return List.copyOf(changes);
@@ -2547,6 +2737,12 @@ public final class DungeonRunManager {
 
     private static double effectiveMobHealthMultiplier(RunState run) {
         return run.healthMultiplier * baseEnemyHealthMultiplier(averageParticipantLevel(run));
+    }
+
+    /** A floor's later waves continue to grow without treating them as new floors. */
+    private static int waveStrength(RunState run) {
+        int completedBeforeFloor = Math.max(0, (run.waveNumber - 1) * run.waveNumber / 2);
+        return completedBeforeFloor + run.wavesCompletedOnFloor + 1;
     }
 
     private static double baseEnemyHealthMultiplier(int avgLevel) {
@@ -2616,6 +2812,10 @@ public final class DungeonRunManager {
                 if (portal != null) portal.discard();
             }
         }
+        if (run.advancePortalId >= 0 && dungeon != null) {
+            Entity portal = dungeon.getEntity(run.advancePortalId);
+            if (portal != null) portal.discard();
+        }
         DungeonInstanceManager.cleanupInstance(run.ownerId, dungeon);
         RUNS_BY_OWNER.remove(run.ownerId);
         markStateDirty();
@@ -2665,6 +2865,49 @@ public final class DungeonRunManager {
         player.getInventory().clearContent();
         player.inventoryMenu.broadcastChanges();
         player.containerMenu.broadcastChanges();
+    }
+
+    private static void ensureBailStone(ServerPlayer player) {
+        final int lockedSlot = 8;
+        int bailSlot = -1;
+        for (int slot = 0; slot < player.getInventory().items.size(); slot++) {
+            if (player.getInventory().getItem(slot).is(ModItems.BAIL_STONE.get())) {
+                bailSlot = slot;
+                break;
+            }
+        }
+        if (bailSlot < 0) {
+            ItemStack bailStone = new ItemStack(ModItems.BAIL_STONE.get());
+            DungeonBoundItems.forceMarkDungeonBound(bailStone);
+            player.getInventory().setItem(lockedSlot, bailStone);
+        } else if (bailSlot != lockedSlot) {
+            ItemStack displaced = player.getInventory().getItem(lockedSlot);
+            player.getInventory().setItem(lockedSlot, player.getInventory().getItem(bailSlot));
+            player.getInventory().setItem(bailSlot, displaced);
+        }
+        DungeonBoundItems.forceMarkDungeonBound(player.getInventory().getItem(lockedSlot));
+        player.getInventory().setChanged();
+    }
+
+    private static void resetRunModifiers(RunState run) {
+        run.enemyCountMultiplier = 1.0D;
+        run.healthMultiplier = 1.0D;
+        run.damageMultiplier = 1.0D;
+        run.speedMultiplier = 1.0D;
+        run.mobLeechPercent = 0.0D;
+        run.eliteChanceBonus = 0.0D;
+        run.totalDifficultySelected = 0;
+        run.quantityBonusModifier = 0.0D;
+        run.rarityBonusModifier = 0.0D;
+        run.coinBonusModifier = 0.0D;
+        run.levelMultiplier = 1.0D;
+        run.extraRewardRolls = 0;
+        run.hordeWeightBonus = 0;
+        run.archerWeightBonus = 0;
+        run.assassinWeightBonus = 0;
+        run.tankWeightBonus = 0;
+        run.eliteWeightBonus = 0;
+        run.currentWavePools = new HashMap<>();
     }
 
     private static void saveEntrySnapshot(RunState run, ServerPlayer player) {
@@ -2756,6 +2999,9 @@ public final class DungeonRunManager {
     }
 
     private static List<ItemStack> rollCompletionBoosterPacks(RandomSource random, int playerLevel, RunState run) {
+        if (playerLevel < 10) {
+            return List.of();
+        }
         ArrayList<ItemStack> packs = new ArrayList<>();
         int guaranteed = Math.max(0, run.waveNumber / 5);
         int extra = random.nextFloat() < Mth.clamp(playerLevel / 140.0F + run.waveNumber * 0.01F, 0.05F, 0.65F) ? 1 : 0;
@@ -3008,6 +3254,8 @@ public final class DungeonRunManager {
         tag.putUUID("owner", run.ownerId);
         tag.putString("phase", run.phase.name());
         tag.putInt("wave_number", run.waveNumber);
+        tag.putInt("waves_completed_on_floor", run.wavesCompletedOnFloor);
+        tag.putInt("intermission_ticks", run.intermissionTicks);
         tag.putInt("to_spawn", run.toSpawn);
         tag.putInt("wave_total_mobs", run.waveTotalMobs);
         tag.putInt("spawn_cooldown", run.spawnCooldown);
@@ -3049,6 +3297,14 @@ public final class DungeonRunManager {
             snapshots.add(snapshot);
         }
         tag.put("snapshots", snapshots);
+        ListTag dungeonLoadouts = new ListTag();
+        for (Map.Entry<UUID, PlayerSnapshot> entry : run.dungeonLoadouts.entrySet()) {
+            CompoundTag loadout = new CompoundTag();
+            loadout.putUUID("player", entry.getKey());
+            loadout.put("data", saveSnapshot(entry.getValue(), registries));
+            dungeonLoadouts.add(loadout);
+        }
+        tag.put("dungeon_loadouts", dungeonLoadouts);
         tag.put("level_source_points", saveIntegerMap(run.levelSourcePoints));
         tag.put("awarded_exit_xp", saveUuidList(run.awardedExitXp));
         return tag;
@@ -3078,8 +3334,21 @@ public final class DungeonRunManager {
                 run.snapshots.put(snapshot.getUUID("player"), loadedSnapshot);
             }
         }
+        ListTag dungeonLoadouts = tag.getList("dungeon_loadouts", Tag.TAG_COMPOUND);
+        for (Tag value : dungeonLoadouts) {
+            CompoundTag loadout = (CompoundTag) value;
+            if (!loadout.hasUUID("player") || !loadout.contains("data", Tag.TAG_COMPOUND)) {
+                continue;
+            }
+            PlayerSnapshot loadedLoadout = loadSnapshot(loadout.getCompound("data"), registries);
+            if (loadedLoadout != null) {
+                run.dungeonLoadouts.put(loadout.getUUID("player"), loadedLoadout);
+            }
+        }
         run.phase = parseRunPhase(tag.getString("phase"));
         run.waveNumber = tag.getInt("wave_number");
+        run.wavesCompletedOnFloor = tag.getInt("waves_completed_on_floor");
+        run.intermissionTicks = tag.getInt("intermission_ticks");
         run.aliveMobs = loadUuidSet(tag.getList("alive_mobs", Tag.TAG_COMPOUND));
         run.toSpawn = tag.getInt("to_spawn");
         run.waveTotalMobs = tag.getInt("wave_total_mobs");
@@ -3283,7 +3552,7 @@ public final class DungeonRunManager {
                 bestWave,
                 elapsedTicks,
                 levelPoints,
-                GoldCoinWallet.getTotalEarned(player),
+                Math.max(0, run.coinsEarned),
                 survived ? cashedOutCoins / 1000 : 0,
                 run.mobsKilled,
                 Math.round(run.damageDealt),
@@ -3304,7 +3573,7 @@ public final class DungeonRunManager {
         for (ServerPlayer participant : run.liveParticipants()) PacketDistributor.sendToPlayer(participant, payload);
     }
 
-    private enum RunPhase { SELECTING_TAROT, SELECTING_LOOT, IN_WAVE, SHOP, WAITING_EXIT }
+    private enum RunPhase { SELECTING_TAROT, SELECTING_LOOT, IN_WAVE, INTERMISSION, SHOP, CHECKPOINT, WAITING_EXIT }
 
     private enum WaveArchetype { UNDEAD, HORDE, ASSASSIN, ARCHER, TANK, NETHER }
 
@@ -3313,13 +3582,17 @@ public final class DungeonRunManager {
         private MinecraftServer server;
         private final Set<UUID> participants = new HashSet<>();
         private final Map<UUID, PlayerSnapshot> snapshots = new HashMap<>();
+        private final Map<UUID, PlayerSnapshot> dungeonLoadouts = new HashMap<>();
         private RunPhase phase = RunPhase.SELECTING_TAROT;
         private int waveNumber = 0;
+        private int wavesCompletedOnFloor = 0;
+        private int intermissionTicks = 0;
         private Set<UUID> aliveMobs = new HashSet<>();
         private int toSpawn = 0;
         private int waveTotalMobs = 0;
         private int spawnCooldown = 0;
         private int exitPortalId = -1;
+        private int advancePortalId = -1;
         private int shopkeeperId = -1;
         private UUID shopkeeperUuid;
         private Map<WaveArchetype, EnemyPoolSet> currentWavePools = new HashMap<>();
@@ -3434,7 +3707,7 @@ public final class DungeonRunManager {
         }
     }
 
-    private static final class TarotOption {
+        private static final class TarotOption {
         private final Component title;
         private final Component details;
         private final double enemyCountBonus;
@@ -3500,6 +3773,7 @@ public final class DungeonRunManager {
             double rarity = 0.0D;
             double coins = 0.0D;
             double levels = 0.0D;
+            int lootboxRolls = 0;
             ArrayList<String> lines = new ArrayList<>();
             ArrayList<String> mobPool = new ArrayList<>(List.of("hoard", "archer", "assassin", "tank"));
             if (displayedWave > 1) {
@@ -3546,17 +3820,17 @@ public final class DungeonRunManager {
                         lines.add("+" + Math.round(amount * 100.0D) + "% spawn chance");
                     }
                     case "damage" -> {
-                        double amount = 0.06D + difficulty * 0.03D + wavePressure * 0.005D + levelPressure;
+                        double amount = 0.035D + difficulty * 0.016D + wavePressure * 0.0025D + levelPressure * 0.5D;
                         damage += amount;
                         lines.add("+" + Math.round(amount * 100.0D) + "% mob damage");
                     }
                     case "health" -> {
-                        double amount = 0.08D + difficulty * 0.035D + wavePressure * 0.006D + levelPressure;
+                        double amount = 0.045D + difficulty * 0.018D + wavePressure * 0.003D + levelPressure * 0.5D;
                         health += amount;
                         lines.add("+" + Math.round(amount * 100.0D) + "% mob health");
                     }
                     case "speed" -> {
-                        double amount = 0.04D + difficulty * 0.02D + wavePressure * 0.003D;
+                        double amount = 0.018D + difficulty * 0.009D + wavePressure * 0.0015D;
                         speed += amount;
                         lines.add("+" + Math.round(amount * 100.0D) + "% mob speed");
                     }
@@ -3567,7 +3841,7 @@ public final class DungeonRunManager {
                 }
             }
             lines.add("-------------------");
-            ArrayList<String> positivePool = new ArrayList<>(List.of("quantity", "rarity", "coins", "levels"));
+            ArrayList<String> positivePool = new ArrayList<>(List.of("quantity", "rarity", "lootboxes", "coins", "levels"));
             for (int i = 0; i < positiveCount && !positivePool.isEmpty(); i++) {
                 String type = positivePool.remove(random.nextInt(positivePool.size()));
                 switch (type) {
@@ -3578,6 +3852,10 @@ public final class DungeonRunManager {
                     case "rarity" -> {
                         rarity += 0.02D + difficulty * 0.0125D + wavePressure * 0.0025D;
                         lines.add("+" + Math.round(rarity * 100.0D) + "% rarity");
+                    }
+                    case "lootboxes" -> {
+                        lootboxRolls++;
+                        lines.add("+1 lootbox amount");
                     }
                     case "coins" -> {
                         coins += 0.06D + difficulty * 0.03D + wavePressure * 0.006D;
@@ -3604,7 +3882,7 @@ public final class DungeonRunManager {
                     rarity,
                     coins,
                     levels,
-                    0,
+                    lootboxRolls,
                     hordeMobs,
                     archerMobs,
                     assassinMobs,

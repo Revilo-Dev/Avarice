@@ -9,6 +9,7 @@ import com.revilo.gatesofavarice.entity.GatekeeperEntity;
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
 import com.revilo.gatesofavarice.progression.ProgressionSystem;
 import com.revilo.gatesofavarice.registry.ModMenus;
+import com.revilo.gatesofavarice.registry.ModItems;
 import com.revilo.gatesofavarice.shop.GatewaySellValues;
 import com.revilo.gatesofavarice.shop.ShopOfferDefinition;
 import com.revilo.gatesofavarice.shop.ShopkeeperManager;
@@ -31,7 +32,6 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
     public static final int GRID_SLOT_COUNT = 10;
     public static final int REROLL_BUTTON_ID = 100;
     public static final int SELL_BUTTON_ID = 101;
-    public static final int START_NEXT_WAVE_BUTTON_ID = 102;
     public static final int BACK_BUTTON_ID = 103;
     public static final int BAIL_BUTTON_ID = 104;
     public static final int CATEGORY_BUTTON_ID_OFFSET = 1000;
@@ -44,8 +44,7 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
     private static final int DATA_TEMP_START = 2;
     private static final int DATA_STOCK_START = DATA_TEMP_START + TEMP_OFFER_COUNT;
     private static final int DATA_PRICE_START = DATA_STOCK_START + GRID_SLOT_COUNT;
-    private static final int DATA_DUNGEON_NEXT_WAVE_AVAILABLE = DATA_PRICE_START + GRID_SLOT_COUNT;
-    private static final int DATA_DUNGEON_BAIL_AVAILABLE = DATA_DUNGEON_NEXT_WAVE_AVAILABLE + 1;
+    private static final int DATA_DUNGEON_BAIL_AVAILABLE = DATA_PRICE_START + GRID_SLOT_COUNT;
     private static final int DATA_SIZE = DATA_DUNGEON_BAIL_AVAILABLE + 1;
     private static final int SELL_GRID_X = 8;
     private static final int SELL_GRID_Y = 14;
@@ -148,9 +147,6 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
             this.addCurrency(serverPlayer, total);
             this.broadcastChanges();
             return true;
-        }
-        if (id == START_NEXT_WAVE_BUTTON_ID) {
-            return DungeonRunManager.startNextWaveFromShop(serverPlayer, this.shopkeeperId);
         }
         if (id == BAIL_BUTTON_ID) {
             return DungeonRunManager.bailFromShop(serverPlayer, this.shopkeeperId);
@@ -329,10 +325,6 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
         return this.hasRerollsRemaining() && this.getWalletBalance() >= this.getRerollCost();
     }
 
-    public boolean canStartNextWave() {
-        return this.syncedData.get(DATA_DUNGEON_NEXT_WAVE_AVAILABLE) == 1;
-    }
-
     public boolean canBailFromDungeon() {
         return this.syncedData.get(DATA_DUNGEON_BAIL_AVAILABLE) == 1;
     }
@@ -405,7 +397,6 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
         for (int index = 0; index < GRID_SLOT_COUNT; index++) {
             this.syncedData.set(DATA_PRICE_START + index, 0);
         }
-        this.syncedData.set(DATA_DUNGEON_NEXT_WAVE_AVAILABLE, 0);
         this.syncedData.set(DATA_DUNGEON_BAIL_AVAILABLE, 0);
         this.refreshOffersFromData();
     }
@@ -434,8 +425,6 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
             this.syncedData.set(DATA_PRICE_START + index, value);
         }
         ServerPlayer menuPlayer = this.player instanceof ServerPlayer serverPlayer ? serverPlayer : null;
-        this.syncedData.set(DATA_DUNGEON_NEXT_WAVE_AVAILABLE,
-                menuPlayer != null && DungeonRunManager.canOwnerStartNextWaveFromShop(menuPlayer, this.shopkeeperId) ? 1 : 0);
         this.syncedData.set(DATA_DUNGEON_BAIL_AVAILABLE,
                 menuPlayer != null && DungeonRunManager.canOwnerBailFromShop(menuPlayer, this.shopkeeperId) ? 1 : 0);
         this.refreshOffersFromData();
@@ -508,17 +497,27 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
     private void grantPurchasedReward(ServerPlayer player, ShopOfferDefinition offer) {
         ItemStack reward = offer.createStack(player.getRandom(), this.getPlayerLevel());
         if (DungeonRunManager.isPlayerInActiveRun(player)) {
-            DungeonRunManager.rollAndBindForActiveRun(player, reward, player.getRandom());
+            if (!isShopBoosterPack(reward)) {
+                DungeonRunManager.rollAndBindForActiveRun(player, reward, player.getRandom());
+            }
             if (DungeonBoundItems.isWeapon(reward)) {
                 DungeonRunManager.grantPrimaryWeapon(player, reward);
                 return;
             }
-        } else {
+        } else if (!isShopBoosterPack(reward)) {
             DungeonBoundItems.markIfDungeonBound(reward);
         }
         if (!player.getInventory().add(reward)) {
             player.drop(reward, false);
         }
+    }
+
+    private static boolean isShopBoosterPack(ItemStack stack) {
+        return stack.is(ModItems.COMMON_BOOSTER_PACK.get())
+                || stack.is(ModItems.UNCOMMON_BOOSTER_PACK.get())
+                || stack.is(ModItems.RARE_BOOSTER_PACK.get())
+                || stack.is(ModItems.EPIC_BOOSTER_PACK.get())
+                || stack.is(ModItems.LEGENDARY_BOOSTER_PACK.get());
     }
 
     private void addCurrency(ServerPlayer player, int amount) {

@@ -96,6 +96,38 @@
                       "entries":  [
                                       {
                                           "type":  "minecraft:item",
+                                          "name":  "gatesofavarice:mythril_scrap",
+                                          "weight":  8,
+                                          "functions":  [
+                                                            {
+                                                                "function":  "minecraft:set_count",
+                                                                "count":  {
+                                                                              "type":  "minecraft:uniform",
+                                                                              "min":  1,
+                                                                              "max":  3
+                                                                          },
+                                                                "add":  false
+                                                            }
+                                                        ]
+                                      },
+                                      {
+                                          "type":  "minecraft:item",
+                                          "name":  "gatesofavarice:arcanium_scrap",
+                                          "weight":  8,
+                                          "functions":  [
+                                                            {
+                                                                "function":  "minecraft:set_count",
+                                                                "count":  {
+                                                                              "type":  "minecraft:uniform",
+                                                                              "min":  1,
+                                                                              "max":  3
+                                                                          },
+                                                                "add":  false
+                                                            }
+                                                        ]
+                                      },
+                                      {
+                                          "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
                                           "weight":  1,
                                           "functions":  [
@@ -450,7 +482,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_custom_data",
@@ -461,7 +493,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_custom_data",
@@ -472,7 +504,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_custom_data",
@@ -483,7 +515,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_custom_data",
@@ -494,7 +526,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_custom_data",
@@ -505,7 +537,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_custom_data",
@@ -516,7 +548,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_custom_data",
@@ -527,7 +559,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_custom_data",
@@ -538,7 +570,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_custom_data",
@@ -549,7 +581,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_custom_data",
@@ -560,7 +592,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -574,7 +606,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -588,7 +620,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -602,7 +634,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -616,7 +648,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -630,7 +662,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -644,7 +676,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -658,7 +690,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -672,7 +704,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -686,7 +718,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -700,7 +732,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  5,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -714,7 +746,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -728,7 +760,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -742,7 +774,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -756,7 +788,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -770,7 +802,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -784,7 +816,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -798,7 +830,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -812,7 +844,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -826,7 +858,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -840,7 +872,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -854,7 +886,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -868,7 +900,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -882,7 +914,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -896,7 +928,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -910,7 +942,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -924,7 +956,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -938,7 +970,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -952,7 +984,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:enhanced_rune",
-                                          "weight":  2,
+                                          "weight":  1,
                                           "functions":  [
                                                             {
                                                                 "function":  "minecraft:set_enchantments",
@@ -966,12 +998,12 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:blank_inscription",
-                                          "weight":  2
+                                          "weight":  1
                                       },
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:reroll_inscription",
-                                          "weight":  2
+                                          "weight":  1
                                       },
                                       {
                                           "type":  "minecraft:item",
@@ -986,7 +1018,7 @@
                                       {
                                           "type":  "minecraft:item",
                                           "name":  "runic:upgrade_rune",
-                                          "weight":  2
+                                          "weight":  1
                                       },
                                       {
                                           "type":  "minecraft:item",

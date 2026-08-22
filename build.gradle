@@ -139,7 +139,8 @@ tasks.withType(ProcessResources).configureEach {
             mod_description        : mod_description,
             placebo_version        : placebo_version,
             apothic_attributes_version: apothic_attributes_version,
-            curios_version         : curios_version
+            curios_version         : curios_version,
+            runic_version          : runic_version
     ]
     inputs.properties replaceProperties
 

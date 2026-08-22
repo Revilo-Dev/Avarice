@@ -25,11 +25,9 @@ public final class GatewayWorkbenchJeiCategory implements IRecipeCategory<Gatewa
 
     private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/workbench.png");
 
-    private final IDrawable background;
     private final IDrawable icon;
 
     public GatewayWorkbenchJeiCategory(IGuiHelper guiHelper) {
-        this.background = guiHelper.createBlankDrawable(144, 54);
         this.icon = guiHelper.createDrawableItemStack(new ItemStack(ModItems.GATEWAY_WORKBENCH.get()));
     }
 
@@ -44,8 +42,13 @@ public final class GatewayWorkbenchJeiCategory implements IRecipeCategory<Gatewa
     }
 
     @Override
-    public IDrawable getBackground() {
-        return this.background;
+    public int getWidth() {
+        return 144;
+    }
+
+    @Override
+    public int getHeight() {
+        return 54;
     }
 
     @Override

@@ -1,6 +1,8 @@
 package com.revilo.gatesofavarice.shop;
 
 import com.revilo.gatesofavarice.registry.ModItems;
+import com.revilo.gatesofavarice.dungeon.DungeonBoundItems;
+import com.revilo.gatesofavarice.item.data.LootRarity;
 import java.util.List;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -17,6 +19,9 @@ public final class GatewaySellValues {
     }
 
     public static boolean isSellable(ItemStack stack) {
+        if (!stack.is(ModItems.HEART_FRAGMENT.get()) && DungeonBoundItems.isDungeonBound(stack)) {
+            return false;
+        }
         return getUnitValue(stack) > 0;
     }
 
@@ -27,14 +32,22 @@ public final class GatewaySellValues {
 
         Item item = stack.getItem();
         ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(item);
+        int dungeonTaggedValue = getDungeonTaggedUnitValue(stack, item);
+        if (dungeonTaggedValue > 0) {
+            return dungeonTaggedValue;
+        }
         if (ResourceLocation.fromNamespaceAndPath("architects_palette", "withered_bone").equals(itemId)) return 1;
         if (ResourceLocation.fromNamespaceAndPath("architects_pallet", "withered_bone").equals(itemId)) return 1;
         if (item == Items.ROTTEN_FLESH) return 2;
         if (item == Items.BONE) return 2;
         if (item == Items.COAL) return 2;
         if (item == Items.POTATO) return 1;
+        if (item == Items.CARROT) return 1;
+        if (item == Items.GOLDEN_CARROT) return 6;
         if (item == Items.COPPER_INGOT) return 1;
         if (item == Items.ARROW) return 1;
+        if (item == Items.BOW) return 12;
+        if (item == Items.NAUTILUS_SHELL) return 30;
         if (item == Items.STONE_SWORD) return 1;
         if (item == Items.SLIME_BALL) return 1;
         if (item == Items.SPIDER_EYE) return 2;
@@ -124,6 +137,14 @@ public final class GatewaySellValues {
     }
 
     public static void appendDungeonSellValueTooltip(ItemStack stack, List<Component> tooltipComponents) {
+        String dungeonLootRarity = DungeonBoundItems.getDungeonLootRarity(stack);
+        if (!dungeonLootRarity.isBlank()) {
+            try {
+                tooltipComponents.add(LootRarity.valueOf(dungeonLootRarity.toUpperCase(java.util.Locale.ROOT)).displayName());
+            } catch (IllegalArgumentException ignored) {
+                // Ignore invalid persisted rarity tags.
+            }
+        }
         int value = getUnitValue(stack);
         if (value <= 0) {
             return;
@@ -134,6 +155,19 @@ public final class GatewaySellValues {
 
     private static boolean showSellValuesFromItemTooltips() {
         return false;
+    }
+
+    private static int getDungeonTaggedUnitValue(ItemStack stack, Item item) {
+        String dungeonLootRarity = DungeonBoundItems.getDungeonLootRarity(stack);
+        if (!"common".equals(dungeonLootRarity)) {
+            return 0;
+        }
+        if (item == Items.COAL) return 2;
+        if (item == Items.QUARTZ) return 2;
+        if (item == Items.IRON_INGOT) return 3;
+        if (item == Items.GOLD_INGOT) return 3;
+        if (item == Items.DIAMOND) return 5;
+        return 0;
     }
 
     private static int getRunicUnitValue(Item item) {

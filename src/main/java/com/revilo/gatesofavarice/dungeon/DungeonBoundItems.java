@@ -20,6 +20,7 @@ import net.minecraft.world.item.component.CustomData;
 public final class DungeonBoundItems {
 
     public static final String DUNGEON_BOUND_KEY = "dungeon_bound";
+    public static final String DUNGEON_LOOT_RARITY_KEY = "dungeon_loot_rarity";
     public static final String WEAPON_ROLE_KEY = "dungeon_weapon_role";
     public static final String PRIMARY_WEAPON_ROLE = "primary";
     public static final String SECONDARY_WEAPON_ROLE = "secondary";
@@ -43,7 +44,7 @@ public final class DungeonBoundItems {
     }
 
     public static void forceMarkDungeonBound(ItemStack stack) {
-        if (stack.is(ModItems.GATEWAY_CARD.get())) {
+        if (stack.is(ModItems.GATEWAY_CARD.get()) || stack.is(ModItems.HEART_FRAGMENT.get())) {
             return;
         }
         CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
@@ -73,6 +74,22 @@ public final class DungeonBoundItems {
                 || stack.getItem() instanceof BowItem
                 || stack.getItem() instanceof CrossbowItem
                 || stack.getItem() instanceof TridentItem;
+    }
+
+    public static void markDungeonLootRarity(ItemStack stack, String rarityId) {
+        if (stack.isEmpty() || rarityId == null || rarityId.isBlank()) {
+            return;
+        }
+        CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+        CompoundTag root = tag.getCompound(GatewayExpansion.MOD_ID);
+        root.putString(DUNGEON_LOOT_RARITY_KEY, rarityId);
+        tag.put(GatewayExpansion.MOD_ID, root);
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+    }
+
+    public static String getDungeonLootRarity(ItemStack stack) {
+        CompoundTag root = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag().getCompound(GatewayExpansion.MOD_ID);
+        return root.getString(DUNGEON_LOOT_RARITY_KEY);
     }
 
     public static boolean replaceRoleWeapon(Player player, ItemStack stack) {

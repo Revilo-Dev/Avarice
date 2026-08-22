@@ -417,6 +417,9 @@ public class DungeonUpgradeCardsScreen extends Screen {
     }
 
     private static ResourceLocation resolveCardIcon(UpgradeCard card) {
+        if ("Synergy Card".equals(card.title())) {
+            return ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/icons/power.png");
+        }
         if ("Dungeon Magnet".equals(card.changeLabel()) || "Magnet".equals(card.changeLabel())) {
             return ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/item/armor/dungeon_magnet.png");
         }

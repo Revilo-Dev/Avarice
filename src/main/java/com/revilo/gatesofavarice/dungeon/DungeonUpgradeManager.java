@@ -24,6 +24,7 @@ import java.util.UUID;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.RandomSource;
@@ -37,6 +38,8 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.revilodev.runic.stat.RuneStatType;
 import net.revilodev.runic.stat.RuneStats;
+import net.revilodev.runic.gear.RunicItemData;
+import net.revilodev.runic.synergy.SynergyRegistry;
 
 public final class DungeonUpgradeManager {
     private static final Map<UUID, UpgradeSession> SESSIONS = new HashMap<>();
@@ -348,7 +351,8 @@ public final class DungeonUpgradeManager {
         if (count <= 0) {
             return List.of();
         }
-        List<UpgradeCard> generated = pricedCards(RunicUpgradeService.generateUpgradeCards(player, target, session.instance, session.definition, category, waveNumber, session.cardGenerationNonce), waveNumber);
+        boolean includeSynergyCard = session.waveOwnerId != null && DungeonRunManager.isSynergyCardWave(session.waveOwnerId);
+        List<UpgradeCard> generated = pricedCards(RunicUpgradeService.generateUpgradeCards(player, target, session.instance, session.definition, category, waveNumber, session.cardGenerationNonce, includeSynergyCard), waveNumber);
         if (generated.size() <= count) {
             return generated;
         }
@@ -357,15 +361,12 @@ public final class DungeonUpgradeManager {
 
     private static int maxShopSelections(ServerPlayer player) {
         int playerLevel = Math.max(0, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player));
-        if (playerLevel <= 5) return 2;
-        if (playerLevel <= 10) return 3;
-        if (playerLevel <= 15) return 4;
-        if (playerLevel <= 20) return 5;
-        if (playerLevel <= 30) return 6;
-        if (playerLevel <= 40) return 7;
-        if (playerLevel <= 50) return 8;
-        if (playerLevel <= 75) return 9;
-        return 10;
+        if (playerLevel <= 5) return 3;
+        if (playerLevel <= 10) return 4;
+        if (playerLevel <= 15) return 5;
+        if (playerLevel <= 20) return 6;
+        if (playerLevel <= 30) return 7;
+        return 8;
     }
 
     private static int getSessionWaveNumber(UpgradeSession session) {
@@ -454,6 +455,14 @@ public final class DungeonUpgradeManager {
     }
 
     private static boolean canApplyCardToTarget(ServerPlayer player, ItemStack target, UpgradeCard card) {
+        if (card.type() == UpgradeCardType.APPLY_SYNERGY) {
+            ResourceLocation synergyId = ResourceLocation.tryParse(card.targetLabel());
+            return synergyId != null
+                    && !target.isEmpty()
+                    && SynergyRegistry.isRegisteredResult(synergyId)
+                    && !RunicItemData.hasSynergy(target, synergyId)
+                    && SynergyRegistry.canApplyTo(target, synergyId);
+        }
         if (!wouldAddRuneEntry(player, target, card)) {
             return true;
         }
@@ -500,6 +509,12 @@ public final class DungeonUpgradeManager {
     private static void applyCard(ServerPlayer player, ItemStack target, UpgradeCard card, UpgradeContext ctx, LoadoutDefinition definition) {
         try {
             switch (card.type()) {
+                case APPLY_SYNERGY -> {
+                    ResourceLocation synergyId = ResourceLocation.tryParse(card.targetLabel());
+                    if (synergyId != null) {
+                        applyRunicSynergyCard(target, synergyId);
+                    }
+                }
                 case ITEM_REWARD_FOOD, ITEM_REWARD_RESTOCK, ITEM_REWARD_ABILITY, ITEM_REWARD_GATEWAY_CARD, ITEM_REROLL_PRIMARY_WEAPON, ITEM_REROLL_SECONDARY_WEAPON, UPGRADE_ITEM_SUPPLY, UPGRADE_DUNGEON_MAGNET -> {
                     applyItemUpgrade(player, definition, card);
                     return;
@@ -556,13 +571,30 @@ public final class DungeonUpgradeManager {
             case ITEM_REWARD_ABILITY -> {
                 giveBoundStack(player, new ItemStack(com.revilo.gatesofavarice.registry.ModItems.ARCANE_APPLE.get(), 1 + random.nextInt(3)));
             }
-            case ITEM_REWARD_GATEWAY_CARD -> giveBoundStack(player, new ItemStack(com.revilo.gatesofavarice.registry.ModItems.RARE_BOOSTER_PACK.get()));
+            case ITEM_REWARD_GATEWAY_CARD -> {
+                if (com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player) >= 10) {
+                    giveBoundStack(player, new ItemStack(com.revilo.gatesofavarice.registry.ModItems.RARE_BOOSTER_PACK.get()));
+                }
+            }
             case UPGRADE_DUNGEON_MAGNET -> upgradeDungeonMagnet(player, random);
             case ITEM_REROLL_PRIMARY_WEAPON -> rerollWeapon(player, definition, true, random);
             case ITEM_REROLL_SECONDARY_WEAPON -> rerollWeapon(player, definition, false, random);
             default -> {
             }
         }
+    }
+
+    /** Applies a server-validated RUNIC synergy without consuming a rune slot. */
+    private static boolean applyRunicSynergyCard(ItemStack target, ResourceLocation synergyId) {
+        if (target.isEmpty()
+                || !SynergyRegistry.isRegisteredResult(synergyId)
+                || RunicItemData.hasSynergy(target, synergyId)
+                || !SynergyRegistry.canApplyTo(target, synergyId)) {
+            return false;
+        }
+        RunicItemData.addSynergy(target, synergyId);
+        target.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
+        return true;
     }
 
     private static void upgradeDungeonMagnet(ServerPlayer player, RandomSource random) {
@@ -1025,10 +1057,10 @@ public final class DungeonUpgradeManager {
         private static int weaponTier(net.minecraft.resources.ResourceLocation id) {
             if (id == null) return 1;
             String path = id.getPath();
-            if (path.contains("mana_steel")) return 1;
-            if (path.contains("elixrite")) return 2;
-            if (path.contains("astrite") || path.contains("lunarium")) return 3;
-            if (path.contains("ignite") || path.contains("iridium")) return 4;
+            if (path.contains("mana_steel") || path.contains("elixrite")) return 1;
+            if (path.contains("astrite") || path.contains("lunarium")) return 2;
+            if (path.contains("ignite") || path.contains("iridium")) return 3;
+            if (path.contains("mythril") || path.contains("arcanium")) return 4;
             return 5;
         }
     }

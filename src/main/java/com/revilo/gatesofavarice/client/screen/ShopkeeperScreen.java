@@ -62,8 +62,10 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private static final int BUY_AREA_BOTTOM = 74;
     private static final float CATEGORY_CARD_SCALE = 0.44F;
     private static final int CATEGORY_CARD_GAP = 4;
-    private static final float UPGRADE_CARD_SCALE = 0.372F;
-    private static final int UPGRADE_CARD_GAP = 1;
+    private static final int UPGRADE_CARDS_PER_ROW = 4;
+    private static final float UPGRADE_CARD_SCALE = 0.28F;
+    private static final int UPGRADE_CARD_GAP = 8;
+    private static final int UPGRADE_CARD_ROW_GAP = 1;
     private static final int REROLL_X = 153;
     private static final int REROLL_Y = 67;
     private static final int REROLL_RENDER_SIZE = 10;
@@ -102,7 +104,6 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
 
     private final List<CoinFlight> coinFlights = new ArrayList<>();
     private Button buyButton;
-    private Button nextWaveButton;
     private Button bailButton;
     private Page activePage = Page.BUY;
     private int lastWalletBalance;
@@ -148,17 +149,12 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
                 .pos(0, 0)
                 .size(1, 1)
                 .build());
-        this.nextWaveButton = this.addRenderableWidget(Button.builder(Component.literal("Next Wave"), button -> this.startNextWave())
-                .pos(this.leftPos + (this.imageWidth - NEXT_WAVE_BUTTON_WIDTH) / 2, this.topPos + this.imageHeight + 2)
-                .size(NEXT_WAVE_BUTTON_WIDTH, NEXT_WAVE_BUTTON_HEIGHT)
-                .build());
         this.bailButton = this.addRenderableWidget(Button.builder(Component.literal("Bail").withStyle(ChatFormatting.RED), button -> this.startBail())
                 .pos(this.leftPos + (this.imageWidth - NEXT_WAVE_BUTTON_WIDTH) / 2, this.topPos + this.imageHeight + 24)
                 .size(NEXT_WAVE_BUTTON_WIDTH, NEXT_WAVE_BUTTON_HEIGHT)
                 .build());
         this.applyPageLayout();
         this.updateBuyButton();
-        this.updateNextWaveButton();
         this.updateBailButton();
     }
 
@@ -201,7 +197,6 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
 
         this.tickCoinFlights();
         this.updateBuyButton();
-        this.updateNextWaveButton();
         this.updateBailButton();
     }
 
@@ -350,14 +345,18 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private void renderUpgradeCards(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        int count = Math.min(5, this.upgradeCards.size());
-        int totalWidth = Math.round(count * CARD_W * UPGRADE_CARD_SCALE + Math.max(0, count - 1) * UPGRADE_CARD_GAP);
+        int count = Math.min(8, this.upgradeCards.size());
+        int columns = Math.min(UPGRADE_CARDS_PER_ROW, count);
+        int totalWidth = Math.round(columns * CARD_W * UPGRADE_CARD_SCALE + Math.max(0, columns - 1) * UPGRADE_CARD_GAP);
         int startX = this.leftPos + BUY_AREA_LEFT + (buyAreaWidth() - totalWidth) / 2;
-        int y = this.topPos + BUY_AREA_TOP + 12;
+        int startY = this.topPos + BUY_AREA_TOP + 1;
         guiGraphics.enableScissor(this.leftPos + BUY_AREA_LEFT, this.topPos + BUY_AREA_TOP, this.leftPos + BUY_AREA_RIGHT, this.topPos + BUY_AREA_BOTTOM);
         for (int i = 0; i < count; i++) {
             UpgradeCard card = this.upgradeCards.get(i);
-            int x = startX + Math.round(i * CARD_W * UPGRADE_CARD_SCALE) + (i * UPGRADE_CARD_GAP);
+            int row = i / UPGRADE_CARDS_PER_ROW;
+            int column = i % UPGRADE_CARDS_PER_ROW;
+            int x = startX + Math.round(column * CARD_W * UPGRADE_CARD_SCALE) + (column * UPGRADE_CARD_GAP);
+            int y = startY + row * (Math.round(CARD_H * UPGRADE_CARD_SCALE) + UPGRADE_CARD_ROW_GAP);
             boolean blocked = this.isBlockedByRuneSlots(card);
             boolean limitReached = this.isSelectionLimitReached();
             boolean disabled = blocked || limitReached;
@@ -434,7 +433,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             return;
         }
         this.animationTick++;
-        int cardCount = Math.max(1, this.categorySelection ? UpgradeCategory.values().length : Math.min(5, this.upgradeCards.size()));
+        int cardCount = Math.max(1, this.categorySelection ? UpgradeCategory.values().length : Math.min(8, this.upgradeCards.size()));
         int drawEnd = (cardCount - 1) * DRAW_STAGGER_TICKS + DRAW_DURATION_TICKS;
         if (this.animationState == AnimationState.DRAWING && this.animationTick > drawEnd) {
             this.animationState = AnimationState.IDLE;
@@ -719,15 +718,6 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         this.buyButton.setMessage(Component.translatable("screen.gatesofavarice.shopkeeper.buy").setStyle(Style.EMPTY.withColor(0xD05050)));
     }
 
-    private void updateNextWaveButton() {
-        if (this.nextWaveButton == null) {
-            return;
-        }
-        boolean show = this.menu.canStartNextWave();
-        this.nextWaveButton.visible = show;
-        this.nextWaveButton.active = show;
-    }
-
     private void updateBailButton() {
         if (this.bailButton == null) {
             return;
@@ -828,13 +818,6 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             builder.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
         }
         return builder.toString();
-    }
-
-    private void startNextWave() {
-        if (this.minecraft == null || this.minecraft.gameMode == null || !this.menu.canStartNextWave()) {
-            return;
-        }
-        this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, ShopkeeperMenu.START_NEXT_WAVE_BUTTON_ID);
     }
 
     private void startBail() {
@@ -1003,12 +986,16 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             return -1;
         }
 
-        int count = Math.min(5, this.upgradeCards.size());
-        int totalWidth = Math.round(count * CARD_W * UPGRADE_CARD_SCALE + Math.max(0, count - 1) * UPGRADE_CARD_GAP);
+        int count = Math.min(8, this.upgradeCards.size());
+        int columns = Math.min(UPGRADE_CARDS_PER_ROW, count);
+        int totalWidth = Math.round(columns * CARD_W * UPGRADE_CARD_SCALE + Math.max(0, columns - 1) * UPGRADE_CARD_GAP);
         int startX = this.leftPos + BUY_AREA_LEFT + (buyAreaWidth() - totalWidth) / 2;
-        int y = this.topPos + BUY_AREA_TOP + 12;
+        int startY = this.topPos + BUY_AREA_TOP + 1;
         for (int i = 0; i < count; i++) {
-            int x = startX + Math.round(i * CARD_W * UPGRADE_CARD_SCALE) + (i * UPGRADE_CARD_GAP);
+            int row = i / UPGRADE_CARDS_PER_ROW;
+            int column = i % UPGRADE_CARDS_PER_ROW;
+            int x = startX + Math.round(column * CARD_W * UPGRADE_CARD_SCALE) + (column * UPGRADE_CARD_GAP);
+            int y = startY + row * (Math.round(CARD_H * UPGRADE_CARD_SCALE) + UPGRADE_CARD_ROW_GAP);
             if (this.isMouseOverScaledCard(mouseX, mouseY, x, y, UPGRADE_CARD_SCALE)) {
                 return i;
             }
@@ -1076,7 +1063,6 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         this.coinFlights.clear();
         this.applyPageLayout();
         this.updateBuyButton();
-        this.updateNextWaveButton();
         this.updateBailButton();
     }
 
@@ -1099,6 +1085,9 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private static ResourceLocation resolveCardIcon(UpgradeCard card) {
+        if ("Synergy Card".equals(card.title())) {
+            return ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/dungeon/icons/power.png");
+        }
         if ("Dungeon Magnet".equals(card.changeLabel()) || "Magnet".equals(card.changeLabel())) {
             return ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/item/armor/dungeon_magnet.png");
         }

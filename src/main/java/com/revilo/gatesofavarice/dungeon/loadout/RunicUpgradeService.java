@@ -33,9 +33,11 @@ import net.revilodev.runic.item.custom.RuneItem;
 import net.revilodev.runic.runes.RuneSlots;
 import net.revilodev.runic.stat.RuneStatType;
 import net.revilodev.runic.stat.RuneStats;
+import net.revilodev.runic.gear.RunicItemData;
+import net.revilodev.runic.synergy.SynergyRegistry;
 
 public final class RunicUpgradeService {
-    public static final int CARD_COUNT = 5;
+    public static final int CARD_COUNT = 8;
     private static final List<CardSpec> WEAPON_EFFECT_CARDS = List.of(
             statCard("poison_chance", "Effect Card", "Toxic", 0.01F, 0.03F),
             statCard("flame_chance", "Effect Card", "Fire Aspect", 0.01F, 0.03F),
@@ -164,6 +166,10 @@ public final class RunicUpgradeService {
     }
 
     public static List<UpgradeCard> generateUpgradeCards(ServerPlayer player, ItemStack target, LoadoutInstance loadout, LoadoutDefinition definition, UpgradeCategory category, int waveNumber, long rerollNonce) {
+        return generateUpgradeCards(player, target, loadout, definition, category, waveNumber, rerollNonce, false);
+    }
+
+    public static List<UpgradeCard> generateUpgradeCards(ServerPlayer player, ItemStack target, LoadoutInstance loadout, LoadoutDefinition definition, UpgradeCategory category, int waveNumber, long rerollNonce, boolean includeSynergyCard) {
         int playerLevel = Math.max(1, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player));
         long seed = loadout.seed()
                 ^ ((long) category.ordinal() * 0x9E3779B97F4A7C15L)
@@ -171,7 +177,7 @@ public final class RunicUpgradeService {
                 ^ (rerollNonce * 0xC2B2AE3D27D4EB4FL);
         RandomSource random = RandomSource.create(seed);
         if (category == UpgradeCategory.ITEM) {
-            return generateItemCards(definition, category, random);
+            return generateItemCards(definition, category, random, playerLevel);
         }
 
         ArrayList<UpgradeCard> cards = new ArrayList<>(CARD_COUNT);
@@ -203,7 +209,61 @@ public final class RunicUpgradeService {
             }
             cards.add(fallback);
         }
+        if (includeSynergyCard && category != UpgradeCategory.ITEM) {
+            UpgradeCard synergy = generateSynergyCard(target, category, random);
+            if (synergy != null) {
+                if (cards.size() >= CARD_COUNT) {
+                    cards.set(cards.size() - 1, synergy);
+                } else {
+                    cards.add(synergy);
+                }
+            }
+        }
         return List.copyOf(cards);
+    }
+
+    private static UpgradeCard generateSynergyCard(ItemStack target, UpgradeCategory category, RandomSource random) {
+        if (target.isEmpty()) {
+            return null;
+        }
+        ArrayList<ResourceLocation> eligible = new ArrayList<>();
+        for (ResourceLocation id : SynergyRegistry.ids()) {
+            if (SynergyRegistry.isRegisteredResult(id)
+                    && !RunicItemData.hasSynergy(target, id)
+                    && SynergyRegistry.canApplyTo(target, id)) {
+                eligible.add(id);
+            }
+        }
+        if (eligible.isEmpty()) {
+            return null;
+        }
+        ResourceLocation id = eligible.get(random.nextInt(eligible.size()));
+        return new UpgradeCard(
+                UUID.randomUUID().toString(),
+                UpgradeCardType.APPLY_SYNERGY,
+                category,
+                "Synergy Card",
+                id.toString(),
+                formatSynergyName(id),
+                "-",
+                "Apply",
+                3,
+                0
+        );
+    }
+
+    private static String formatSynergyName(ResourceLocation id) {
+        String[] words = id.getPath().split("_");
+        StringBuilder name = new StringBuilder();
+        for (String word : words) {
+            if (!name.isEmpty()) {
+                name.append(' ');
+            }
+            if (!word.isEmpty()) {
+                name.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+            }
+        }
+        return name.toString();
     }
 
     public static Holder.Reference<Enchantment> resolveEffect(ServerLevel level, ResourceLocation id) {
@@ -404,10 +464,10 @@ public final class RunicUpgradeService {
         };
     }
 
-    private static List<UpgradeCard> generateItemCards(LoadoutDefinition definition, UpgradeCategory category, RandomSource random) {
+    private static List<UpgradeCard> generateItemCards(LoadoutDefinition definition, UpgradeCategory category, RandomSource random, int playerLevel) {
         ArrayList<UpgradeCard> cards = new ArrayList<>(5);
         cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REWARD_FOOD, category, "Food Card", definition.displayName(), "Heart Fragment", "0", "+8-16", 1, 0));
-        if (random.nextFloat() < 0.18F) {
+        if (playerLevel >= 10 && random.nextFloat() < 0.18F) {
             cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.ITEM_REWARD_GATEWAY_CARD, category, "Booster Card", definition.displayName(), "Booster Pack", "0", "+1 rare pack", 3, 0));
         } else {
             cards.add(new UpgradeCard(UUID.randomUUID().toString(), UpgradeCardType.UPGRADE_DUNGEON_MAGNET, category, "Magnet Card", definition.displayName(), "Dungeon Magnet", "Current", "+1 distance, +1 speed", 2, 0));

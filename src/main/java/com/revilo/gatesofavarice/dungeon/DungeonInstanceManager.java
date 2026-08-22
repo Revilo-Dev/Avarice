@@ -1,6 +1,8 @@
 package com.revilo.gatesofavarice.dungeon;
 
 import com.revilo.gatesofavarice.GatewayExpansion;
+import com.revilo.gatesofavarice.block.entity.PoiLootboxBlockEntity;
+import com.revilo.gatesofavarice.registry.ModBlocks;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -24,6 +26,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -33,15 +36,19 @@ public final class DungeonInstanceManager {
 
     private static final int INSTANCE_SPACING = 512;
     private static final int PLATFORM_Y = 64;
-    private static final int DUNGEON_HALF_SPAN = 32;
+    // Clear the whole reserved instance area. This also removes remnants from older template layouts.
+    private static final int DUNGEON_HALF_SPAN = 96;
     private static final int DUNGEON_CLEAR_HEIGHT = 80;
     private static final int INSTANCE_CLEANUP_RADIUS = 96;
     private static final long PLATFORM_LIFETIME_TICKS = 20L * 120L;
     private static final Vec3 PLAYER_SPAWN_OFFSET = new Vec3(29.0D, 2.0D, 0.0D);
-    private static final Vec3 EXIT_PORTAL_OFFSET = new Vec3(0.0D, 2.0D, 8.0D);
+    private static final Vec3 SHOP_PLAYER_SPAWN_OFFSET = new Vec3(0.0D, 4.0D, 8.0D);
+    private static final Vec3 EXIT_PORTAL_OFFSET = new Vec3(0.0D, 0.0D, 8.0D);
     private static final Vec3 SHOPKEEPER_OFFSET = new Vec3(0.0D, 4.0D, 0.0D);
-    private static final double MOB_SPAWN_Y_OFFSET = 2.0D;
-    private static final double MOB_SPAWN_RADIUS = 12.0D;
+    private static final Vec3 ADVANCE_PORTAL_OFFSET = new Vec3(0.0D, 0.0D, 0.0D);
+    private static final int[] DUNGEON_SPAWN_SURFACE_Y = {65, 76, 86};
+    // The assembled combat room is 96 blocks across; leave a narrow edge buffer but use its full interior.
+    private static final double MOB_SPAWN_RADIUS = 46.0D;
     private static final int CENTRAL_PILLAR_MIN_X_OFFSET = -5;
     private static final int CENTRAL_PILLAR_MAX_X_OFFSET = 4;
     private static final int CENTRAL_PILLAR_MIN_Z_OFFSET = -5;
@@ -50,12 +57,13 @@ public final class DungeonInstanceManager {
     private static final ResourceLocation BROKEN_STRUCTURE_DROP = ResourceLocation.fromNamespaceAndPath("chipped", "iron_bowl_soul_lantern");
 
     private static final DungeonStructurePiece[] DUNGEON_PIECES = {
-            new DungeonStructurePiece("dungeon-nw", -32, -32),
-            new DungeonStructurePiece("dungeon-ne", 0, -32),
-            new DungeonStructurePiece("dungeon-sw", -32, 0),
-            new DungeonStructurePiece("dungeon-se", 0, 0)
+            new DungeonStructurePiece("t1-nw1", -48, -48),
+            new DungeonStructurePiece("t1-ne1", 0, -48),
+            new DungeonStructurePiece("t1-sw1", -48, 0),
+            new DungeonStructurePiece("t1-se1", 0, 0)
     };
     private static final Map<BlockPos, Long> ACTIVE_DUNGEONS = new HashMap<>();
+    private static final Map<BlockPos, InstanceLayout> INSTANCE_LAYOUTS = new HashMap<>();
 
     private DungeonInstanceManager() {
     }
@@ -68,7 +76,7 @@ public final class DungeonInstanceManager {
         }
 
         BlockPos origin = instanceOrigin(instanceOwnerId);
-        ensureDungeon(dungeonLevel, origin);
+        ensureInstance(dungeonLevel, origin, InstanceLayout.DUNGEON);
         clearDungeonItems(dungeonLevel, origin);
         clearBrokenStructureDrops(dungeonLevel, origin);
 
@@ -92,6 +100,24 @@ public final class DungeonInstanceManager {
         return true;
     }
 
+    /** Moves a player to the mob-free shop layout for a completed five-floor segment. */
+    public static boolean teleportToShopInstance(ServerPlayer player, UUID instanceOwnerId) {
+        ServerLevel dungeonLevel = player.server.getLevel(ModDimensions.DUNGEON_LEVEL);
+        if (dungeonLevel == null) {
+            GatewayExpansion.LOGGER.error("Dungeon dimension is not available. Check dimension datapack registration.");
+            return false;
+        }
+
+        BlockPos origin = instanceOrigin(instanceOwnerId);
+        ensureInstance(dungeonLevel, origin, InstanceLayout.SHOP);
+        clearDungeonItems(dungeonLevel, origin);
+
+        Vec3 spawnPos = positionedOffset(instanceOwnerId, SHOP_PLAYER_SPAWN_OFFSET);
+        player.teleportTo(dungeonLevel, spawnPos.x(), spawnPos.y(), spawnPos.z(), PLAYER_SPAWN_YAW, 0.0F);
+        player.setPortalCooldown();
+        return true;
+    }
+
     public static BlockPos instanceCenter(UUID instanceOwnerId) {
         return instanceOrigin(instanceOwnerId);
     }
@@ -104,16 +130,25 @@ public final class DungeonInstanceManager {
         return positionedOffset(instanceOwnerId, SHOPKEEPER_OFFSET);
     }
 
-    public static Vec3 randomMobSpawnPosition(UUID instanceOwnerId, net.minecraft.util.RandomSource random) {
+    public static Vec3 advancePortalPosition(UUID instanceOwnerId) {
+        return positionedOffset(instanceOwnerId, ADVANCE_PORTAL_OFFSET);
+    }
+
+    public static Vec3 randomMobSpawnPosition(ServerLevel level, UUID instanceOwnerId, net.minecraft.util.RandomSource random) {
         BlockPos origin = instanceOrigin(instanceOwnerId);
-        for (int attempt = 0; attempt < 24; attempt++) {
-            double x = origin.getX() + 0.5D + (random.nextDouble() * MOB_SPAWN_RADIUS * 2.0D - MOB_SPAWN_RADIUS);
-            double z = origin.getZ() + 0.5D + (random.nextDouble() * MOB_SPAWN_RADIUS * 2.0D - MOB_SPAWN_RADIUS);
-            if (!isCentralPillarPosition(origin, x, z)) {
-                return new Vec3(x, origin.getY() + MOB_SPAWN_Y_OFFSET, z);
+        for (int attempt = 0; attempt < 96; attempt++) {
+            int x = origin.getX() + random.nextInt((int) (MOB_SPAWN_RADIUS * 2.0D + 1.0D)) - (int) MOB_SPAWN_RADIUS;
+            int z = origin.getZ() + random.nextInt((int) (MOB_SPAWN_RADIUS * 2.0D + 1.0D)) - (int) MOB_SPAWN_RADIUS;
+            int y = DUNGEON_SPAWN_SURFACE_Y[random.nextInt(DUNGEON_SPAWN_SURFACE_Y.length)];
+            BlockPos surface = new BlockPos(x, y, z);
+            if (!isCentralPillarPosition(origin, x + 0.5D, z + 0.5D)
+                    && level.getBlockState(surface).isFaceSturdy(level, surface, net.minecraft.core.Direction.UP)
+                    && level.getBlockState(surface.above()).isAir()
+                    && level.getBlockState(surface.above(2)).isAir()) {
+                return Vec3.atBottomCenterOf(surface.above());
             }
         }
-        return new Vec3(origin.getX() + MOB_SPAWN_RADIUS + 0.5D, origin.getY() + MOB_SPAWN_Y_OFFSET, origin.getZ() + 0.5D);
+        return null;
     }
 
     private static Vec3 playerSpawnPosition(UUID instanceOwnerId) {
@@ -139,8 +174,22 @@ public final class DungeonInstanceManager {
             return;
         }
         BlockPos origin = instanceOrigin(instanceOwnerId);
-        ensureDungeon(dungeonLevel, origin);
+        ensureInstance(dungeonLevel, origin, INSTANCE_LAYOUTS.getOrDefault(origin, InstanceLayout.DUNGEON));
         ACTIVE_DUNGEONS.put(origin.immutable(), dungeonLevel.getGameTime() + PLATFORM_LIFETIME_TICKS);
+    }
+
+    /** Rebuilds the combat room so every floor starts with a fresh structure and POIs. */
+    public static void reloadDungeonFloor(ServerLevel level, UUID instanceOwnerId, int floor) {
+        BlockPos origin = instanceOrigin(instanceOwnerId);
+        showRebuildStatus(level, origin, "Rebuilding dungeon floor...");
+        clearDungeonEntities(level, origin);
+        clearDungeonVolume(level, origin);
+        placeDungeonStructure(level, origin);
+        clearBrokenStructureDrops(level, origin);
+        spawnPoiLootboxes(level, origin, floor);
+        ACTIVE_DUNGEONS.put(origin.immutable(), level.getGameTime() + PLATFORM_LIFETIME_TICKS);
+        INSTANCE_LAYOUTS.put(origin.immutable(), InstanceLayout.DUNGEON);
+        showRebuildStatus(level, origin, "Dungeon floor ready.");
     }
 
     public static void cleanupInstance(UUID instanceOwnerId, ServerLevel dungeonLevel) {
@@ -151,7 +200,9 @@ public final class DungeonInstanceManager {
         BlockPos origin = instanceOrigin(instanceOwnerId);
         clearDungeonEntities(dungeonLevel, origin);
         clearDungeonVolume(dungeonLevel, origin);
+        clearDungeonItems(dungeonLevel, origin);
         ACTIVE_DUNGEONS.remove(origin);
+        INSTANCE_LAYOUTS.remove(origin);
     }
 
     @SubscribeEvent
@@ -162,6 +213,7 @@ public final class DungeonInstanceManager {
         }
 
         long gameTime = dungeonLevel.getGameTime();
+        extinguishFireNearDungeonPlayers(dungeonLevel);
         ArrayList<BlockPos> expiredDungeons = new ArrayList<>();
         for (Map.Entry<BlockPos, Long> entry : ACTIVE_DUNGEONS.entrySet()) {
             if (gameTime >= entry.getValue()) {
@@ -173,6 +225,7 @@ public final class DungeonInstanceManager {
 
         for (BlockPos dungeonOrigin : expiredDungeons) {
             ACTIVE_DUNGEONS.remove(dungeonOrigin);
+            INSTANCE_LAYOUTS.remove(dungeonOrigin);
         }
     }
 
@@ -186,23 +239,68 @@ public final class DungeonInstanceManager {
         return new BlockPos(x, PLATFORM_Y, z);
     }
 
-    private static void ensureDungeon(ServerLevel level, BlockPos origin) {
+    private static void ensureInstance(ServerLevel level, BlockPos origin, InstanceLayout layout) {
         boolean alreadyActive = ACTIVE_DUNGEONS.containsKey(origin);
+        InstanceLayout activeLayout = INSTANCE_LAYOUTS.get(origin);
         long expiresAt = level.getGameTime() + PLATFORM_LIFETIME_TICKS;
         ACTIVE_DUNGEONS.put(origin.immutable(), expiresAt);
 
-        if (alreadyActive) {
+        if (alreadyActive && activeLayout == layout) {
             return;
         }
 
         clearDungeonEntities(level, origin);
         clearDungeonVolume(level, origin);
-        placeDungeonStructure(level, origin);
-        clearBrokenStructureDrops(level, origin);
+        if (layout == InstanceLayout.DUNGEON) {
+            placeDungeonStructure(level, origin);
+            clearBrokenStructureDrops(level, origin);
+            spawnPoiLootboxes(level, origin, 1);
+        } else {
+            placeShopStructure(level, origin);
+        }
+        INSTANCE_LAYOUTS.put(origin.immutable(), layout);
+    }
+
+    private static void placeShopStructure(ServerLevel level, BlockPos origin) {
+        // A compact, intentionally empty shop space: the gatekeeper is the only spawned entity.
+        for (int xOffset = -8; xOffset <= 8; xOffset++) {
+            for (int zOffset = -8; zOffset <= 8; zOffset++) {
+                BlockPos floorPos = origin.offset(xOffset, 3, zOffset);
+                level.setBlock(floorPos, Blocks.POLISHED_DEEPSLATE.defaultBlockState(), 3);
+                if (Math.abs(xOffset) == 8 || Math.abs(zOffset) == 8) {
+                    level.setBlock(floorPos.above(), Blocks.DEEPSLATE_BRICK_WALL.defaultBlockState(), 3);
+                }
+            }
+        }
+    }
+
+    /**
+     * Dungeon structures are immutable during a run.  Extinguish both normal and soul fire
+     * around players before a fire tick can spread it into the template.
+     */
+    private static void extinguishFireNearDungeonPlayers(ServerLevel level) {
+        for (ServerPlayer player : level.players()) {
+            BlockPos playerPos = player.blockPosition();
+            boolean inActiveDungeon = ACTIVE_DUNGEONS.keySet().stream()
+                    .anyMatch(origin -> Math.abs(playerPos.getX() - origin.getX()) <= DUNGEON_HALF_SPAN
+                            && Math.abs(playerPos.getZ() - origin.getZ()) <= DUNGEON_HALF_SPAN);
+            if (!inActiveDungeon) continue;
+
+            for (BlockPos pos : BlockPos.betweenClosed(playerPos.offset(-12, -6, -12), playerPos.offset(12, 6, 12))) {
+                if (level.getBlockState(pos).is(Blocks.FIRE) || level.getBlockState(pos).is(Blocks.SOUL_FIRE)) {
+                    level.removeBlock(pos, false);
+                }
+            }
+        }
     }
 
     private static void placeDungeonStructure(ServerLevel level, BlockPos origin) {
-        StructurePlaceSettings settings = new StructurePlaceSettings().setIgnoreEntities(false);
+        // The exported tier-one pieces are 48x48 and are authored facing out from their local origin.
+        // Rotate them in-place around the 48x48 piece centre so every entrance faces the room centre.
+        StructurePlaceSettings settings = new StructurePlaceSettings()
+                .setIgnoreEntities(false)
+                .setRotation(Rotation.CLOCKWISE_180)
+                .setRotationPivot(new BlockPos(24, 0, 24));
         for (DungeonStructurePiece piece : DUNGEON_PIECES) {
             Optional<StructureTemplate> template = loadDungeonPiece(level, piece);
             if (template.isEmpty()) {
@@ -210,12 +308,48 @@ public final class DungeonInstanceManager {
                 continue;
             }
 
-            BlockPos placementOrigin = origin.offset(piece.xOffset(), 0, piece.zOffset());
+            // Rotation around (24, 24) is one block wider on the positive axes; offset back to retain the 96x96 layout.
+            BlockPos placementOrigin = origin.offset(piece.xOffset() - 1, 0, piece.zOffset() - 1);
             boolean placed = template.get().placeInWorld(level, placementOrigin, placementOrigin, settings, level.random, 2);
             if (!placed) {
                 GatewayExpansion.LOGGER.error("Failed to place dungeon structure piece {} at {}", piece.templateId(), placementOrigin);
             }
         }
+    }
+
+    private static void spawnPoiLootboxes(ServerLevel level, BlockPos origin, int floor) {
+        int clusterCount = Math.min(7, 3 + Math.max(0, floor - 1) / 5);
+        for (int cluster = 0; cluster < clusterCount; cluster++) {
+            int centerX = origin.getX() + (level.random.nextBoolean() ? 1 : -1) * (10 + level.random.nextInt(14));
+            int centerZ = origin.getZ() + (level.random.nextBoolean() ? 1 : -1) * (10 + level.random.nextInt(14));
+            int boxes = 3 + level.random.nextInt(4);
+            for (int i = 0; i < boxes; i++) {
+                BlockPos surface = null;
+                // A cluster may contain pillars or gaps; try several points in its 5x5 footprint.
+                for (int attempt = 0; attempt < 16 && surface == null; attempt++) {
+                    surface = findPoiSurface(level, origin, centerX + level.random.nextInt(5) - 2, centerZ + level.random.nextInt(5) - 2);
+                }
+                if (surface == null) continue;
+                BlockPos lootboxPos = surface.above();
+                if (!level.getBlockState(lootboxPos).isAir()) continue;
+                level.setBlock(lootboxPos, ModBlocks.POI_LOOTBOX.get().defaultBlockState(), 3);
+                if (level.getBlockEntity(lootboxPos) instanceof PoiLootboxBlockEntity lootbox) {
+                    lootbox.assignRandomRarity(level.random);
+                }
+            }
+        }
+    }
+
+    private static BlockPos findPoiSurface(ServerLevel level, BlockPos origin, int x, int z) {
+        for (int y : DUNGEON_SPAWN_SURFACE_Y) {
+            BlockPos candidate = new BlockPos(x, y, z);
+            if (level.getBlockState(candidate).isFaceSturdy(level, candidate, net.minecraft.core.Direction.UP)
+                    && level.getBlockState(candidate.above()).isAir()
+                    && level.getBlockState(candidate.above(2)).isAir()) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private static Optional<StructureTemplate> loadDungeonPiece(ServerLevel level, DungeonStructurePiece piece) {
@@ -268,6 +402,15 @@ public final class DungeonInstanceManager {
         }
     }
 
+    private static void showRebuildStatus(ServerLevel level, BlockPos origin, String message) {
+        double maxDistance = (double) INSTANCE_CLEANUP_RADIUS * INSTANCE_CLEANUP_RADIUS;
+        for (ServerPlayer player : level.players()) {
+            if (player.blockPosition().distSqr(origin) <= maxDistance) {
+                player.displayClientMessage(net.minecraft.network.chat.Component.literal(message), true);
+            }
+        }
+    }
+
     private static void clearBrokenStructureDrops(ServerLevel level, BlockPos origin) {
         AABB bounds = new AABB(
                 origin.getX() - INSTANCE_CLEANUP_RADIUS,
@@ -309,4 +452,6 @@ public final class DungeonInstanceManager {
 
     private record DungeonStructurePiece(String templateId, int xOffset, int zOffset) {
     }
+
+    private enum InstanceLayout { DUNGEON, SHOP }
 }

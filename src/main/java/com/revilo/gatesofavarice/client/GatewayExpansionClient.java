@@ -17,7 +17,10 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.client.event.RegisterDimensionSpecialEffectsEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
+import net.minecraft.resources.ResourceLocation;
+import com.revilo.gatesofavarice.GatewayExpansion;
 
 public final class GatewayExpansionClient {
 
@@ -37,6 +40,13 @@ public final class GatewayExpansionClient {
     public static final class ClientEvents {
 
         private ClientEvents() {
+        }
+
+        @SubscribeEvent
+        public static void registerDimensionEffects(RegisterDimensionSpecialEffectsEvent event) {
+            event.register(
+                    ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "infinite_library"),
+                    new InfiniteLibrarySkyEffects());
         }
 
         @SubscribeEvent
