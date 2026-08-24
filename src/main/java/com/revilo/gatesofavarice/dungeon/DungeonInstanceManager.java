@@ -45,8 +45,9 @@ public final class DungeonInstanceManager {
     private static final Vec3 SHOP_PLAYER_SPAWN_OFFSET = new Vec3(0.0D, 4.0D, 8.0D);
     private static final Vec3 EXIT_PORTAL_OFFSET = new Vec3(0.0D, 0.0D, 8.0D);
     private static final Vec3 SHOPKEEPER_OFFSET = new Vec3(0.0D, 4.0D, 0.0D);
-    private static final Vec3 ADVANCE_PORTAL_OFFSET = new Vec3(0.0D, 0.0D, 0.0D);
-    private static final int[] DUNGEON_SPAWN_SURFACE_Y = {65, 76, 86};
+    private static final Vec3 ADVANCE_PORTAL_OFFSET = new Vec3(0.0D, 1.0D, 0.0D);
+    // These are the walkable floor blocks; the former values targeted the raised structure layer above them.
+    private static final int[] DUNGEON_SPAWN_SURFACE_Y = {64, 75, 85};
     // The assembled combat room is 96 blocks across; leave a narrow edge buffer but use its full interior.
     private static final double MOB_SPAWN_RADIUS = 46.0D;
     private static final int CENTRAL_PILLAR_MIN_X_OFFSET = -5;
@@ -134,11 +135,12 @@ public final class DungeonInstanceManager {
         return positionedOffset(instanceOwnerId, ADVANCE_PORTAL_OFFSET);
     }
 
-    public static Vec3 randomMobSpawnPosition(ServerLevel level, UUID instanceOwnerId, net.minecraft.util.RandomSource random) {
+    public static Vec3 randomMobSpawnPosition(ServerLevel level, UUID instanceOwnerId, net.minecraft.util.RandomSource random, int activeMobCount) {
         BlockPos origin = instanceOrigin(instanceOwnerId);
+        double spawnRadius = 16.0D + Math.min(30.0D, Math.max(0, activeMobCount) * 0.6D);
         for (int attempt = 0; attempt < 96; attempt++) {
-            int x = origin.getX() + random.nextInt((int) (MOB_SPAWN_RADIUS * 2.0D + 1.0D)) - (int) MOB_SPAWN_RADIUS;
-            int z = origin.getZ() + random.nextInt((int) (MOB_SPAWN_RADIUS * 2.0D + 1.0D)) - (int) MOB_SPAWN_RADIUS;
+            int x = origin.getX() + random.nextInt((int) (spawnRadius * 2.0D + 1.0D)) - (int) spawnRadius;
+            int z = origin.getZ() + random.nextInt((int) (spawnRadius * 2.0D + 1.0D)) - (int) spawnRadius;
             int y = DUNGEON_SPAWN_SURFACE_Y[random.nextInt(DUNGEON_SPAWN_SURFACE_Y.length)];
             BlockPos surface = new BlockPos(x, y, z);
             if (!isCentralPillarPosition(origin, x + 0.5D, z + 0.5D)
@@ -179,14 +181,14 @@ public final class DungeonInstanceManager {
     }
 
     /** Rebuilds the combat room so every floor starts with a fresh structure and POIs. */
-    public static void reloadDungeonFloor(ServerLevel level, UUID instanceOwnerId, int floor) {
+    public static void reloadDungeonFloor(ServerLevel level, UUID instanceOwnerId, int floor, double quantityBonus) {
         BlockPos origin = instanceOrigin(instanceOwnerId);
         showRebuildStatus(level, origin, "Rebuilding dungeon floor...");
         clearDungeonEntities(level, origin);
         clearDungeonVolume(level, origin);
         placeDungeonStructure(level, origin);
         clearBrokenStructureDrops(level, origin);
-        spawnPoiLootboxes(level, origin, floor);
+        spawnPoiLootboxes(level, origin, floor, quantityBonus);
         ACTIVE_DUNGEONS.put(origin.immutable(), level.getGameTime() + PLATFORM_LIFETIME_TICKS);
         INSTANCE_LAYOUTS.put(origin.immutable(), InstanceLayout.DUNGEON);
         showRebuildStatus(level, origin, "Dungeon floor ready.");
@@ -254,7 +256,7 @@ public final class DungeonInstanceManager {
         if (layout == InstanceLayout.DUNGEON) {
             placeDungeonStructure(level, origin);
             clearBrokenStructureDrops(level, origin);
-            spawnPoiLootboxes(level, origin, 1);
+            spawnPoiLootboxes(level, origin, 1, 0.0D);
         } else {
             placeShopStructure(level, origin);
         }
@@ -317,17 +319,21 @@ public final class DungeonInstanceManager {
         }
     }
 
-    private static void spawnPoiLootboxes(ServerLevel level, BlockPos origin, int floor) {
-        int clusterCount = Math.min(7, 3 + Math.max(0, floor - 1) / 5);
+    private static void spawnPoiLootboxes(ServerLevel level, BlockPos origin, int floor, double quantityBonus) {
+        int quantitySteps = Math.min(4, (int) Math.floor(Math.max(0.0D, quantityBonus) * 4.0D));
+        int clusterCount = Math.min(6, 2 + Math.max(0, floor - 1) / 5 + quantitySteps);
+        int boxesPerCluster = 3 + quantitySteps;
+        int clusterRadius = 3 + quantitySteps * 2;
         for (int cluster = 0; cluster < clusterCount; cluster++) {
-            int centerX = origin.getX() + (level.random.nextBoolean() ? 1 : -1) * (10 + level.random.nextInt(14));
-            int centerZ = origin.getZ() + (level.random.nextBoolean() ? 1 : -1) * (10 + level.random.nextInt(14));
-            int boxes = 3 + level.random.nextInt(4);
-            for (int i = 0; i < boxes; i++) {
+            int centerX = origin.getX() + level.random.nextInt((int) (MOB_SPAWN_RADIUS * 2.0D + 1.0D)) - (int) MOB_SPAWN_RADIUS;
+            int centerZ = origin.getZ() + level.random.nextInt((int) (MOB_SPAWN_RADIUS * 2.0D + 1.0D)) - (int) MOB_SPAWN_RADIUS;
+            for (int box = 0; box < boxesPerCluster; box++) {
                 BlockPos surface = null;
-                // A cluster may contain pillars or gaps; try several points in its 5x5 footprint.
-                for (int attempt = 0; attempt < 16 && surface == null; attempt++) {
-                    surface = findPoiSurface(level, origin, centerX + level.random.nextInt(5) - 2, centerZ + level.random.nextInt(5) - 2);
+                // Cluster members remain on the same valid floor regions used by wave mobs.
+                for (int attempt = 0; attempt < 48 && surface == null; attempt++) {
+                    int x = centerX + level.random.nextInt(clusterRadius * 2 + 1) - clusterRadius;
+                    int z = centerZ + level.random.nextInt(clusterRadius * 2 + 1) - clusterRadius;
+                    surface = findPoiSurface(level, origin, x, z);
                 }
                 if (surface == null) continue;
                 BlockPos lootboxPos = surface.above();
@@ -343,7 +349,8 @@ public final class DungeonInstanceManager {
     private static BlockPos findPoiSurface(ServerLevel level, BlockPos origin, int x, int z) {
         for (int y : DUNGEON_SPAWN_SURFACE_Y) {
             BlockPos candidate = new BlockPos(x, y, z);
-            if (level.getBlockState(candidate).isFaceSturdy(level, candidate, net.minecraft.core.Direction.UP)
+            if (!isCentralPillarPosition(origin, x + 0.5D, z + 0.5D)
+                    && level.getBlockState(candidate).isFaceSturdy(level, candidate, net.minecraft.core.Direction.UP)
                     && level.getBlockState(candidate.above()).isAir()
                     && level.getBlockState(candidate.above(2)).isAir()) {
                 return candidate;

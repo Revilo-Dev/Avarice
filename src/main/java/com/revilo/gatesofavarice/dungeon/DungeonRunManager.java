@@ -318,9 +318,16 @@ public final class DungeonRunManager {
         run.rerollsUsed = 0;
         run.phase = run.waveNumber % 5 == 0 ? RunPhase.SHOP : RunPhase.CHECKPOINT;
         clearHudToPlayer(player);
+        int levelPoints = awardDungeonExitProgression(player, run);
+        List<ItemStack> rewards = collectCompletionRewards(player, run);
+        ItemStack lootbox = createLootboxFromRewards(player, run, rewards, levelPoints);
+        resetRunModifiers(run);
         setBoundlessQuestBookHidden(false);
         clearDungeonBeltMagnet(player);
         restoreSnapshot(player, snapshot);
+        if (!lootbox.isEmpty() && !player.getInventory().add(lootbox)) {
+            player.drop(lootbox, false);
+        }
         DungeonInstanceManager.teleportToSavedLocation(player, snapshot.dimension, snapshot.returnPos, snapshot.yaw, snapshot.pitch);
         PLAYER_TO_OWNER.remove(player.getUUID());
         run.participants.remove(player.getUUID());
@@ -337,7 +344,7 @@ public final class DungeonRunManager {
         run.advancePortalId = -1;
         ServerLevel dungeon = getDungeonLevel(run);
         if (dungeon != null) {
-            DungeonInstanceManager.reloadDungeonFloor(dungeon, run.ownerId, run.waveNumber + 1);
+            DungeonInstanceManager.reloadDungeonFloor(dungeon, run.ownerId, run.waveNumber + 1, run.quantityBonusModifier);
             for (ServerPlayer participant : run.liveParticipants()) {
                 DungeonInstanceManager.teleportToDungeonInstance(participant, run.ownerId);
             }
@@ -1114,6 +1121,7 @@ public final class DungeonRunManager {
             } else if (run.phase == RunPhase.INTERMISSION) {
                 if (run.intermissionTicks > 0) {
                     run.intermissionTicks--;
+                    syncHud(run, false);
                 } else {
                     startWave(run);
                 }
@@ -1403,10 +1411,11 @@ public final class DungeonRunManager {
         int extraPlayers = Math.max(0, run.liveParticipants().size() - 1);
         int avgLevel = averageParticipantLevel(run);
         double progressionDifficulty = ProgressionSystem.dungeonDifficultyScalar(avgLevel, Math.max(1, run.waveNumber));
-        int baseCount = 6 + waveStrength(run) * 2 + extraPlayers * 6;
+        int baseCount = 30 + waveStrength(run) * 2 + extraPlayers * 8;
         run.toSpawn = Math.max(4, (int) Math.round(baseCount * run.enemyCountMultiplier * progressionDifficulty));
         run.waveTotalMobs = run.toSpawn;
         run.currentWavePools = buildWavePools(run);
+        spawnInitialWaveMobs(run);
         syncHud(run, true);
         markStateDirty();
         forceCriticalSave(run.server);
@@ -1436,13 +1445,32 @@ public final class DungeonRunManager {
             else {
                 int spawned = spawnOneMob(run, level) ? 1 : 0;
                 run.toSpawn -= spawned;
-                run.spawnCooldown = 25;
+                run.spawnCooldown = spawnIntervalTicks(run.aliveMobs.size());
                 if (spawned > 0) {
                     markStateDirty();
                 }
             }
         }
         if (run.toSpawn <= 0 && run.aliveMobs.isEmpty()) completeWave(run, level); else syncHud(run, true);
+    }
+
+    /** Opens every wave at full map scale, then keeps pressure on players as the first pack is cleared. */
+    private static void spawnInitialWaveMobs(RunState run) {
+        ServerLevel level = getDungeonLevel(run);
+        if (level == null) return;
+        int initialCount = Math.min(50, run.toSpawn);
+        for (int i = 0; i < initialCount; i++) {
+            if (!spawnOneMob(run, level)) break;
+            run.toSpawn--;
+        }
+        run.spawnCooldown = spawnIntervalTicks(run.aliveMobs.size());
+    }
+
+    private static int spawnIntervalTicks(int aliveMobs) {
+        if (aliveMobs < 10) return 2;
+        if (aliveMobs < 25) return 5;
+        if (aliveMobs < 50) return 10;
+        return 20;
     }
 
     private static void completeWave(RunState run, ServerLevel level) {
@@ -1715,7 +1743,7 @@ public final class DungeonRunManager {
         if (type == null) return false;
         Entity entity = type.create(level);
         if (!(entity instanceof LivingEntity mob)) return false;
-        net.minecraft.world.phys.Vec3 spawnPos = DungeonInstanceManager.randomMobSpawnPosition(level, run.ownerId, level.random);
+        net.minecraft.world.phys.Vec3 spawnPos = DungeonInstanceManager.randomMobSpawnPosition(level, run.ownerId, level.random, run.aliveMobs.size());
         if (spawnPos == null) return false;
         double x = spawnPos.x();
         double y = spawnPos.y();
@@ -2763,15 +2791,17 @@ public final class DungeonRunManager {
     }
 
     private static void clearHudToPlayer(ServerPlayer player) {
-        PacketDistributor.sendToPlayer(player, new DungeonWaveHudPayload(false, false, 0, 0, 1, 0L, 0, List.of()));
+        PacketDistributor.sendToPlayer(player, new DungeonWaveHudPayload(false, false, 0, 0, 0, 1, 0, 0L, 0, List.of()));
     }
 
     private static DungeonWaveHudPayload createHudPayload(RunState run, boolean active, int wave, int remaining, int total) {
         boolean upgradePhase = run != null && run.phase == RunPhase.SHOP;
-        boolean displayActive = active || upgradePhase;
+        int countdownTicks = run != null && run.phase == RunPhase.INTERMISSION ? Math.max(0, run.intermissionTicks) : 0;
+        boolean displayActive = active || upgradePhase || countdownTicks > 0;
         int displayRemaining = upgradePhase ? 1 : remaining;
         int displayTotal = upgradePhase ? 1 : total;
-        return new DungeonWaveHudPayload(displayActive, upgradePhase, wave, displayRemaining, displayTotal, elapsedRunTicks(run), run.mobsKilled, modifiedStatSummary(run));
+        int waveInFloor = run == null ? 0 : Math.max(1, run.wavesCompletedOnFloor + 1);
+        return new DungeonWaveHudPayload(displayActive, upgradePhase, wave, waveInFloor, displayRemaining, displayTotal, countdownTicks, elapsedRunTicks(run), run.mobsKilled, modifiedStatSummary(run));
     }
 
     private static long elapsedRunTicks(RunState run) {

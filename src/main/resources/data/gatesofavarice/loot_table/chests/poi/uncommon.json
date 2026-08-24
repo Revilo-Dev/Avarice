@@ -5,7 +5,15 @@
     "entries": [
       { "type": "minecraft:item", "name": "gatesofavarice:mana_gems", "weight": 10, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 2, "max": 5 } }] },
       { "type": "minecraft:item", "name": "gatesofavarice:manastones", "weight": 8, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 2, "max": 4 } }] },
+      { "type": "minecraft:item", "name": "gatesofavarice:heart_fragment", "weight": 10, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 4, "max": 8 } }] },
       { "type": "minecraft:item", "name": "gatesofavarice:magnetite_scrap", "weight": 6, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 1, "max": 4 } }] }
+    ]
+  }, {
+    "rolls": 1,
+    "conditions": [{ "condition": "minecraft:random_chance", "chance": 0.05 }],
+    "entries": [
+      { "type": "minecraft:item", "name": "runic:repair_rune", "weight": 3 },
+      { "type": "minecraft:item", "name": "runic:expansion_rune", "weight": 1 }
     ]
   }]
 }

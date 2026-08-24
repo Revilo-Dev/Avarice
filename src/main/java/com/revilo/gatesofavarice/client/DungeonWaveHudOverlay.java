@@ -56,14 +56,20 @@ public final class DungeonWaveHudOverlay {
             event.getGuiGraphics().disableScissor();
         }
 
+        int countdownTicks = DungeonHudState.nextWaveCountdownTicks();
         Component waveLabel = DungeonHudState.upgradePhase()
                 ? Component.literal("Upgrade phase")
-                : Component.literal("Floor " + DungeonHudState.waveNumber());
+                : Component.literal("Floor " + DungeonHudState.floorNumber() + "  Wave " + DungeonHudState.waveInFloor());
         int waveTextAreaWidth = WAVE_TEXT_RIGHT - WAVE_TEXT_LEFT;
         int waveTextX = x + WAVE_TEXT_LEFT + (waveTextAreaWidth - minecraft.font.width(waveLabel)) / 2;
         event.getGuiGraphics().drawString(minecraft.font, waveLabel, waveTextX, y + WAVE_TEXT_TOP, 0xFFFFFF, false);
 
-        if (!DungeonHudState.upgradePhase()) {
+        if (countdownTicks > 0) {
+            int seconds = Mth.ceil(countdownTicks / 20.0F);
+            Component countdownLabel = Component.literal("Next wave in " + seconds + "s");
+            int countdownWidth = minecraft.font.width(countdownLabel);
+            event.getGuiGraphics().drawString(minecraft.font, countdownLabel, x + (BAR_WIDTH - countdownWidth) / 2, y + BAR_HEIGHT + 4, 0xFFE36B, false);
+        } else if (!DungeonHudState.upgradePhase()) {
             Component mobsLabel = Component.literal(remaining + " mobs remaining");
             int mobsLabelWidth = minecraft.font.width(mobsLabel);
             event.getGuiGraphics().drawString(minecraft.font, mobsLabel, x + (BAR_WIDTH - mobsLabelWidth) / 2, y + BAR_HEIGHT + 4, 0xFFFFFF, false);

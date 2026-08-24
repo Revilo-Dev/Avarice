@@ -33,8 +33,8 @@ public final class PartyManager {
         INVITES.put(target.getUUID(), leader.getUUID());
         target.sendSystemMessage(Component.literal(leader.getName().getString() + " invited you to party " + party.name + ". ")
                 .append(Component.literal("[ACCEPT]").withStyle(style -> style.withColor(ChatFormatting.GREEN)
-                        .withClickEvent(new ClickEvent.RunCommand("/party accept"))
-                        .withHoverEvent(new HoverEvent.ShowText(Component.literal("Join " + party.name))))));
+                        .withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/party accept"))
+                        .withHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, Component.literal("Join " + party.name))))));
         return true;
     }
 
