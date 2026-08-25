@@ -35,6 +35,7 @@ public final class DungeonWaveHudOverlay {
 
         if (DungeonHudState.hasRunStats() && isTabDown(minecraft)) {
             renderStatsSidebar(event.getGuiGraphics(), minecraft);
+            renderPartySidebar(event.getGuiGraphics(), minecraft);
         }
 
         if (!DungeonHudState.active()) {
@@ -57,7 +58,9 @@ public final class DungeonWaveHudOverlay {
         }
 
         int countdownTicks = DungeonHudState.nextWaveCountdownTicks();
-        Component waveLabel = DungeonHudState.upgradePhase()
+        Component waveLabel = DungeonHudState.gatewayOpen()
+                ? Component.literal("A gateway has opened to the next floor")
+                : DungeonHudState.upgradePhase()
                 ? Component.literal("Upgrade phase")
                 : Component.literal("Floor " + DungeonHudState.floorNumber() + "  Wave " + DungeonHudState.waveInFloor());
         int waveTextAreaWidth = WAVE_TEXT_RIGHT - WAVE_TEXT_LEFT;
@@ -69,7 +72,7 @@ public final class DungeonWaveHudOverlay {
             Component countdownLabel = Component.literal("Next wave in " + seconds + "s");
             int countdownWidth = minecraft.font.width(countdownLabel);
             event.getGuiGraphics().drawString(minecraft.font, countdownLabel, x + (BAR_WIDTH - countdownWidth) / 2, y + BAR_HEIGHT + 4, 0xFFE36B, false);
-        } else if (!DungeonHudState.upgradePhase()) {
+        } else if (!DungeonHudState.upgradePhase() && !DungeonHudState.gatewayOpen()) {
             Component mobsLabel = Component.literal(remaining + " mobs remaining");
             int mobsLabelWidth = minecraft.font.width(mobsLabel);
             event.getGuiGraphics().drawString(minecraft.font, mobsLabel, x + (BAR_WIDTH - mobsLabelWidth) / 2, y + BAR_HEIGHT + 4, 0xFFFFFF, false);
@@ -109,6 +112,29 @@ public final class DungeonWaveHudOverlay {
                 break;
             }
             guiGraphics.drawString(minecraft.font, Component.literal(statLine), textX, textY, statColor(statLine), false);
+            textY += lineHeight;
+        }
+    }
+
+    private static void renderPartySidebar(GuiGraphics guiGraphics, Minecraft minecraft) {
+        if (DungeonHudState.partyMembers().isEmpty()) return;
+        int x = 12;
+        int y = 40;
+        int lineHeight = 11;
+        int width = 174;
+        int height = SIDEBAR_PADDING * 2 + 14 + lineHeight * DungeonHudState.partyMembers().size();
+        guiGraphics.fill(x, y, x + width, y + height, 0xD0101010);
+        guiGraphics.fill(x, y, x + width, y + 1, 0x806EC8E8);
+        int textY = y + SIDEBAR_PADDING;
+        guiGraphics.drawString(minecraft.font, Component.literal("Party: " + DungeonHudState.partyName()), x + SIDEBAR_PADDING, textY, 0xFF8FE9FF, false);
+        textY += 14;
+        for (String encoded : DungeonHudState.partyMembers()) {
+            String[] member = encoded.split("\\|", 3);
+            String name = member.length > 0 ? member[0] : "Unknown";
+            String state = member.length > 1 ? member[1] : "OFFLINE";
+            String health = member.length > 2 ? member[2] : "0";
+            int color = "OFFLINE".equals(state) ? 0xFF777777 : ("IN DUNGEON".equals(state) ? 0xFF8DFF9D : 0xFFFFE28A);
+            guiGraphics.drawString(minecraft.font, Component.literal(name + "  " + state + "  ♥" + health), x + SIDEBAR_PADDING, textY, color, false);
             textY += lineHeight;
         }
     }

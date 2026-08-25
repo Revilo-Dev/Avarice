@@ -21,6 +21,7 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.GATEWAY_WORKBENCH.get());
                         output.accept(ModItems.LOOTBOX.get());
                         output.accept(ModItems.POI_LOOTBOX.get());
+                        output.accept(ModItems.SACRIFICIAL_ALTAR.get());
 
                         output.accept(ModItems.TIER_1_CRYSTAL.get());
                         output.accept(ModItems.TIER_2_CRYSTAL.get());

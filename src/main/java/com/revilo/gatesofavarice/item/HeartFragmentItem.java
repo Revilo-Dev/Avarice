@@ -24,7 +24,7 @@ public class HeartFragmentItem extends LootMaterialItem {
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltipComponents, TooltipFlag tooltipFlag) {
         super.appendHoverText(stack, context, tooltipComponents, tooltipFlag);
-        tooltipComponents.add(Component.literal("Heals half a heart instantly").withStyle(ChatFormatting.RED));
+        tooltipComponents.add(Component.literal("Use to heal half a heart").withStyle(ChatFormatting.RED));
     }
 
     @Override

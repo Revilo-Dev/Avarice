@@ -26,7 +26,7 @@ public class GatewayCrystalEntity extends Entity {
     private static final String SHOP_PORTAL_KEY = "ShopPortal";
     private static final double DEFAULT_INTERACTION_HORIZONTAL_INFLATE = 0.8D;
     private static final double DEFAULT_INTERACTION_VERTICAL_INFLATE = 0.2D;
-    private static final double RETURN_PORTAL_VISUAL_SCALE = 4.0D;
+    private static final double DUNGEON_WARP_PORTAL_VISUAL_SCALE = 5.0D;
     private static final EntityDataAccessor<Integer> CRYSTAL_TIER = SynchedEntityData.defineId(GatewayCrystalEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> RETURN_PORTAL = SynchedEntityData.defineId(GatewayCrystalEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> ADVANCE_PORTAL = SynchedEntityData.defineId(GatewayCrystalEntity.class, EntityDataSerializers.BOOLEAN);
@@ -177,8 +177,8 @@ public class GatewayCrystalEntity extends Entity {
     }
 
     private net.minecraft.world.phys.AABB interactionBounds() {
-        if (this.isReturnPortal()) {
-            double visualSize = this.getBbHeight() * RETURN_PORTAL_VISUAL_SCALE;
+        if (this.isReturnPortal() || this.isAdvancePortal()) {
+            double visualSize = this.getBbHeight() * DUNGEON_WARP_PORTAL_VISUAL_SCALE;
             double horizontalInflate = Math.max(0.0D, (visualSize - this.getBbWidth()) * 0.5D);
             double verticalInflate = Math.max(0.0D, (visualSize - this.getBbHeight()) * 0.5D);
             return this.getBoundingBox().inflate(horizontalInflate, verticalInflate, horizontalInflate);

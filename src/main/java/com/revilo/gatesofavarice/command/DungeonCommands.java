@@ -3,6 +3,7 @@ package com.revilo.gatesofavarice.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import net.minecraft.commands.arguments.EntityArgument;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.revilo.gatesofavarice.block.entity.GatewayWorkbenchBlockEntity;
 import com.revilo.gatesofavarice.currency.GoldCoinWallet;
@@ -63,9 +64,32 @@ public final class DungeonCommands {
                 .then(Commands.literal("dungeon")
                         .then(Commands.literal("end")
                                 .executes(context -> endDungeon(context.getSource())))
+                        .then(Commands.literal("next_wave_duration")
+                                .then(Commands.argument("player", EntityArgument.player())
+                                        .then(Commands.argument("seconds", IntegerArgumentType.integer(0, 300))
+                                                .executes(context -> setNextWaveDuration(
+                                                        context.getSource(),
+                                                        EntityArgument.getPlayer(context, "player"),
+                                                        IntegerArgumentType.getInteger(context, "seconds"))))))
                         .then(Commands.literal("wave")
                                 .then(Commands.literal("clear")
                                         .executes(context -> testWaveClear(context.getSource())))))
+                .then(Commands.literal("wave")
+                        .then(Commands.literal("set")
+                                .then(Commands.argument("wave", IntegerArgumentType.integer(0))
+                                        .executes(context -> testWaveSet(context.getSource(), IntegerArgumentType.getInteger(context, "wave")))))
+                        .then(Commands.literal("next")
+                                .executes(context -> nextWave(context.getSource()))))
+                .then(Commands.literal("floor")
+                        .then(Commands.literal("set")
+                                .then(Commands.argument("floor", IntegerArgumentType.integer(1))
+                                        .executes(context -> setFloor(context.getSource(), IntegerArgumentType.getInteger(context, "floor")))))
+                        .then(Commands.literal("next")
+                                .executes(context -> nextFloor(context.getSource())))
+                        .then(Commands.literal("regenerate")
+                                .executes(context -> regenerateFloor(context.getSource()))))
+                .then(Commands.literal("shop")
+                        .executes(context -> testShopPhase(context.getSource())))
                 .then(Commands.literal("cleanup")
                         .then(Commands.literal("dungeon")
                                 .then(Commands.literal("items")
@@ -255,6 +279,15 @@ public final class DungeonCommands {
         return 1;
     }
 
+    private static int setNextWaveDuration(CommandSourceStack source, ServerPlayer player, int seconds) {
+        if (!DungeonRunManager.setNextWaveDuration(player, seconds)) {
+            source.sendFailure(Component.literal("That player is not in an active dungeon run."));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Set " + player.getGameProfile().getName() + "'s dungeon next-wave duration to " + seconds + " seconds."), true);
+        return 1;
+    }
+
     private static ServerPlayer requirePlayer(CommandSourceStack source) {
         return source.getPlayer();
     }
@@ -386,6 +419,46 @@ public final class DungeonCommands {
             return 0;
         }
         source.sendSuccess(() -> Component.literal("Cleared active dungeon wave"), true);
+        return 1;
+    }
+
+    private static int nextWave(CommandSourceStack source) {
+        ServerPlayer player = requirePlayer(source);
+        if (player == null || !DungeonRunManager.debugClearWave(player)) {
+            source.sendFailure(Component.literal("No active dungeon wave to advance."));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Advanced to the next wave."), true);
+        return 1;
+    }
+
+    private static int setFloor(CommandSourceStack source, int floor) {
+        ServerPlayer player = requirePlayer(source);
+        if (player == null || !DungeonRunManager.debugSetFloor(player, floor)) {
+            source.sendFailure(Component.literal("No active dungeon run."));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Set dungeon floor to " + floor + "."), true);
+        return 1;
+    }
+
+    private static int nextFloor(CommandSourceStack source) {
+        ServerPlayer player = requirePlayer(source);
+        if (player == null || !DungeonRunManager.debugNextFloor(player)) {
+            source.sendFailure(Component.literal("No active dungeon run."));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Advanced to the next dungeon floor."), true);
+        return 1;
+    }
+
+    private static int regenerateFloor(CommandSourceStack source) {
+        ServerPlayer player = requirePlayer(source);
+        if (player == null || !DungeonRunManager.debugRegenerateFloor(player)) {
+            source.sendFailure(Component.literal("No active dungeon run."));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Regenerated the current dungeon floor."), true);
         return 1;
     }
 

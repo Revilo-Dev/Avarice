@@ -1,6 +1,7 @@
 package com.revilo.gatesofavarice.block.entity;
 
 import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
+import com.revilo.gatesofavarice.config.GatewayExpansionConfig;
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
 import com.revilo.gatesofavarice.registry.ModBlockEntities;
 import java.util.List;
@@ -58,6 +59,10 @@ public class PoiLootboxBlockEntity extends BlockEntity {
         for (int i = 0; i < rolls; i++) {
             List<ItemStack> rewards = table.getRandomItems(params, level.random.nextLong());
             for (ItemStack reward : rewards) {
+                if (BuiltInRegistries.ITEM.getKey(reward.getItem()).getNamespace().equals("runic")
+                        && level.random.nextDouble() > GatewayExpansionConfig.RUNE_LOOT_CRATE_DROP_CHANCE.get()) {
+                    continue;
+                }
                 scaleCount(reward, quantityMultiplier, level.random);
                 Containers.dropItemStack(level, pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D, reward);
             }
@@ -71,6 +76,13 @@ public class PoiLootboxBlockEntity extends BlockEntity {
                 pos.getX() + 0.5D, pos.getY() + 0.7D, pos.getZ() + 0.5D,
                 64, 0.5D, 0.4D, 0.5D, 0.2D
         );
+        level.playSound(null, pos, switch (rarity) {
+            case RARE -> net.minecraft.sounds.SoundEvents.AMETHYST_BLOCK_CHIME;
+            case EPIC -> net.minecraft.sounds.SoundEvents.PLAYER_LEVELUP;
+            case LEGENDARY -> net.minecraft.sounds.SoundEvents.TOTEM_USE;
+            default -> net.minecraft.sounds.SoundEvents.CHEST_OPEN;
+        }, net.minecraft.sounds.SoundSource.BLOCKS, rarity == PoiLootboxRarity.LEGENDARY ? 0.9F : 0.65F,
+                rarity == PoiLootboxRarity.EPIC ? 1.25F : 1.0F);
         DustParticleOptions particle = switch (rarity) {
             case COMMON -> null;
             case UNCOMMON -> dust(0x57D65D);

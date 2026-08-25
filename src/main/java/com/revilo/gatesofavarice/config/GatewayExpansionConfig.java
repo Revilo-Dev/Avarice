@@ -13,6 +13,12 @@ public final class GatewayExpansionConfig {
     public static final ModConfigSpec.BooleanValue LOADOUT_ITEM_UPGRADES_ENABLED;
     public static final ModConfigSpec.IntValue LOADOUT_UPGRADE_CARD_COUNT;
     public static final ModConfigSpec.ConfigValue<java.util.List<? extends String>> ALLOWED_LOADOUT_EFFECTS;
+    public static final ModConfigSpec.IntValue NEXT_WAVE_DURATION_SECONDS;
+    public static final ModConfigSpec.IntValue INITIAL_WAVE_MOB_PERCENT;
+    public static final ModConfigSpec.IntValue INITIAL_WAVE_MOB_MAX;
+    public static final ModConfigSpec.IntValue MAX_ACTIVE_WAVE_MOBS;
+    public static final ModConfigSpec.IntValue LOOT_CRATES_PER_WAVE;
+    public static final ModConfigSpec.DoubleValue RUNE_LOOT_CRATE_DROP_CHANCE;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -21,6 +27,20 @@ public final class GatewayExpansionConfig {
                 .define("announceGateOpenInChat", true);
         ANNOUNCE_GATE_PARTY_JOIN_IN_CHAT = builder.comment("Broadcast a chat message when another player joins an active generated gate.")
                 .define("announceGatePartyJoinInChat", true);
+        builder.pop();
+        builder.push("dungeon");
+        NEXT_WAVE_DURATION_SECONDS = builder.comment("Default delay between waves, in seconds.")
+                .defineInRange("nextWaveDurationSeconds", 10, 0, 300);
+        INITIAL_WAVE_MOB_PERCENT = builder.comment("Percentage of a wave spawned immediately.")
+                .defineInRange("initialWaveMobPercent", 50, 1, 100);
+        INITIAL_WAVE_MOB_MAX = builder.comment("Maximum mobs spawned immediately at the start of a wave.")
+                .defineInRange("initialWaveMobMax", 150, 1, 500);
+        MAX_ACTIVE_WAVE_MOBS = builder.comment("Maximum concurrently alive dungeon mobs for one wave.")
+                .defineInRange("maxActiveWaveMobs", 250, 1, 1000);
+        LOOT_CRATES_PER_WAVE = builder.comment("Extra dungeon loot crates created after each completed wave.")
+                .defineInRange("lootCratesPerWave", 3, 0, 32);
+        RUNE_LOOT_CRATE_DROP_CHANCE = builder.comment("Chance for an otherwise rolled Runic item to remain in a loot crate.")
+                .defineInRange("runeLootCrateDropChance", 0.10D, 0.0D, 1.0D);
         builder.pop();
         builder.push("loadout");
         LOADOUT_STAT_ROLL_MULTIPLIER = builder.defineInRange("statRollMultiplier", 1.0D, 0.1D, 10.0D);

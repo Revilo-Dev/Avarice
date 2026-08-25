@@ -2,6 +2,7 @@ package com.revilo.gatesofavarice.shop;
 
 import com.revilo.gatesofavarice.currency.MythicCoinWallet;
 import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
+import com.revilo.gatesofavarice.dungeon.DungeonInstanceManager;
 import com.revilo.gatesofavarice.entity.GatekeeperEntity;
 import com.revilo.gatesofavarice.dungeon.ModDimensions;
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
@@ -45,6 +46,7 @@ import java.util.Set;
 public final class ShopkeeperManager {
 
     private static final String SHOPKEEPER_KEY = "gatesofavarice.shopkeeper";
+    private static final String SHOP_SPECIALIST_ROLE_KEY = "gatesofavarice.shop_specialist_role";
     private static final String TEMP_TRADE_KEY = "gatesofavarice.temp_trades";
     private static final String STOCK_KEY = "gatesofavarice.stock";
     private static final String PRICE_KEY = "gatesofavarice.price";
@@ -198,6 +200,23 @@ public final class ShopkeeperManager {
         return serverLevel.addFreshEntity(trader) ? trader : null;
     }
 
+    /** Keeps the two specialist traders present in the archive shop layout. */
+    public static void ensureShopSpecialists(ServerLevel level, Player summoner) {
+        ensureSpecialist(level, DungeonInstanceManager.armorerPosition(), "armorer", Component.literal("Armorer").withStyle(ChatFormatting.RED), summoner);
+        ensureSpecialist(level, DungeonInstanceManager.enchanterPosition(), "enchanter", Component.literal("Enchanter").withStyle(ChatFormatting.LIGHT_PURPLE), summoner);
+    }
+
+    private static void ensureSpecialist(ServerLevel level, Vec3 position, String role, Component name, Player summoner) {
+        boolean present = !level.getEntitiesOfClass(GatekeeperEntity.class,
+                new net.minecraft.world.phys.AABB(position, position).inflate(2.0D),
+                entity -> role.equals(entity.getPersistentData().getString(SHOP_SPECIALIST_ROLE_KEY))).isEmpty();
+        if (present) return;
+        GatekeeperEntity trader = spawnShopkeeper(level, position.x(), position.y(), position.z(), summoner);
+        if (trader == null) return;
+        trader.getPersistentData().putString(SHOP_SPECIALIST_ROLE_KEY, role);
+        trader.setCustomName(name);
+    }
+
     public static boolean isShopkeeper(GatekeeperEntity trader) {
         return trader.getPersistentData().getBoolean(SHOPKEEPER_KEY);
     }
@@ -320,7 +339,9 @@ public final class ShopkeeperManager {
                 continue;
             }
 
-            stocks[index] = offers.get(index).rollStock(random);
+            // Shop offers are coin-limited, not stock-limited.  A player can keep buying
+            // an offer for as long as their wallet can pay for it.
+            stocks[index] = Integer.MAX_VALUE;
         }
         return stocks;
     }

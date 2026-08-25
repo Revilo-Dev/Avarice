@@ -7,6 +7,7 @@ public final class DungeonHudState {
 
     private static volatile boolean active;
     private static volatile boolean upgradePhase;
+    private static volatile boolean gatewayOpen;
     private static volatile int floorNumber;
     private static volatile int waveInFloor;
     private static volatile int mobsRemaining;
@@ -16,6 +17,8 @@ public final class DungeonHudState {
     private static volatile long playTimeReceivedAtMillis;
     private static volatile int mobsKilled;
     private static volatile List<String> statLines = List.of();
+    private static volatile String partyName = "";
+    private static volatile List<String> partyMembers = List.of();
 
     private DungeonHudState() {
     }
@@ -23,6 +26,7 @@ public final class DungeonHudState {
     public static void apply(DungeonWaveHudPayload payload) {
         active = payload.active();
         upgradePhase = payload.upgradePhase();
+        gatewayOpen = payload.gatewayOpen();
         floorNumber = payload.floorNumber();
         waveInFloor = payload.waveInFloor();
         mobsRemaining = payload.mobsRemaining();
@@ -32,11 +36,14 @@ public final class DungeonHudState {
         playTimeReceivedAtMillis = System.currentTimeMillis();
         mobsKilled = payload.mobsKilled();
         statLines = List.copyOf(payload.statLines());
+        partyName = payload.partyName();
+        partyMembers = List.copyOf(payload.partyMembers());
     }
 
     public static void clear() {
         active = false;
         upgradePhase = false;
+        gatewayOpen = false;
         floorNumber = 0;
         waveInFloor = 0;
         mobsRemaining = 0;
@@ -46,6 +53,8 @@ public final class DungeonHudState {
         playTimeReceivedAtMillis = 0L;
         mobsKilled = 0;
         statLines = List.of();
+        partyName = "";
+        partyMembers = List.of();
     }
 
     public static boolean active() {
@@ -55,6 +64,8 @@ public final class DungeonHudState {
     public static boolean upgradePhase() {
         return upgradePhase;
     }
+
+    public static boolean gatewayOpen() { return gatewayOpen; }
 
     public static int floorNumber() {
         return floorNumber;
@@ -95,4 +106,8 @@ public final class DungeonHudState {
     public static List<String> statLines() {
         return statLines;
     }
+
+    public static String partyName() { return partyName; }
+
+    public static List<String> partyMembers() { return partyMembers; }
 }

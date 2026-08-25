@@ -1,6 +1,7 @@
 package com.revilo.gatesofavarice.block.entity;
 
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
+import com.revilo.gatesofavarice.config.GatewayExpansionConfig;
 import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
 import com.revilo.gatesofavarice.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
@@ -92,13 +93,16 @@ public class LootboxBlockEntity extends BlockEntity {
     public void burstLoot(ServerLevel level, BlockPos pos, ServerPlayer player) {
         spawnOpenParticles(level, pos);
         for (ItemStack stack : this.loot) {
-            if (!stack.isEmpty()) {
+            if (!stack.isEmpty() && (!net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).getNamespace().equals("runic")
+                    || level.random.nextDouble() <= GatewayExpansionConfig.RUNE_LOOT_CRATE_DROP_CHANCE.get())) {
                 Containers.dropItemStack(level, pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D, stack.copy());
             }
         }
         if (this.storedLevelOrbs > 0) {
             ExperienceOrb.award(level, Vec3.atCenterOf(pos).add(0.0D, 1.0D, 0.0D), this.storedLevelOrbs);
-            LevelUpIntegration.awardXp(player, this.storedLevelOrbs, DUNGEON_LOOTBOX_XP_SOURCE);
+            if (!DungeonRunManager.queueDungeonXp(player, this.storedLevelOrbs, DUNGEON_LOOTBOX_XP_SOURCE)) {
+                LevelUpIntegration.awardXp(player, this.storedLevelOrbs, DUNGEON_LOOTBOX_XP_SOURCE);
+            }
         }
         this.loot.clear();
         this.storedLevelOrbs = 0;
@@ -106,6 +110,7 @@ public class LootboxBlockEntity extends BlockEntity {
     }
 
     private static void spawnOpenParticles(ServerLevel level, BlockPos pos) {
+        level.playSound(null, pos, net.minecraft.sounds.SoundEvents.CHEST_OPEN, net.minecraft.sounds.SoundSource.BLOCKS, 0.8F, 1.0F);
         level.sendParticles(
                 new BlockParticleOption(ParticleTypes.BLOCK, Blocks.SPRUCE_PLANKS.defaultBlockState()).setPos(pos),
                 pos.getX() + 0.5D,

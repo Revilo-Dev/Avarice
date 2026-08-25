@@ -9,6 +9,7 @@ import com.revilo.gatesofavarice.client.screen.DungeonWaveScreen;
 import com.revilo.gatesofavarice.client.screen.DungeonLoadoutScreen;
 import com.revilo.gatesofavarice.client.screen.ShopkeeperScreen;
 import com.revilo.gatesofavarice.client.screen.GatewayWorkbenchScreen;
+import com.revilo.gatesofavarice.client.screen.SacrificialAltarScreen;
 import com.revilo.gatesofavarice.registry.ModBlockEntities;
 import com.revilo.gatesofavarice.registry.ModEntities;
 import com.revilo.gatesofavarice.registry.ModMenus;
@@ -55,6 +56,7 @@ public final class GatewayExpansionClient {
             event.register(ModMenus.SHOPKEEPER.get(), ShopkeeperScreen::new);
             event.register(ModMenus.DUNGEON_WAVE.get(), DungeonWaveScreen::new);
             event.register(ModMenus.DUNGEON_LOADOUT.get(), DungeonLoadoutScreen::new);
+            event.register(ModMenus.SACRIFICIAL_ALTAR.get(), SacrificialAltarScreen::new);
         }
 
         @SubscribeEvent

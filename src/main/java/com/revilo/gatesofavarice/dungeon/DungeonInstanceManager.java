@@ -42,8 +42,13 @@ public final class DungeonInstanceManager {
     private static final int INSTANCE_CLEANUP_RADIUS = 96;
     private static final long PLATFORM_LIFETIME_TICKS = 20L * 120L;
     private static final Vec3 PLAYER_SPAWN_OFFSET = new Vec3(29.0D, 2.0D, 0.0D);
-    private static final Vec3 SHOP_PLAYER_SPAWN_OFFSET = new Vec3(0.0D, 4.0D, 8.0D);
-    private static final Vec3 EXIT_PORTAL_OFFSET = new Vec3(0.0D, 0.0D, 8.0D);
+    private static final Vec3 SHOP_PLAYER_SPAWN = new Vec3(4983831.0D, 65.0D, -4828645.0D);
+    private static final Vec3 SHOP_ARCHIVIST_POSITION = new Vec3(4983831.0D, 65.0D, -4828631.0D);
+    private static final Vec3 SHOP_ARMORER_POSITION = new Vec3(4983814.0D, 65.0D, -4828648.0D);
+    private static final Vec3 SHOP_ENCHANTER_POSITION = new Vec3(4983850.0D, 65.0D, -4828648.0D);
+    private static final Vec3 SHOP_ADVANCE_PORTAL_POSITION = new Vec3(4983832.0D, 65.0D, -4828664.0D);
+    private static final BlockPos SHOP_STRUCTURE_ORIGIN = new BlockPos(4983831, 64, -4828645);
+    private static final Vec3 EXIT_PORTAL_OFFSET = new Vec3(0.0D, 5.0D, 8.0D);
     private static final Vec3 SHOPKEEPER_OFFSET = new Vec3(0.0D, 4.0D, 0.0D);
     private static final Vec3 ADVANCE_PORTAL_OFFSET = new Vec3(0.0D, 1.0D, 0.0D);
     // These are the walkable floor blocks; the former values targeted the raised structure layer above them.
@@ -109,11 +114,10 @@ public final class DungeonInstanceManager {
             return false;
         }
 
-        BlockPos origin = instanceOrigin(instanceOwnerId);
-        ensureInstance(dungeonLevel, origin, InstanceLayout.SHOP);
-        clearDungeonItems(dungeonLevel, origin);
+        ensureInstance(dungeonLevel, SHOP_STRUCTURE_ORIGIN, InstanceLayout.SHOP);
+        clearDungeonItems(dungeonLevel, SHOP_STRUCTURE_ORIGIN);
 
-        Vec3 spawnPos = positionedOffset(instanceOwnerId, SHOP_PLAYER_SPAWN_OFFSET);
+        Vec3 spawnPos = SHOP_PLAYER_SPAWN;
         player.teleportTo(dungeonLevel, spawnPos.x(), spawnPos.y(), spawnPos.z(), PLAYER_SPAWN_YAW, 0.0F);
         player.setPortalCooldown();
         return true;
@@ -128,11 +132,25 @@ public final class DungeonInstanceManager {
     }
 
     public static Vec3 shopkeeperPosition(UUID instanceOwnerId) {
-        return positionedOffset(instanceOwnerId, SHOPKEEPER_OFFSET);
+        return SHOP_ARCHIVIST_POSITION;
     }
+
+    public static Vec3 armorerPosition() { return SHOP_ARMORER_POSITION; }
+
+    public static Vec3 enchanterPosition() { return SHOP_ENCHANTER_POSITION; }
+
+    public static Vec3 shopAdvancePortalPosition() { return SHOP_ADVANCE_PORTAL_POSITION; }
 
     public static Vec3 advancePortalPosition(UUID instanceOwnerId) {
         return positionedOffset(instanceOwnerId, ADVANCE_PORTAL_OFFSET);
+    }
+
+    /** Adds fresh point-of-interest crates without rebuilding the current floor. */
+    public static void spawnWaveLootboxes(ServerLevel level, UUID instanceOwnerId, int floor, double quantityBonus, int count) {
+        if (count <= 0) {
+            return;
+        }
+        spawnPoiLootboxes(level, instanceOrigin(instanceOwnerId), floor, quantityBonus, count);
     }
 
     public static Vec3 randomMobSpawnPosition(ServerLevel level, UUID instanceOwnerId, net.minecraft.util.RandomSource random, int activeMobCount) {
@@ -264,15 +282,14 @@ public final class DungeonInstanceManager {
     }
 
     private static void placeShopStructure(ServerLevel level, BlockPos origin) {
-        // A compact, intentionally empty shop space: the gatekeeper is the only spawned entity.
-        for (int xOffset = -8; xOffset <= 8; xOffset++) {
-            for (int zOffset = -8; zOffset <= 8; zOffset++) {
-                BlockPos floorPos = origin.offset(xOffset, 3, zOffset);
-                level.setBlock(floorPos, Blocks.POLISHED_DEEPSLATE.defaultBlockState(), 3);
-                if (Math.abs(xOffset) == 8 || Math.abs(zOffset) == 8) {
-                    level.setBlock(floorPos.above(), Blocks.DEEPSLATE_BRICK_WALL.defaultBlockState(), 3);
-                }
-            }
+        Optional<StructureTemplate> template = loadStructure(level, "t1-archive1");
+        if (template.isEmpty()) {
+            GatewayExpansion.LOGGER.error("Missing shop structure t1-archive1");
+            return;
+        }
+        StructurePlaceSettings settings = new StructurePlaceSettings().setIgnoreEntities(false);
+        if (!template.get().placeInWorld(level, origin, origin, settings, level.random, 2)) {
+            GatewayExpansion.LOGGER.error("Failed to place shop structure t1-archive1 at {}", origin);
         }
     }
 
@@ -320,9 +337,16 @@ public final class DungeonInstanceManager {
     }
 
     private static void spawnPoiLootboxes(ServerLevel level, BlockPos origin, int floor, double quantityBonus) {
+        spawnPoiLootboxes(level, origin, floor, quantityBonus, -1);
+    }
+
+    private static void spawnPoiLootboxes(ServerLevel level, BlockPos origin, int floor, double quantityBonus, int requestedBoxes) {
         int quantitySteps = Math.min(4, (int) Math.floor(Math.max(0.0D, quantityBonus) * 4.0D));
-        int clusterCount = Math.min(6, 2 + Math.max(0, floor - 1) / 5 + quantitySteps);
+        int clusterCount = requestedBoxes > 0
+                ? Math.max(1, (int) Math.ceil(requestedBoxes / (double) Math.max(1, 3 + quantitySteps)))
+                : Math.min(6, 2 + Math.max(0, floor - 1) / 5 + quantitySteps);
         int boxesPerCluster = 3 + quantitySteps;
+        int spawned = 0;
         int clusterRadius = 3 + quantitySteps * 2;
         for (int cluster = 0; cluster < clusterCount; cluster++) {
             int centerX = origin.getX() + level.random.nextInt((int) (MOB_SPAWN_RADIUS * 2.0D + 1.0D)) - (int) MOB_SPAWN_RADIUS;
@@ -341,6 +365,10 @@ public final class DungeonInstanceManager {
                 level.setBlock(lootboxPos, ModBlocks.POI_LOOTBOX.get().defaultBlockState(), 3);
                 if (level.getBlockEntity(lootboxPos) instanceof PoiLootboxBlockEntity lootbox) {
                     lootbox.assignRandomRarity(level.random);
+                    spawned++;
+                    if (requestedBoxes > 0 && spawned >= requestedBoxes) {
+                        return;
+                    }
                 }
             }
         }
@@ -360,18 +388,22 @@ public final class DungeonInstanceManager {
     }
 
     private static Optional<StructureTemplate> loadDungeonPiece(ServerLevel level, DungeonStructurePiece piece) {
-        ResourceLocation templateId = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, piece.templateId());
+        return loadStructure(level, piece.templateId());
+    }
+
+    private static Optional<StructureTemplate> loadStructure(ServerLevel level, String structureId) {
+        ResourceLocation templateId = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, structureId);
         Optional<StructureTemplate> managedTemplate = level.getStructureManager().get(templateId);
         if (managedTemplate.isPresent()) {
             return managedTemplate;
         }
 
-        ResourceLocation resourcePath = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "structures/" + piece.templateId() + ".nbt");
+        ResourceLocation resourcePath = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "structures/" + structureId + ".nbt");
         try (InputStream stream = level.getServer().getResourceManager().open(resourcePath)) {
             CompoundTag tag = NbtIo.readCompressed(stream, NbtAccounter.unlimitedHeap());
             return Optional.of(level.getStructureManager().readStructure(tag));
         } catch (IOException exception) {
-            GatewayExpansion.LOGGER.error("Could not load dungeon structure piece {}", resourcePath, exception);
+            GatewayExpansion.LOGGER.error("Could not load structure {}", resourcePath, exception);
             return Optional.empty();
         }
     }

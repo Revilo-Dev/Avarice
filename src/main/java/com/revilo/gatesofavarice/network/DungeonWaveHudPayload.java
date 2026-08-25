@@ -8,7 +8,7 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
-public record DungeonWaveHudPayload(boolean active, boolean upgradePhase, int floorNumber, int waveInFloor, int mobsRemaining, int totalMobs, int nextWaveCountdownTicks, long playTimeTicks, int mobsKilled, List<String> statLines) implements CustomPacketPayload {
+public record DungeonWaveHudPayload(boolean active, boolean upgradePhase, boolean gatewayOpen, int floorNumber, int waveInFloor, int mobsRemaining, int totalMobs, int nextWaveCountdownTicks, long playTimeTicks, int mobsKilled, List<String> statLines, String partyName, List<String> partyMembers) implements CustomPacketPayload {
 
     public static final Type<DungeonWaveHudPayload> TYPE =
             new Type<>(ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "dungeon_wave_hud"));
@@ -18,6 +18,7 @@ public record DungeonWaveHudPayload(boolean active, boolean upgradePhase, int fl
                     (buffer, payload) -> {
                         buffer.writeBoolean(payload.active);
                         buffer.writeBoolean(payload.upgradePhase);
+                        buffer.writeBoolean(payload.gatewayOpen);
                         buffer.writeVarInt(payload.floorNumber);
                         buffer.writeVarInt(payload.waveInFloor);
                         buffer.writeVarInt(payload.mobsRemaining);
@@ -29,10 +30,14 @@ public record DungeonWaveHudPayload(boolean active, boolean upgradePhase, int fl
                         for (String statLine : payload.statLines) {
                             buffer.writeUtf(statLine);
                         }
+                        buffer.writeUtf(payload.partyName);
+                        buffer.writeVarInt(payload.partyMembers.size());
+                        for (String member : payload.partyMembers) buffer.writeUtf(member);
                     },
                     buffer -> {
                         boolean active = buffer.readBoolean();
                         boolean upgradePhase = buffer.readBoolean();
+                        boolean gatewayOpen = buffer.readBoolean();
                         int floorNumber = buffer.readVarInt();
                         int waveInFloor = buffer.readVarInt();
                         int mobsRemaining = buffer.readVarInt();
@@ -45,7 +50,11 @@ public record DungeonWaveHudPayload(boolean active, boolean upgradePhase, int fl
                         for (int i = 0; i < statCount; i++) {
                             statLines.add(buffer.readUtf());
                         }
-                        return new DungeonWaveHudPayload(active, upgradePhase, floorNumber, waveInFloor, mobsRemaining, totalMobs, nextWaveCountdownTicks, playTimeTicks, mobsKilled, List.copyOf(statLines));
+                        String partyName = buffer.readUtf();
+                        int partyCount = buffer.readVarInt();
+                        ArrayList<String> partyMembers = new ArrayList<>(partyCount);
+                        for (int i = 0; i < partyCount; i++) partyMembers.add(buffer.readUtf());
+                        return new DungeonWaveHudPayload(active, upgradePhase, gatewayOpen, floorNumber, waveInFloor, mobsRemaining, totalMobs, nextWaveCountdownTicks, playTimeTicks, mobsKilled, List.copyOf(statLines), partyName, List.copyOf(partyMembers));
                     }
             );
 

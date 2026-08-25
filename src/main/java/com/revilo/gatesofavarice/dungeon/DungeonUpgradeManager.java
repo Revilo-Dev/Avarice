@@ -340,6 +340,16 @@ public final class DungeonUpgradeManager {
         session.purchasedShopCards++;
         ItemStack target = representativeTargetStack(player, category, session.activeArmorPiece);
         remaining.removeIf(candidate -> !canApplyCardToTarget(player, target, candidate));
+        // Refill the purchased card immediately.  Shop cards are now limited only by
+        // wallet balance and available rune capacity, rather than a fixed selection cap.
+        session.cardGenerationNonce++;
+        List<UpgradeCard> replacement = generateShopCards(player, session, category, target, getSessionWaveNumber(session), 1);
+        for (UpgradeCard candidate : replacement) {
+            if (canApplyCardToTarget(player, target, candidate)) {
+                remaining.add(candidate);
+                break;
+            }
+        }
         session.cardsByCategory.put(category, List.copyOf(remaining));
         rebuildShopCardIndex(session);
         int rerollsLeft = session.waveOwnerId == null ? 0 : DungeonRunManager.getUpgradeRerollsLeft(session.waveOwnerId);
@@ -360,13 +370,7 @@ public final class DungeonUpgradeManager {
     }
 
     private static int maxShopSelections(ServerPlayer player) {
-        int playerLevel = Math.max(0, com.revilo.gatesofavarice.integration.LevelUpIntegration.getEffectiveLevel(player));
-        if (playerLevel <= 5) return 3;
-        if (playerLevel <= 10) return 4;
-        if (playerLevel <= 15) return 5;
-        if (playerLevel <= 20) return 6;
-        if (playerLevel <= 30) return 7;
-        return 8;
+        return Integer.MAX_VALUE;
     }
 
     private static int getSessionWaveNumber(UpgradeSession session) {

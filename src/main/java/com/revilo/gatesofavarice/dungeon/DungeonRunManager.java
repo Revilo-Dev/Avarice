@@ -2,6 +2,7 @@ package com.revilo.gatesofavarice.dungeon;
 
 import com.revilo.gatesofavarice.currency.MythicCoinWallet;
 import com.revilo.gatesofavarice.currency.GoldCoinWallet;
+import com.revilo.gatesofavarice.config.GatewayExpansionConfig;
 import com.revilo.gatesofavarice.dungeon.DungeonUpgradeManager;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCategory;
@@ -56,6 +57,9 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.protocol.game.ClientboundSetEquipmentPacket;
+import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket;
+import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
+import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -110,6 +114,7 @@ public final class DungeonRunManager {
     private static final Map<UUID, UUID> PLAYER_TO_OWNER = new HashMap<>();
     private static final Map<UUID, PendingSnapshotRestore> PENDING_SNAPSHOT_RESTORES = new HashMap<>();
     private static final Map<UUID, DungeonCompletePayload> PENDING_COMPLETION_SCREENS = new HashMap<>();
+    private static final Map<UUID, Integer> LAST_OVERWORLD_LEVELS = new HashMap<>();
 
     private static final ResourceLocation MOB_HEALTH_MODIFIER_ID = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_wave_health");
     private static final ResourceLocation MOB_DAMAGE_MODIFIER_ID = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_wave_damage");
@@ -213,6 +218,12 @@ public final class DungeonRunManager {
 
     private static void markStateDirty() {
         persistedStateDirty = true;
+    }
+
+    private static void showFirstFloorTitle(ServerPlayer player) {
+        player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 60, 20));
+        player.connection.send(new ClientboundSetTitleTextPacket(Component.literal("Floor 1").withStyle(ChatFormatting.GOLD)));
+        player.connection.send(new ClientboundSetSubtitleTextPacket(Component.literal("the forgotten archives").withStyle(ChatFormatting.LIGHT_PURPLE)));
     }
 
     private static void savePersistedState(MinecraftServer server) {
@@ -369,6 +380,7 @@ public final class DungeonRunManager {
         run.advancePortalId = -1;
         for (ServerPlayer participant : run.liveParticipants()) {
             DungeonInstanceManager.teleportToShopInstance(participant, run.ownerId);
+            awardQueuedDungeonXp(participant, run);
         }
         ServerLevel dungeon = getDungeonLevel(run);
         if (dungeon != null) {
@@ -651,7 +663,11 @@ public final class DungeonRunManager {
         run.toSpawn = 0;
         run.spawnCooldown = 0;
         run.phase = RunPhase.SHOP;
+        for (ServerPlayer participant : run.liveParticipants()) {
+            DungeonInstanceManager.teleportToShopInstance(participant, run.ownerId);
+        }
         ensureShopkeeper(run, dungeon);
+        spawnAdvancePortal(run, dungeon);
         syncHud(run, false);
         markStateDirty();
         forceCriticalSave(player.server);
@@ -1064,6 +1080,10 @@ public final class DungeonRunManager {
         }
         applyLoadout(serverPlayer, buttonId);
         serverPlayer.closeContainer();
+        RunState run = RUNS_BY_OWNER.get(ownerId);
+        if (run != null && run.waveNumber == 0 && run.floorIntroShown.add(serverPlayer.getUUID())) {
+            showFirstFloorTitle(serverPlayer);
+        }
         return true;
     }
 
@@ -1076,6 +1096,10 @@ public final class DungeonRunManager {
     public static void onServerTick(ServerTickEvent.Post event) {
         ensureLoaded(event.getServer());
         flushPendingCompletionScreens(event.getServer());
+        ServerLevel overworld = event.getServer().overworld();
+        if (overworld != null && overworld.getGameTime() % 20L == 0L) {
+            refreshOverworldRuneSlots(event.getServer());
+        }
         if (RUNS_BY_OWNER.isEmpty() && PENDING_SNAPSHOT_RESTORES.isEmpty() && PENDING_COMPLETION_SCREENS.isEmpty()) {
             return;
         }
@@ -1133,8 +1157,35 @@ public final class DungeonRunManager {
                 spawnExitPortal(run, dungeon);
             }
         }
-        ServerLevel overworld = event.getServer().overworld();
         maybeAutosave(event.getServer(), dungeonLevel != null ? dungeonLevel.getGameTime() : (overworld != null ? overworld.getGameTime() : 0L));
+    }
+
+    private static void refreshOverworldRuneSlots(MinecraftServer server) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (player.level().dimension() == ModDimensions.DUNGEON_LEVEL) continue;
+            int level = getEffectivePlayerLevel(player);
+            Integer previous = LAST_OVERWORLD_LEVELS.put(player.getUUID(), level);
+            if (previous == null || level <= previous) continue;
+            int oldSlots = RunicLoadoutService.runeSlotsForPlayerLevel(previous);
+            int newSlots = RunicLoadoutService.runeSlotsForPlayerLevel(level);
+            if (newSlots <= oldSlots) continue;
+            applyRuneSlotCapacityToLoadout(player, newSlots);
+            player.displayClientMessage(Component.literal("Level " + level + " reached! Your dungeon loadout gained rune slots: " + oldSlots + " to " + newSlots)
+                    .withStyle(ChatFormatting.LIGHT_PURPLE), false);
+        }
+    }
+
+    private static void applyRuneSlotCapacityToLoadout(ServerPlayer player, int capacity) {
+        for (ItemStack stack : player.getInventory().items) {
+            if (DungeonBoundItems.isDungeonBound(stack)) RunicLoadoutService.applyRuneSlotCapacity(stack, capacity);
+        }
+        for (ItemStack stack : player.getInventory().armor) {
+            if (DungeonBoundItems.isDungeonBound(stack)) RunicLoadoutService.applyRuneSlotCapacity(stack, capacity);
+        }
+        for (ItemStack stack : player.getInventory().offhand) {
+            if (DungeonBoundItems.isDungeonBound(stack)) RunicLoadoutService.applyRuneSlotCapacity(stack, capacity);
+        }
+        player.inventoryMenu.broadcastChanges();
     }
 
     private static void flushPendingCompletionScreens(MinecraftServer server) {
@@ -1443,9 +1494,9 @@ public final class DungeonRunManager {
         if (run.toSpawn > 0) {
             if (run.spawnCooldown > 0) run.spawnCooldown--;
             else {
-                int spawned = spawnOneMob(run, level) ? 1 : 0;
+                int spawned = run.aliveMobs.size() < GatewayExpansionConfig.MAX_ACTIVE_WAVE_MOBS.get() && spawnOneMob(run, level) ? 1 : 0;
                 run.toSpawn -= spawned;
-                run.spawnCooldown = spawnIntervalTicks(run.aliveMobs.size());
+                run.spawnCooldown = spawned > 0 ? spawnIntervalTicks(run.aliveMobs.size()) : 5;
                 if (spawned > 0) {
                     markStateDirty();
                 }
@@ -1454,11 +1505,13 @@ public final class DungeonRunManager {
         if (run.toSpawn <= 0 && run.aliveMobs.isEmpty()) completeWave(run, level); else syncHud(run, true);
     }
 
-    /** Opens every wave at full map scale, then keeps pressure on players as the first pack is cleared. */
+    /** Starts each wave with a configurable first pack, then replaces mobs as they are cleared. */
     private static void spawnInitialWaveMobs(RunState run) {
         ServerLevel level = getDungeonLevel(run);
         if (level == null) return;
-        int initialCount = Math.min(50, run.toSpawn);
+        int percentageCount = (int) Math.ceil(run.toSpawn * (GatewayExpansionConfig.INITIAL_WAVE_MOB_PERCENT.get() / 100.0D));
+        int initialCount = Math.min(run.toSpawn, Math.min(GatewayExpansionConfig.MAX_ACTIVE_WAVE_MOBS.get(),
+                Math.min(GatewayExpansionConfig.INITIAL_WAVE_MOB_MAX.get(), percentageCount)));
         for (int i = 0; i < initialCount; i++) {
             if (!spawnOneMob(run, level)) break;
             run.toSpawn--;
@@ -1486,11 +1539,13 @@ public final class DungeonRunManager {
             player.setHealth(player.getMaxHealth());
         }
         run.wavesCompletedOnFloor++;
+        DungeonInstanceManager.spawnWaveLootboxes(level, run.ownerId, Math.max(1, run.waveNumber), run.quantityBonusModifier,
+                GatewayExpansionConfig.LOOT_CRATES_PER_WAVE.get());
         if (run.wavesCompletedOnFloor < wave) {
             run.phase = RunPhase.INTERMISSION;
-            run.intermissionTicks = 20 * 10;
+            run.intermissionTicks = 20 * nextWaveDurationSeconds(run);
             for (ServerPlayer player : run.liveParticipants()) {
-                player.displayClientMessage(Component.literal("Next wave begins in 10 seconds. Bail Stone is available.").withStyle(ChatFormatting.GOLD), true);
+                player.displayClientMessage(Component.literal("Next wave begins in " + nextWaveDurationSeconds(run) + " seconds. Bail Stone is available.").withStyle(ChatFormatting.GOLD), true);
             }
             syncHud(run, false);
             markStateDirty();
@@ -1537,6 +1592,45 @@ public final class DungeonRunManager {
         return true;
     }
 
+    public static boolean debugSetFloor(ServerPlayer player, int floor) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        ServerLevel dungeon = run == null ? null : getDungeonLevel(run);
+        if (run == null || dungeon == null) return false;
+        run.waveNumber = Math.max(1, floor);
+        run.wavesCompletedOnFloor = 0;
+        run.phase = RunPhase.SELECTING_TAROT;
+        run.aliveMobs.clear();
+        run.toSpawn = 0;
+        run.spawnCooldown = 0;
+        DungeonInstanceManager.reloadDungeonFloor(dungeon, run.ownerId, run.waveNumber, run.quantityBonusModifier);
+        for (ServerPlayer participant : run.liveParticipants()) DungeonInstanceManager.teleportToDungeonInstance(participant, run.ownerId);
+        rollTarotOptions(run, dungeon.random);
+        ServerPlayer owner = run.online(run.ownerId);
+        if (owner != null) openWaveMenu(owner, run);
+        markStateDirty();
+        forceCriticalSave(player.server);
+        return true;
+    }
+
+    public static boolean debugNextFloor(ServerPlayer player) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        return run != null && debugSetFloor(player, Math.max(1, run.waveNumber + 1));
+    }
+
+    public static boolean debugRegenerateFloor(ServerPlayer player) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        ServerLevel dungeon = run == null ? null : getDungeonLevel(run);
+        if (run == null || dungeon == null) return false;
+        DungeonInstanceManager.reloadDungeonFloor(dungeon, run.ownerId, Math.max(1, run.waveNumber), run.quantityBonusModifier);
+        for (ServerPlayer participant : run.liveParticipants()) DungeonInstanceManager.teleportToDungeonInstance(participant, run.ownerId);
+        markStateDirty();
+        forceCriticalSave(player.server);
+        return true;
+    }
+
     private static void spawnAdvancePortal(RunState run, ServerLevel level) {
         if (run.advancePortalId >= 0) {
             Entity existing = level.getEntity(run.advancePortalId);
@@ -1545,14 +1639,68 @@ public final class DungeonRunManager {
         }
         GatewayCrystalEntity portal = ModEntities.GATEWAY_CRYSTAL.get().create(level);
         if (portal == null) return;
-        Vec3 pos = DungeonInstanceManager.advancePortalPosition(run.ownerId);
+        Vec3 pos = run.phase == RunPhase.SHOP
+                ? DungeonInstanceManager.shopAdvancePortalPosition()
+                : DungeonInstanceManager.advancePortalPosition(run.ownerId);
         portal.setOwnerId(run.ownerId);
         portal.setAdvancePortal(true);
         portal.moveTo(pos.x(), pos.y(), pos.z(), 0.0F, 0.0F);
         if (level.addFreshEntity(portal)) {
             run.advancePortalId = portal.getId();
+            for (ServerPlayer player : run.liveParticipants()) {
+                player.displayClientMessage(Component.literal("A gateway has opened to the next floor").withStyle(ChatFormatting.LIGHT_PURPLE), true);
+            }
             markStateDirty();
         }
+    }
+
+    private static int nextWaveDurationSeconds(RunState run) {
+        return run.nextWaveDurationSeconds >= 0 ? run.nextWaveDurationSeconds : GatewayExpansionConfig.NEXT_WAVE_DURATION_SECONDS.get();
+    }
+
+    public static boolean setNextWaveDuration(ServerPlayer player, int seconds) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        if (run == null) {
+            return false;
+        }
+        run.nextWaveDurationSeconds = Mth.clamp(seconds, 0, 300);
+        if (run.phase == RunPhase.INTERMISSION) {
+            run.intermissionTicks = Math.min(run.intermissionTicks, 20 * run.nextWaveDurationSeconds);
+        }
+        markStateDirty();
+        forceCriticalSave(player.server);
+        return true;
+    }
+
+    /** Holds dungeon XP until the party reaches the shop phase. */
+    public static boolean queueDungeonXp(ServerPlayer player, int amount, ResourceLocation source) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        if (run == null || amount <= 0) return false;
+        run.pendingXpByPlayer.merge(player.getUUID(), (long) amount, Long::sum);
+        markStateDirty();
+        return true;
+    }
+
+    private static void awardQueuedDungeonXp(ServerPlayer player, RunState run) {
+        long amount = run.pendingXpByPlayer.getOrDefault(player.getUUID(), 0L);
+        if (amount <= 0L) return;
+        run.pendingXpByPlayer.remove(player.getUUID());
+        int before = LevelUpIntegration.getEffectiveLevel(player);
+        LevelUpIntegration.awardXp(player, amount, ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_shop_levelup"));
+        int after = LevelUpIntegration.getEffectiveLevel(player);
+        int oldSlots = RunicLoadoutService.runeSlotsForPlayerLevel(before);
+        int newSlots = RunicLoadoutService.runeSlotsForPlayerLevel(after);
+        if (newSlots > oldSlots) {
+            applyRuneSlotCapacityToLoadout(player, newSlots);
+            player.displayClientMessage(Component.literal("Your dungeon loadout rune slots upgraded: " + oldSlots + " to " + newSlots)
+                    .withStyle(ChatFormatting.LIGHT_PURPLE), false);
+        }
+        player.displayClientMessage(Component.literal(after > before
+                ? "Dungeon experience claimed: level " + before + " to " + after
+                : "Dungeon experience claimed: " + amount + " XP").withStyle(ChatFormatting.GOLD), false);
+        markStateDirty();
     }
 
     private static void spawnShopPortal(RunState run, ServerLevel level) {
@@ -1596,6 +1744,7 @@ public final class DungeonRunManager {
             if (changed) {
                 markStateDirty();
             }
+            ShopkeeperManager.ensureShopSpecialists(level, run.online(run.ownerId));
             return true;
         }
         net.minecraft.world.phys.Vec3 shopPos = DungeonInstanceManager.shopkeeperPosition(run.ownerId);
@@ -1610,6 +1759,7 @@ public final class DungeonRunManager {
         markDungeonShopkeeper(shop, run.ownerId);
         run.shopkeeperId = shop.getId();
         run.shopkeeperUuid = shop.getUUID();
+        ShopkeeperManager.ensureShopSpecialists(level, owner);
         markStateDirty();
         return true;
     }
@@ -2787,21 +2937,23 @@ public final class DungeonRunManager {
             clearHudToPlayer(player);
             return;
         }
-        PacketDistributor.sendToPlayer(player, createHudPayload(run, active, wave, remaining, total));
+        PacketDistributor.sendToPlayer(player, createHudPayload(run, player, active, wave, remaining, total));
     }
 
     private static void clearHudToPlayer(ServerPlayer player) {
-        PacketDistributor.sendToPlayer(player, new DungeonWaveHudPayload(false, false, 0, 0, 0, 1, 0, 0L, 0, List.of()));
+        PacketDistributor.sendToPlayer(player, new DungeonWaveHudPayload(false, false, false, 0, 0, 0, 1, 0, 0L, 0, List.of(), "", List.of()));
     }
 
-    private static DungeonWaveHudPayload createHudPayload(RunState run, boolean active, int wave, int remaining, int total) {
+    private static DungeonWaveHudPayload createHudPayload(RunState run, ServerPlayer recipient, boolean active, int wave, int remaining, int total) {
         boolean upgradePhase = run != null && run.phase == RunPhase.SHOP;
+        boolean gatewayOpen = run != null && (run.phase == RunPhase.CHECKPOINT || (run.phase == RunPhase.SHOP && run.advancePortalId >= 0));
         int countdownTicks = run != null && run.phase == RunPhase.INTERMISSION ? Math.max(0, run.intermissionTicks) : 0;
-        boolean displayActive = active || upgradePhase || countdownTicks > 0;
+        boolean displayActive = active || upgradePhase || gatewayOpen || countdownTicks > 0;
         int displayRemaining = upgradePhase ? 1 : remaining;
         int displayTotal = upgradePhase ? 1 : total;
         int waveInFloor = run == null ? 0 : Math.max(1, run.wavesCompletedOnFloor + 1);
-        return new DungeonWaveHudPayload(displayActive, upgradePhase, wave, waveInFloor, displayRemaining, displayTotal, countdownTicks, elapsedRunTicks(run), run.mobsKilled, modifiedStatSummary(run));
+        PartyManager.PartyHudData party = PartyManager.hudData(recipient);
+        return new DungeonWaveHudPayload(displayActive, upgradePhase, gatewayOpen, wave, waveInFloor, displayRemaining, displayTotal, countdownTicks, elapsedRunTicks(run), run.mobsKilled, modifiedStatSummary(run), party.name(), party.members());
     }
 
     private static long elapsedRunTicks(RunState run) {
@@ -3286,6 +3438,15 @@ public final class DungeonRunManager {
         tag.putInt("wave_number", run.waveNumber);
         tag.putInt("waves_completed_on_floor", run.wavesCompletedOnFloor);
         tag.putInt("intermission_ticks", run.intermissionTicks);
+        tag.putInt("next_wave_duration_seconds", run.nextWaveDurationSeconds);
+        ListTag pendingXp = new ListTag();
+        for (Map.Entry<UUID, Long> entry : run.pendingXpByPlayer.entrySet()) {
+            CompoundTag entryTag = new CompoundTag();
+            entryTag.putUUID("player", entry.getKey());
+            entryTag.putLong("amount", entry.getValue());
+            pendingXp.add(entryTag);
+        }
+        tag.put("pending_xp", pendingXp);
         tag.putInt("to_spawn", run.toSpawn);
         tag.putInt("wave_total_mobs", run.waveTotalMobs);
         tag.putInt("spawn_cooldown", run.spawnCooldown);
@@ -3379,6 +3540,13 @@ public final class DungeonRunManager {
         run.waveNumber = tag.getInt("wave_number");
         run.wavesCompletedOnFloor = tag.getInt("waves_completed_on_floor");
         run.intermissionTicks = tag.getInt("intermission_ticks");
+        run.nextWaveDurationSeconds = tag.contains("next_wave_duration_seconds") ? tag.getInt("next_wave_duration_seconds") : -1;
+        for (Tag value : tag.getList("pending_xp", Tag.TAG_COMPOUND)) {
+            CompoundTag entry = (CompoundTag) value;
+            if (entry.hasUUID("player") && entry.getLong("amount") > 0L) {
+                run.pendingXpByPlayer.put(entry.getUUID("player"), entry.getLong("amount"));
+            }
+        }
         run.aliveMobs = loadUuidSet(tag.getList("alive_mobs", Tag.TAG_COMPOUND));
         run.toSpawn = tag.getInt("to_spawn");
         run.waveTotalMobs = tag.getInt("wave_total_mobs");
@@ -3599,8 +3767,9 @@ public final class DungeonRunManager {
     private static void syncHud(RunState run, boolean active) {
         int remaining = Math.max(0, run.toSpawn + run.aliveMobs.size());
         int total = Math.max(1, run.waveTotalMobs);
-        DungeonWaveHudPayload payload = createHudPayload(run, active, run.waveNumber, remaining, total);
-        for (ServerPlayer participant : run.liveParticipants()) PacketDistributor.sendToPlayer(participant, payload);
+        for (ServerPlayer participant : run.liveParticipants()) {
+            PacketDistributor.sendToPlayer(participant, createHudPayload(run, participant, active, run.waveNumber, remaining, total));
+        }
     }
 
     private enum RunPhase { SELECTING_TAROT, SELECTING_LOOT, IN_WAVE, INTERMISSION, SHOP, CHECKPOINT, WAITING_EXIT }
@@ -3613,10 +3782,13 @@ public final class DungeonRunManager {
         private final Set<UUID> participants = new HashSet<>();
         private final Map<UUID, PlayerSnapshot> snapshots = new HashMap<>();
         private final Map<UUID, PlayerSnapshot> dungeonLoadouts = new HashMap<>();
+        private final Set<UUID> floorIntroShown = new HashSet<>();
         private RunPhase phase = RunPhase.SELECTING_TAROT;
         private int waveNumber = 0;
         private int wavesCompletedOnFloor = 0;
         private int intermissionTicks = 0;
+        private int nextWaveDurationSeconds = -1;
+        private final Map<UUID, Long> pendingXpByPlayer = new HashMap<>();
         private Set<UUID> aliveMobs = new HashSet<>();
         private int toSpawn = 0;
         private int waveTotalMobs = 0;

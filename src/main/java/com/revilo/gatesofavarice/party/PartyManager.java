@@ -10,6 +10,7 @@ import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.server.level.ServerPlayer;
+import com.revilo.gatesofavarice.dungeon.ModDimensions;
 
 /** Lightweight server-side parties. Dungeon ownership is always the party leader. */
 public final class PartyManager {
@@ -87,6 +88,23 @@ public final class PartyManager {
         }).reduce((a, b) -> a + ", " + b).orElse("None");
         return Component.literal("Party " + party.name + ": " + members).withStyle(ChatFormatting.AQUA);
     }
+
+    /** Compact, client-safe information for the dungeon party tab. */
+    public static PartyHudData hudData(ServerPlayer viewer) {
+        Party party = partyOf(viewer.getUUID());
+        if (party == null) return new PartyHudData("Solo", java.util.List.of(memberHudLine(viewer, viewer.getUUID())));
+        return new PartyHudData(party.name, party.members.stream().sorted(java.util.Comparator.comparing(UUID::toString))
+                .map(id -> memberHudLine(viewer, id)).toList());
+    }
+
+    private static String memberHudLine(ServerPlayer viewer, UUID id) {
+        ServerPlayer member = viewer.server.getPlayerList().getPlayer(id);
+        if (member == null) return "Offline|OFFLINE|0";
+        String state = member.level().dimension() == ModDimensions.DUNGEON_LEVEL ? "IN DUNGEON" : "OUTSIDE";
+        return member.getName().getString() + "|" + state + "|" + Math.max(0, (int) Math.ceil(member.getHealth()));
+    }
+
+    public record PartyHudData(String name, java.util.List<String> members) {}
 
     private static Party partyOf(UUID member) {
         UUID leader = MEMBER_TO_LEADER.get(member);
