@@ -76,13 +76,11 @@ public class PoiLootboxBlockEntity extends BlockEntity {
                 pos.getX() + 0.5D, pos.getY() + 0.7D, pos.getZ() + 0.5D,
                 64, 0.5D, 0.4D, 0.5D, 0.2D
         );
-        level.playSound(null, pos, switch (rarity) {
-            case RARE -> net.minecraft.sounds.SoundEvents.AMETHYST_BLOCK_CHIME;
-            case EPIC -> net.minecraft.sounds.SoundEvents.PLAYER_LEVELUP;
-            case LEGENDARY -> net.minecraft.sounds.SoundEvents.TOTEM_USE;
-            default -> net.minecraft.sounds.SoundEvents.CHEST_OPEN;
-        }, net.minecraft.sounds.SoundSource.BLOCKS, rarity == PoiLootboxRarity.LEGENDARY ? 0.9F : 0.65F,
-                rarity == PoiLootboxRarity.EPIC ? 1.25F : 1.0F);
+        level.playSound(null, pos, net.minecraft.sounds.SoundEvents.BARREL_OPEN, net.minecraft.sounds.SoundSource.BLOCKS, 0.75F, 1.0F);
+        if (rarity.ordinal() >= PoiLootboxRarity.RARE.ordinal()) {
+            level.playSound(null, pos, net.minecraft.sounds.SoundEvents.NOTE_BLOCK_PLING.value(), net.minecraft.sounds.SoundSource.BLOCKS,
+                    0.9F, 1.0F + rarity.ordinal() * 0.12F);
+        }
         DustParticleOptions particle = switch (rarity) {
             case COMMON -> null;
             case UNCOMMON -> dust(0x57D65D);

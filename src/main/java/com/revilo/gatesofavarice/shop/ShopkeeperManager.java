@@ -201,9 +201,9 @@ public final class ShopkeeperManager {
     }
 
     /** Keeps the two specialist traders present in the archive shop layout. */
-    public static void ensureShopSpecialists(ServerLevel level, Player summoner) {
-        ensureSpecialist(level, DungeonInstanceManager.armorerPosition(), "armorer", Component.literal("Armorer").withStyle(ChatFormatting.RED), summoner);
-        ensureSpecialist(level, DungeonInstanceManager.enchanterPosition(), "enchanter", Component.literal("Enchanter").withStyle(ChatFormatting.LIGHT_PURPLE), summoner);
+    public static void ensureShopSpecialists(ServerLevel level, java.util.UUID instanceOwnerId, Player summoner) {
+        ensureSpecialist(level, DungeonInstanceManager.armorerPosition(instanceOwnerId), "armorer", Component.literal("Armorer").withStyle(ChatFormatting.RED), summoner);
+        ensureSpecialist(level, DungeonInstanceManager.enchanterPosition(instanceOwnerId), "enchanter", Component.literal("Enchanter").withStyle(ChatFormatting.LIGHT_PURPLE), summoner);
     }
 
     private static void ensureSpecialist(ServerLevel level, Vec3 position, String role, Component name, Player summoner) {

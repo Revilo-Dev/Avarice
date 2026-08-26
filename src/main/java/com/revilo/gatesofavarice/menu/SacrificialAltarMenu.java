@@ -15,6 +15,7 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 public final class SacrificialAltarMenu extends AbstractContainerMenu {
+    public static final int SACRIFICE_BUTTON_ID = 0;
     private final Container altar;
 
     public SacrificialAltarMenu(int containerId, Inventory inventory, FriendlyByteBuf buffer) {
@@ -57,8 +58,27 @@ public final class SacrificialAltarMenu extends AbstractContainerMenu {
         return copy;
     }
 
+    @Override
+    public boolean clickMenuButton(Player player, int id) {
+        if (id != SACRIFICE_BUTTON_ID || player.level().isClientSide || !(player instanceof ServerPlayer serverPlayer)
+                || !(altar instanceof SacrificialAltarBlockEntity altarBlock) || getSacrificeValue() <= 0) {
+            return false;
+        }
+        altarBlock.sacrificeContents(serverPlayer);
+        broadcastChanges();
+        return true;
+    }
+
+    public int getSacrificeValue() {
+        int total = 0;
+        for (int slot = 0; slot < SacrificialAltarBlockEntity.SLOT_COUNT; slot++) {
+            total += GatewaySellValues.getStackValue(altar.getItem(slot)) / 2;
+        }
+        return total;
+    }
+
     @Override public void removed(Player player) {
         super.removed(player);
-        if (!player.level().isClientSide && player instanceof ServerPlayer serverPlayer && altar instanceof SacrificialAltarBlockEntity altarBlock) altarBlock.sacrificeContents(serverPlayer);
+        // Items remain staged until the player presses Sacrifice, just like the shop sell page.
     }
 }

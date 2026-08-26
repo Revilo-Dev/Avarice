@@ -118,7 +118,7 @@ public final class DungeonWaveHudOverlay {
 
     private static void renderPartySidebar(GuiGraphics guiGraphics, Minecraft minecraft) {
         if (DungeonHudState.partyMembers().isEmpty()) return;
-        int x = 12;
+        int x = -3;
         int y = 40;
         int lineHeight = 11;
         int width = 174;

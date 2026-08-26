@@ -51,6 +51,9 @@ public final class ModItems {
 
     public static final DeferredHolder<Item, MythicCoinItem> MYTHIC_COIN = ITEMS.register("mythic_coin",
             () -> new MythicCoinItem(new Item.Properties().stacksTo(99)));
+    // Placeholder reward for the knowledge system; intentionally has no texture yet.
+    public static final DeferredHolder<Item, Item> USELESS_KNOWLEDGE_BOOK = ITEMS.register("useless_knowledge_book",
+            () -> new Item(new Item.Properties().stacksTo(16).rarity(Rarity.RARE)));
     public static final DeferredHolder<Item, GoldCoinItem> GOLD_COIN = ITEMS.register("gold_coin",
             () -> new GoldCoinItem(new Item.Properties().stacksTo(99).rarity(Rarity.UNCOMMON)));
     public static final DeferredHolder<Item, StabilityPearlItem> STABILITY_PEARL = ITEMS.register("stability_pearl",
@@ -259,6 +262,10 @@ public final class ModItems {
             () -> new BlockItem(ModBlocks.LOOTBOX.get(), new Item.Properties()));
     public static final DeferredHolder<Item, BlockItem> POI_LOOTBOX = ITEMS.register("poi_lootbox",
             () -> new BlockItem(ModBlocks.POI_LOOTBOX.get(), new Item.Properties()));
+    public static final DeferredHolder<Item, BlockItem> MYTHIC_COIN_PILE = ITEMS.register("mythic_coin_pile",
+            () -> new BlockItem(ModBlocks.MYTHIC_COIN_PILE.get(), new Item.Properties()));
+    public static final DeferredHolder<Item, BlockItem> KNOWLEDGE_BOOK = ITEMS.register("knowledge_book",
+            () -> new BlockItem(ModBlocks.KNOWLEDGE_BOOK.get(), new Item.Properties()));
     public static final DeferredHolder<Item, BlockItem> SACRIFICIAL_ALTAR = ITEMS.register("sacrificial_altar",
             () -> new BlockItem(ModBlocks.SACRIFICIAL_ALTAR.get(), new Item.Properties()));
     public static final DeferredHolder<Item, BlockItem> METAL_BLOCK = ITEMS.register("metal_block",

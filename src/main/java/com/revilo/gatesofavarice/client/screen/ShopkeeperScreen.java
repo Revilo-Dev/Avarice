@@ -317,7 +317,6 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
                 : this.upgradePreviewStack.getHoverName().copy().withStyle(ChatFormatting.GOLD);
         guiGraphics.drawCenteredString(this.font, title, this.leftPos + 88, this.topPos + 15, 0xF3D78A);
         this.renderUpgradeCards(guiGraphics, mouseX, mouseY);
-        this.renderSelectionCounter(guiGraphics);
     }
 
     private void renderSelectionCounter(GuiGraphics guiGraphics) {
@@ -330,7 +329,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         int count = UpgradeCategory.values().length;
         int totalWidth = Math.round(count * CARD_W * CATEGORY_CARD_SCALE + Math.max(0, count - 1) * CATEGORY_CARD_GAP);
         int startX = this.leftPos + BUY_AREA_LEFT + (buyAreaWidth() - totalWidth) / 2;
-        int y = this.topPos + BUY_AREA_TOP + 2;
+        int y = this.topPos + BUY_AREA_TOP + 12;
         guiGraphics.enableScissor(this.leftPos + BUY_AREA_LEFT, this.topPos + BUY_AREA_TOP, this.leftPos + BUY_AREA_RIGHT, this.topPos + BUY_AREA_BOTTOM);
         for (int i = 0; i < count; i++) {
             int x = startX + Math.round(i * CARD_W * CATEGORY_CARD_SCALE) + (i * CATEGORY_CARD_GAP);
@@ -349,7 +348,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         int columns = Math.min(UPGRADE_CARDS_PER_ROW, count);
         int totalWidth = Math.round(columns * CARD_W * UPGRADE_CARD_SCALE + Math.max(0, columns - 1) * UPGRADE_CARD_GAP);
         int startX = this.leftPos + BUY_AREA_LEFT + (buyAreaWidth() - totalWidth) / 2;
-        int startY = this.topPos + BUY_AREA_TOP + 1;
+        int startY = this.topPos + BUY_AREA_TOP + 11;
         guiGraphics.enableScissor(this.leftPos + BUY_AREA_LEFT, this.topPos + BUY_AREA_TOP, this.leftPos + BUY_AREA_RIGHT, this.topPos + BUY_AREA_BOTTOM);
         for (int i = 0; i < count; i++) {
             UpgradeCard card = this.upgradeCards.get(i);
@@ -976,7 +975,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             int count = UpgradeCategory.values().length;
             int totalWidth = Math.round(count * CARD_W * CATEGORY_CARD_SCALE + Math.max(0, count - 1) * CATEGORY_CARD_GAP);
             int startX = this.leftPos + BUY_AREA_LEFT + (buyAreaWidth() - totalWidth) / 2;
-            int y = this.topPos + BUY_AREA_TOP + 2;
+            int y = this.topPos + BUY_AREA_TOP + 12;
             for (int i = 0; i < count; i++) {
                 int x = startX + Math.round(i * CARD_W * CATEGORY_CARD_SCALE) + (i * CATEGORY_CARD_GAP);
                 if (this.isMouseOverScaledCard(mouseX, mouseY, x, y, CATEGORY_CARD_SCALE)) {
@@ -990,7 +989,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         int columns = Math.min(UPGRADE_CARDS_PER_ROW, count);
         int totalWidth = Math.round(columns * CARD_W * UPGRADE_CARD_SCALE + Math.max(0, columns - 1) * UPGRADE_CARD_GAP);
         int startX = this.leftPos + BUY_AREA_LEFT + (buyAreaWidth() - totalWidth) / 2;
-        int startY = this.topPos + BUY_AREA_TOP + 1;
+        int startY = this.topPos + BUY_AREA_TOP + 11;
         for (int i = 0; i < count; i++) {
             int row = i / UPGRADE_CARDS_PER_ROW;
             int column = i % UPGRADE_CARDS_PER_ROW;

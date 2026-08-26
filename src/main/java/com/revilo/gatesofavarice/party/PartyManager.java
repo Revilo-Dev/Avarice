@@ -11,6 +11,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.server.level.ServerPlayer;
 import com.revilo.gatesofavarice.dungeon.ModDimensions;
+import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
 
 /** Lightweight server-side parties. Dungeon ownership is always the party leader. */
 public final class PartyManager {
@@ -25,6 +26,7 @@ public final class PartyManager {
         Party party = new Party(name.trim(), leader.getUUID());
         PARTIES_BY_LEADER.put(leader.getUUID(), party);
         MEMBER_TO_LEADER.put(leader.getUUID(), leader.getUUID());
+        DungeonRunManager.refreshPartyHud(leader);
         return true;
     }
 
@@ -46,6 +48,7 @@ public final class PartyManager {
         party.members.add(player.getUUID());
         MEMBER_TO_LEADER.put(player.getUUID(), leaderId);
         broadcast(player.server, party, Component.literal(player.getName().getString() + " joined the party.").withStyle(ChatFormatting.GREEN));
+        refreshHud(player.server, party);
         return true;
     }
 
@@ -57,6 +60,8 @@ public final class PartyManager {
         party.members.remove(player.getUUID());
         MEMBER_TO_LEADER.remove(player.getUUID());
         broadcast(player.server, party, Component.literal(player.getName().getString() + " left the party.").withStyle(ChatFormatting.YELLOW));
+        DungeonRunManager.refreshPartyHud(player);
+        refreshHud(player.server, party);
         return true;
     }
 
@@ -66,12 +71,32 @@ public final class PartyManager {
         PARTIES_BY_LEADER.remove(leader.getUUID());
         for (UUID member : party.members) MEMBER_TO_LEADER.remove(member);
         broadcast(leader.server, party, Component.literal("Party disbanded.").withStyle(ChatFormatting.RED));
+        for (UUID member : party.members) {
+            ServerPlayer online = leader.server.getPlayerList().getPlayer(member);
+            if (online != null) DungeonRunManager.refreshPartyHud(online);
+        }
         return true;
     }
 
     public static UUID dungeonOwner(ServerPlayer player, UUID requestedOwner) {
         UUID leader = MEMBER_TO_LEADER.get(player.getUUID());
-        return leader == null ? player.getUUID() : leader;
+        return leader != null && requestedOwner != null && areInSameParty(player.getUUID(), requestedOwner)
+                ? leader : player.getUUID();
+    }
+
+    /** A generated gate belongs to its owner; only that owner and their current party may enter it. */
+    public static boolean canEnterDungeon(ServerPlayer player, UUID ownerId) {
+        return player.getUUID().equals(ownerId) || areInSameParty(player.getUUID(), ownerId);
+    }
+
+    public static boolean isInParty(ServerPlayer player) {
+        return MEMBER_TO_LEADER.containsKey(player.getUUID());
+    }
+
+    /** Party membership is checked against the actual gate owner, not merely the leader. */
+    public static boolean areInSameParty(UUID firstPlayerId, UUID secondPlayerId) {
+        UUID firstLeader = MEMBER_TO_LEADER.get(firstPlayerId);
+        return firstLeader != null && firstLeader.equals(MEMBER_TO_LEADER.get(secondPlayerId));
     }
 
     public static int partySize(UUID ownerId) {
@@ -92,7 +117,7 @@ public final class PartyManager {
     /** Compact, client-safe information for the dungeon party tab. */
     public static PartyHudData hudData(ServerPlayer viewer) {
         Party party = partyOf(viewer.getUUID());
-        if (party == null) return new PartyHudData("Solo", java.util.List.of(memberHudLine(viewer, viewer.getUUID())));
+        if (party == null) return new PartyHudData("", java.util.List.of());
         return new PartyHudData(party.name, party.members.stream().sorted(java.util.Comparator.comparing(UUID::toString))
                 .map(id -> memberHudLine(viewer, id)).toList());
     }
@@ -115,6 +140,13 @@ public final class PartyManager {
         for (UUID member : party.members) {
             ServerPlayer online = server.getPlayerList().getPlayer(member);
             if (online != null) online.sendSystemMessage(message);
+        }
+    }
+
+    private static void refreshHud(net.minecraft.server.MinecraftServer server, Party party) {
+        for (UUID member : party.members) {
+            ServerPlayer online = server.getPlayerList().getPlayer(member);
+            if (online != null) DungeonRunManager.refreshPartyHud(online);
         }
     }
 

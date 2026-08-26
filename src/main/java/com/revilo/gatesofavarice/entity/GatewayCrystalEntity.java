@@ -2,6 +2,7 @@ package com.revilo.gatesofavarice.entity;
 
 import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
+import com.revilo.gatesofavarice.party.PartyManager;
 import com.revilo.gatesofavarice.registry.ModEntities;
 import java.util.List;
 import java.util.UUID;
@@ -72,20 +73,35 @@ public class GatewayCrystalEntity extends Entity {
 
         List<ServerPlayer> players = serverLevel.getEntitiesOfClass(ServerPlayer.class, this.interactionBounds(),
                 player -> !player.isSpectator() && !player.isPassenger() && !player.isOnPortalCooldown());
-        for (ServerPlayer player : players) {
-            UUID runOwnerId = this.ownerId == null ? player.getUUID() : this.ownerId;
-            if (this.isShopPortal()) {
-                DungeonRunManager.enterShopThroughGateway(player, runOwnerId, this);
-            } else if (this.isAdvancePortal()) {
-                DungeonRunManager.advanceThroughFloorGateway(player, runOwnerId, this);
-            } else if (this.isReturnPortal()) {
-                DungeonRunManager.exitViaBailPortal(player, runOwnerId, this);
-            } else {
-                if (!canUseTier(player, this.getCrystalTier())) {
-                    denyTierAccess(player, this.getCrystalTier());
-                    continue;
+        // A portal transfer has one entrant.  Processing every nearby player let a host
+        // standing beside a joining client get transferred first on multiplayer servers.
+        ServerPlayer player = players.stream()
+                .min(java.util.Comparator.comparingDouble(candidate -> candidate.distanceToSqr(this)))
+                .orElse(null);
+        if (player == null) return;
+
+        UUID runOwnerId = this.ownerId == null ? player.getUUID() : this.ownerId;
+        if (this.isShopPortal()) {
+            DungeonRunManager.enterShopThroughGateway(player, runOwnerId, this);
+        } else if (this.isAdvancePortal()) {
+            DungeonRunManager.advanceThroughFloorGateway(player, runOwnerId, this);
+        } else if (this.isReturnPortal()) {
+            DungeonRunManager.exitViaBailPortal(player, runOwnerId, this);
+        } else {
+            if (!canUseTier(player, this.getCrystalTier())) {
+                denyTierAccess(player, this.getCrystalTier());
+                return;
+            }
+            if (this.ownerId != null && !PartyManager.canEnterDungeon(player, this.ownerId)) {
+                player.displayClientMessage(Component.literal("unable to join this players gate, join their party first"), true);
+                player.setPortalCooldown();
+                return;
+            }
+            if (DungeonRunManager.enterFromGateway(player, runOwnerId)) {
+                player.setPortalCooldown();
+                if (!PartyManager.isInParty(player)) {
+                    this.discard();
                 }
-                DungeonRunManager.enterFromGateway(player, runOwnerId);
             }
         }
     }

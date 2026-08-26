@@ -21,6 +21,8 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.GATEWAY_WORKBENCH.get());
                         output.accept(ModItems.LOOTBOX.get());
                         output.accept(ModItems.POI_LOOTBOX.get());
+                        output.accept(ModItems.MYTHIC_COIN_PILE.get());
+                        output.accept(ModItems.KNOWLEDGE_BOOK.get());
                         output.accept(ModItems.SACRIFICIAL_ALTAR.get());
 
                         output.accept(ModItems.TIER_1_CRYSTAL.get());
@@ -30,6 +32,7 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.TIER_5_CRYSTAL.get());
 
                         output.accept(ModItems.MYTHIC_COIN.get());
+                        output.accept(ModItems.USELESS_KNOWLEDGE_BOOK.get());
                         output.accept(ModItems.GOLD_COIN.get());
                         output.accept(ModItems.BAIL_STONE.get());
                         output.accept(ModItems.GATEWAY_CARD.get());

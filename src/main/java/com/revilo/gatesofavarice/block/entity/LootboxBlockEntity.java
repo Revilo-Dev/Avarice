@@ -110,7 +110,7 @@ public class LootboxBlockEntity extends BlockEntity {
     }
 
     private static void spawnOpenParticles(ServerLevel level, BlockPos pos) {
-        level.playSound(null, pos, net.minecraft.sounds.SoundEvents.CHEST_OPEN, net.minecraft.sounds.SoundSource.BLOCKS, 0.8F, 1.0F);
+        level.playSound(null, pos, net.minecraft.sounds.SoundEvents.BARREL_OPEN, net.minecraft.sounds.SoundSource.BLOCKS, 0.8F, 1.0F);
         level.sendParticles(
                 new BlockParticleOption(ParticleTypes.BLOCK, Blocks.SPRUCE_PLANKS.defaultBlockState()).setPos(pos),
                 pos.getX() + 0.5D,

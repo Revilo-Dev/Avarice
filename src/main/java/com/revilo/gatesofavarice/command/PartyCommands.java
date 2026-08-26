@@ -29,7 +29,13 @@ public final class PartyCommands {
                 .then(Commands.literal("disband").executes(context -> disband(context.getSource().getPlayerOrException()))));
     }
 
-    private static int create(ServerPlayer player, String name) { return result(player, PartyManager.create(player, name), "Created party " + name + ".", "You are already in a party."); }
+    private static int create(ServerPlayer player, String name) {
+        if (!PartyManager.create(player, name)) return result(player, false, "", "You are already in a party.");
+        player.sendSystemMessage(Component.literal("created party " + name).withStyle(ChatFormatting.GREEN));
+        player.sendSystemMessage(Component.literal("use /party invite to invite party members").withStyle(ChatFormatting.GRAY));
+        player.sendSystemMessage(Component.literal("use /party disband to disband your party").withStyle(ChatFormatting.GRAY));
+        return 1;
+    }
     private static int invite(ServerPlayer player, ServerPlayer target) { return result(player, PartyManager.invite(player, target), "Invited " + target.getName().getString() + ".", "Unable to invite that player."); }
     private static int accept(ServerPlayer player) { return result(player, PartyManager.accept(player), "Joined the party.", "You have no valid party invite."); }
     private static int decline(ServerPlayer player) { return result(player, PartyManager.decline(player), "Invite declined.", "You have no party invite."); }

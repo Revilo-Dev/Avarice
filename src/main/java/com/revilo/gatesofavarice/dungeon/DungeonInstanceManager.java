@@ -42,12 +42,13 @@ public final class DungeonInstanceManager {
     private static final int INSTANCE_CLEANUP_RADIUS = 96;
     private static final long PLATFORM_LIFETIME_TICKS = 20L * 120L;
     private static final Vec3 PLAYER_SPAWN_OFFSET = new Vec3(29.0D, 2.0D, 0.0D);
-    private static final Vec3 SHOP_PLAYER_SPAWN = new Vec3(4983831.0D, 65.0D, -4828645.0D);
-    private static final Vec3 SHOP_ARCHIVIST_POSITION = new Vec3(4983831.0D, 65.0D, -4828631.0D);
-    private static final Vec3 SHOP_ARMORER_POSITION = new Vec3(4983814.0D, 65.0D, -4828648.0D);
-    private static final Vec3 SHOP_ENCHANTER_POSITION = new Vec3(4983850.0D, 65.0D, -4828648.0D);
-    private static final Vec3 SHOP_ADVANCE_PORTAL_POSITION = new Vec3(4983832.0D, 65.0D, -4828664.0D);
-    private static final BlockPos SHOP_STRUCTURE_ORIGIN = new BlockPos(4983831, 64, -4828645);
+    private static final BlockPos SHOP_STRUCTURE_ORIGIN = new BlockPos(13877272, 64, -2688999);
+    private static final Vec3 SHOP_PLAYER_SPAWN = new Vec3(13877272.0D, 65.0D, -2688999.0D);
+    private static final Vec3 SHOP_ARCHIVIST_POSITION = new Vec3(13877272.0D, 64.0D, -2688982.0D);
+    private static final Vec3 SHOP_ARMORER_POSITION = new Vec3(13877253.0D, 64.0D, -2689000.0D);
+    private static final Vec3 SHOP_ENCHANTER_POSITION = new Vec3(13877291.0D, 64.0D, -2689001.0D);
+    private static final Vec3 SHOP_ADVANCE_PORTAL_POSITION = new Vec3(13877272.0D, 64.0D, -2689018.0D);
+    private static final String SHOP_STRUCTURE_ID = "t1-archive1";
     private static final Vec3 EXIT_PORTAL_OFFSET = new Vec3(0.0D, 5.0D, 8.0D);
     private static final Vec3 SHOPKEEPER_OFFSET = new Vec3(0.0D, 4.0D, 0.0D);
     private static final Vec3 ADVANCE_PORTAL_OFFSET = new Vec3(0.0D, 1.0D, 0.0D);
@@ -135,11 +136,11 @@ public final class DungeonInstanceManager {
         return SHOP_ARCHIVIST_POSITION;
     }
 
-    public static Vec3 armorerPosition() { return SHOP_ARMORER_POSITION; }
+    public static Vec3 armorerPosition(UUID instanceOwnerId) { return SHOP_ARMORER_POSITION; }
 
-    public static Vec3 enchanterPosition() { return SHOP_ENCHANTER_POSITION; }
+    public static Vec3 enchanterPosition(UUID instanceOwnerId) { return SHOP_ENCHANTER_POSITION; }
 
-    public static Vec3 shopAdvancePortalPosition() { return SHOP_ADVANCE_PORTAL_POSITION; }
+    public static Vec3 shopAdvancePortalPosition(UUID instanceOwnerId) { return SHOP_ADVANCE_PORTAL_POSITION; }
 
     public static Vec3 advancePortalPosition(UUID instanceOwnerId) {
         return positionedOffset(instanceOwnerId, ADVANCE_PORTAL_OFFSET);
@@ -206,7 +207,7 @@ public final class DungeonInstanceManager {
         clearDungeonVolume(level, origin);
         placeDungeonStructure(level, origin);
         clearBrokenStructureDrops(level, origin);
-        spawnPoiLootboxes(level, origin, floor, quantityBonus);
+        spawnDungeonRewardPatches(level, origin, floor, quantityBonus);
         ACTIVE_DUNGEONS.put(origin.immutable(), level.getGameTime() + PLATFORM_LIFETIME_TICKS);
         INSTANCE_LAYOUTS.put(origin.immutable(), InstanceLayout.DUNGEON);
         showRebuildStatus(level, origin, "Dungeon floor ready.");
@@ -274,7 +275,7 @@ public final class DungeonInstanceManager {
         if (layout == InstanceLayout.DUNGEON) {
             placeDungeonStructure(level, origin);
             clearBrokenStructureDrops(level, origin);
-            spawnPoiLootboxes(level, origin, 1, 0.0D);
+            spawnDungeonRewardPatches(level, origin, 1, 0.0D);
         } else {
             placeShopStructure(level, origin);
         }
@@ -282,14 +283,14 @@ public final class DungeonInstanceManager {
     }
 
     private static void placeShopStructure(ServerLevel level, BlockPos origin) {
-        Optional<StructureTemplate> template = loadStructure(level, "t1-archive1");
+        Optional<StructureTemplate> template = loadStructure(level, SHOP_STRUCTURE_ID);
         if (template.isEmpty()) {
-            GatewayExpansion.LOGGER.error("Missing shop structure t1-archive1");
+            GatewayExpansion.LOGGER.error("Missing shop structure {}", SHOP_STRUCTURE_ID);
             return;
         }
         StructurePlaceSettings settings = new StructurePlaceSettings().setIgnoreEntities(false);
         if (!template.get().placeInWorld(level, origin, origin, settings, level.random, 2)) {
-            GatewayExpansion.LOGGER.error("Failed to place shop structure t1-archive1 at {}", origin);
+            GatewayExpansion.LOGGER.error("Failed to place shop structure {} at {}", SHOP_STRUCTURE_ID, origin);
         }
     }
 
@@ -338,6 +339,49 @@ public final class DungeonInstanceManager {
 
     private static void spawnPoiLootboxes(ServerLevel level, BlockPos origin, int floor, double quantityBonus) {
         spawnPoiLootboxes(level, origin, floor, quantityBonus, -1);
+    }
+
+    /** Spawns coin caches using the same clustered floor locations as point-of-interest lootboxes. */
+    private static void spawnDungeonRewardPatches(ServerLevel level, BlockPos origin, int floor, double quantityBonus) {
+        spawnPoiLootboxes(level, origin, floor, quantityBonus);
+        spawnMythicCoinPiles(level, origin, floor, quantityBonus);
+        spawnKnowledgeBook(level, origin);
+    }
+
+    private static void spawnMythicCoinPiles(ServerLevel level, BlockPos origin, int floor, double quantityBonus) {
+        int quantitySteps = Math.min(4, (int) Math.floor(Math.max(0.0D, quantityBonus) * 4.0D));
+        int patchCount = Math.min(5, 1 + Math.max(0, floor - 1) / 5 + quantitySteps);
+        int pilesPerPatch = 2 + quantitySteps;
+        int patchRadius = 3 + quantitySteps * 2;
+        for (int patch = 0; patch < patchCount; patch++) {
+            int centerX = origin.getX() + level.random.nextInt((int) (MOB_SPAWN_RADIUS * 2.0D + 1.0D)) - (int) MOB_SPAWN_RADIUS;
+            int centerZ = origin.getZ() + level.random.nextInt((int) (MOB_SPAWN_RADIUS * 2.0D + 1.0D)) - (int) MOB_SPAWN_RADIUS;
+            for (int pile = 0; pile < pilesPerPatch; pile++) {
+                BlockPos surface = null;
+                for (int attempt = 0; attempt < 48 && surface == null; attempt++) {
+                    int x = centerX + level.random.nextInt(patchRadius * 2 + 1) - patchRadius;
+                    int z = centerZ + level.random.nextInt(patchRadius * 2 + 1) - patchRadius;
+                    surface = findPoiSurface(level, origin, x, z);
+                }
+                if (surface != null && level.getBlockState(surface.above()).isAir()) {
+                    level.setBlock(surface.above(), ModBlocks.MYTHIC_COIN_PILE.get().defaultBlockState(), 3);
+                }
+            }
+        }
+    }
+
+    private static void spawnKnowledgeBook(ServerLevel level, BlockPos origin) {
+        // This is deliberately independent of quantity bonuses so it remains a rare find.
+        if (level.random.nextFloat() >= 0.20F) return;
+        for (int attempt = 0; attempt < 64; attempt++) {
+            int x = origin.getX() + level.random.nextInt((int) (MOB_SPAWN_RADIUS * 2.0D + 1.0D)) - (int) MOB_SPAWN_RADIUS;
+            int z = origin.getZ() + level.random.nextInt((int) (MOB_SPAWN_RADIUS * 2.0D + 1.0D)) - (int) MOB_SPAWN_RADIUS;
+            BlockPos surface = findPoiSurface(level, origin, x, z);
+            if (surface != null && level.getBlockState(surface.above()).isAir()) {
+                level.setBlock(surface.above(), ModBlocks.KNOWLEDGE_BOOK.get().defaultBlockState(), 3);
+                return;
+            }
+        }
     }
 
     private static void spawnPoiLootboxes(ServerLevel level, BlockPos origin, int floor, double quantityBonus, int requestedBoxes) {
