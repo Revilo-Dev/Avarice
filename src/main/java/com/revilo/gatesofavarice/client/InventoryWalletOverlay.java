@@ -50,9 +50,10 @@ public final class InventoryWalletOverlay {
         boolean inDungeon = minecraft.player.level().dimension() == ModDimensions.DUNGEON_LEVEL;
         WalletLayout layout = WalletLayout.create(minecraft, screen, inDungeon);
         boolean hovered = layout.isMouseOver(event.getMouseX(), event.getMouseY());
+        boolean knowledgeButtonHovered = isKnowledgeButtonHovered(layout, event.getMouseX(), event.getMouseY());
 
         renderWallet(event.getGuiGraphics(), minecraft, layout, hovered, inDungeon);
-        renderKnowledgeButton(event.getGuiGraphics(), layout);
+        renderKnowledgeButton(event.getGuiGraphics(), layout, knowledgeButtonHovered);
 
         if (hovered) {
             ItemStack coinStack = coinStack(inDungeon);
@@ -78,6 +79,9 @@ public final class InventoryWalletOverlay {
                     event.getMouseY());
             event.getGuiGraphics().pose().popPose();
         }
+        if (knowledgeButtonHovered) {
+            event.getGuiGraphics().renderTooltip(minecraft.font, Component.literal("Knowledge Library"), event.getMouseX(), event.getMouseY());
+        }
     }
 
     @SubscribeEvent
@@ -87,21 +91,31 @@ public final class InventoryWalletOverlay {
         if (minecraft.player == null || event.getButton() != 0) return;
         AbstractContainerScreen<?> screen = (AbstractContainerScreen<?>) event.getScreen();
         WalletLayout layout = WalletLayout.create(minecraft, screen, minecraft.player.level().dimension() == ModDimensions.DUNGEON_LEVEL);
-        int x = layout.hoverLeft() - ICON_SIZE - 4;
-        int y = layout.iconY();
-        if (event.getMouseX() >= x && event.getMouseX() <= x + ICON_SIZE && event.getMouseY() >= y && event.getMouseY() <= y + ICON_SIZE) {
+        if (isKnowledgeButtonHovered(layout, event.getMouseX(), event.getMouseY())) {
             PacketDistributor.sendToServer(OpenKnowledgeLibraryPayload.INSTANCE);
             event.setCanceled(true);
         }
     }
 
-    private static void renderKnowledgeButton(GuiGraphics graphics, WalletLayout layout) {
-        int x = layout.hoverLeft() - ICON_SIZE - 4;
+    private static void renderKnowledgeButton(GuiGraphics graphics, WalletLayout layout, boolean hovered) {
+        int x = knowledgeButtonX(layout);
         int y = layout.iconY();
+        graphics.fill(x - 1, y - 1, x + ICON_SIZE + 1, y + ICON_SIZE + 1, hovered ? 0xFFEBD8A8 : 0xFF786A52);
+        graphics.fill(x, y, x + ICON_SIZE, y + ICON_SIZE, hovered ? 0xFFBBA66F : 0xFFDBC88C);
         graphics.blit(KnowledgeLibraryClientState.hasUnread() ? KNOWLEDGE_BUTTON_TOAST : KNOWLEDGE_BUTTON, x, y, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
         if (KnowledgeLibraryClientState.hasUnread()) {
             graphics.blit(KNOWLEDGE_TOAST, x + 11, y - 2, 0, 0, 4, 11, 4, 11);
         }
+    }
+
+    private static boolean isKnowledgeButtonHovered(WalletLayout layout, double mouseX, double mouseY) {
+        int x = knowledgeButtonX(layout);
+        int y = layout.iconY();
+        return mouseX >= x - 1 && mouseX <= x + ICON_SIZE + 1 && mouseY >= y - 1 && mouseY <= y + ICON_SIZE + 1;
+    }
+
+    private static int knowledgeButtonX(WalletLayout layout) {
+        return layout.iconX() - ICON_SIZE - 4;
     }
 
     private static void renderWallet(GuiGraphics guiGraphics, Minecraft minecraft, WalletLayout layout, boolean hovered, boolean inDungeon) {

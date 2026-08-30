@@ -58,6 +58,12 @@ public final class KnowledgeManager {
         return entries().stream().filter(entry -> entry.id.equals(id)).findFirst();
     }
 
+    public static Optional<KnowledgeEntry> findEntry(String name) {
+        return entries().stream()
+                .filter(entry -> entry.id.equalsIgnoreCase(name) || entry.title.equalsIgnoreCase(name))
+                .findFirst();
+    }
+
     public static ItemStack createGodlyBook(ServerPlayer player, RandomSource random) {
         List<KnowledgeEntry> missing = entries().stream().filter(entry -> !hasKnowledge(player, entry.id)).toList();
         List<KnowledgeEntry> choices = missing.isEmpty() ? entries() : missing;
@@ -104,6 +110,25 @@ public final class KnowledgeManager {
 
     public static boolean hasKnowledge(Player player, String entryId) {
         return values(player, UNLOCKED_KEY).contains(entryId);
+    }
+
+    public static boolean unlock(ServerPlayer player, KnowledgeEntry entry) {
+        if (hasKnowledge(player, entry.id)) return false;
+        Set<String> unlocked = values(player, UNLOCKED_KEY);
+        Set<String> unread = values(player, UNREAD_KEY);
+        unlocked.add(entry.id);
+        unread.add(entry.id);
+        setValues(player, UNLOCKED_KEY, unlocked);
+        setValues(player, UNREAD_KEY, unread);
+        awardNamespaceRecipes(player, entry.unlockedNamespace);
+        sync(player, false);
+        return true;
+    }
+
+    public static void reset(ServerPlayer player) {
+        setValues(player, UNLOCKED_KEY, Set.of());
+        setValues(player, UNREAD_KEY, Set.of());
+        sync(player, false);
     }
 
     public static boolean canUse(Player player, ResourceLocation contentId) {

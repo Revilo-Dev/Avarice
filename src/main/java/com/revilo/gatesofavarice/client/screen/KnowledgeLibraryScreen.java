@@ -4,13 +4,14 @@ import com.revilo.gatesofavarice.GatewayExpansion;
 import com.revilo.gatesofavarice.client.KnowledgeLibraryClientState;
 import com.revilo.gatesofavarice.knowledge.KnowledgeManager;
 import java.util.List;
+import java.util.Optional;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 
-/** A compact paged catalogue of the discoveries a player still needs to find. */
+// a paged catalogue of knowledge books obtained and undiscovered
 public final class KnowledgeLibraryScreen extends Screen {
     private static final ResourceLocation PANEL = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/knowledge-library/book-panel.png");
     private static final ResourceLocation UNKNOWN = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/icon/unknown-knowledge.png");
@@ -47,7 +48,7 @@ public final class KnowledgeLibraryScreen extends Screen {
                 graphics.renderTooltip(this.font, List.of(
                         Component.literal(entry.title()).withStyle(unlocked ? entry.rarity().color() : ChatFormatting.GRAY),
                         Component.literal(unlocked ? entry.description() : "Knowledge not yet discovered.").withStyle(ChatFormatting.DARK_GRAY)
-                ), mouseX, mouseY);
+                ), Optional.empty(), mouseX, mouseY);
             }
         }
         int pages = Math.max(1, (entries.size() + ENTRIES_PER_PAGE - 1) / ENTRIES_PER_PAGE);

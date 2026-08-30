@@ -2,6 +2,7 @@ package com.revilo.gatesofavarice;
 
 import com.revilo.gatesofavarice.command.CoinCommands;
 import com.revilo.gatesofavarice.command.DungeonCommands;
+import com.revilo.gatesofavarice.command.KnowledgeCommands;
 import com.revilo.gatesofavarice.command.PartyCommands;
 import com.revilo.gatesofavarice.client.GatewayExpansionClient;
 import com.revilo.gatesofavarice.config.GatewayExpansionConfig;
@@ -63,6 +64,7 @@ public final class GatewayExpansion {
         }
         NeoForge.EVENT_BUS.register(CoinCommands.class);
         NeoForge.EVENT_BUS.register(DungeonCommands.class);
+        NeoForge.EVENT_BUS.register(KnowledgeCommands.class);
         NeoForge.EVENT_BUS.register(PartyCommands.class);
         NeoForge.EVENT_BUS.register(DungeonBoundTooltipHandler.class);
         NeoForge.EVENT_BUS.register(MagnetHandler.class);

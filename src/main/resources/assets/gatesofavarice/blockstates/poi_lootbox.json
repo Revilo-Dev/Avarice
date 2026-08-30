@@ -1,5 +1,5 @@
 {
   "variants": {
-    "": { "model": "gatesofavarice:block/lootbox" }
+    "": { "model": "gatesofavarice:block/poi_lootbox" }
   }
 }
