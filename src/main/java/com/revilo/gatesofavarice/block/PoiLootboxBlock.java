@@ -2,6 +2,7 @@ package com.revilo.gatesofavarice.block;
 
 import com.mojang.serialization.MapCodec;
 import com.revilo.gatesofavarice.block.entity.PoiLootboxBlockEntity;
+import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -49,6 +50,7 @@ public class PoiLootboxBlock extends BaseEntityBlock {
         BlockEntity blockEntity = level.getBlockEntity(pos);
         if (!(blockEntity instanceof PoiLootboxBlockEntity lootbox)) return InteractionResult.PASS;
         lootbox.open((ServerLevel) level, pos, serverPlayer);
+        DungeonRunManager.recordLootboxLooted(serverPlayer);
         level.levelEvent(2001, pos, Block.getId(Blocks.SPRUCE_PLANKS.defaultBlockState()));
         level.removeBlock(pos, false);
         return InteractionResult.CONSUME;

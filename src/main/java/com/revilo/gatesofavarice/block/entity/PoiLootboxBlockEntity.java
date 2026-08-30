@@ -3,7 +3,9 @@ package com.revilo.gatesofavarice.block.entity;
 import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
 import com.revilo.gatesofavarice.config.GatewayExpansionConfig;
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
+import com.revilo.gatesofavarice.item.data.GatewayCardData;
 import com.revilo.gatesofavarice.registry.ModBlockEntities;
+import com.revilo.gatesofavarice.registry.ModItems;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -59,6 +61,12 @@ public class PoiLootboxBlockEntity extends BlockEntity {
         for (int i = 0; i < rolls; i++) {
             List<ItemStack> rewards = table.getRandomItems(params, level.random.nextLong());
             for (ItemStack reward : rewards) {
+                if (reward.is(ModItems.GATEWAY_CARD.get())) {
+                    GatewayCardData.BoosterRarity cardRarity = effectiveRarity == PoiLootboxRarity.LEGENDARY
+                            ? GatewayCardData.BoosterRarity.LEGENDARY
+                            : GatewayCardData.BoosterRarity.EPIC;
+                    reward = GatewayCardData.createFromBooster(ModItems.GATEWAY_CARD.get(), cardRarity, Math.max(1, playerLevel), level.random);
+                }
                 if (BuiltInRegistries.ITEM.getKey(reward.getItem()).getNamespace().equals("runic")
                         && level.random.nextDouble() > GatewayExpansionConfig.RUNE_LOOT_CRATE_DROP_CHANCE.get()) {
                     continue;

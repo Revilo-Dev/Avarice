@@ -75,6 +75,12 @@
         "custom_model_data": 12
       },
       "model": "gatesofavarice:item/gateway_card_challenge_multiplier"
+    },
+    {
+      "predicate": {
+        "custom_model_data": 13
+      },
+      "model": "gatesofavarice:item/gateway_card_ability"
     }
   ]
 }

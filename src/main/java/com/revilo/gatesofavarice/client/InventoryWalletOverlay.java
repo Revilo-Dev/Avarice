@@ -3,6 +3,7 @@ package com.revilo.gatesofavarice.client;
 import com.revilo.gatesofavarice.currency.GoldCoinWallet;
 import com.revilo.gatesofavarice.currency.MythicCoinWallet;
 import com.revilo.gatesofavarice.dungeon.ModDimensions;
+import com.revilo.gatesofavarice.network.OpenKnowledgeLibraryPayload;
 import com.revilo.gatesofavarice.registry.ModItems;
 import java.text.DecimalFormat;
 import java.util.List;
@@ -11,10 +12,12 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 public final class InventoryWalletOverlay {
 
@@ -25,6 +28,9 @@ public final class InventoryWalletOverlay {
     private static final float BASE_TEXT_SCALE = 0.75F;
     private static final float WALLET_Z = 150.0F;
     private static final float TOOLTIP_Z = 500.0F;
+    private static final ResourceLocation KNOWLEDGE_BUTTON = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/icon/knowledge-button.png");
+    private static final ResourceLocation KNOWLEDGE_BUTTON_TOAST = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/icon/knowledge-button-toast.png");
+    private static final ResourceLocation KNOWLEDGE_TOAST = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/icon/knowledge-toast.png");
 
     private InventoryWalletOverlay() {
     }
@@ -46,6 +52,7 @@ public final class InventoryWalletOverlay {
         boolean hovered = layout.isMouseOver(event.getMouseX(), event.getMouseY());
 
         renderWallet(event.getGuiGraphics(), minecraft, layout, hovered, inDungeon);
+        renderKnowledgeButton(event.getGuiGraphics(), layout);
 
         if (hovered) {
             ItemStack coinStack = coinStack(inDungeon);
@@ -70,6 +77,30 @@ public final class InventoryWalletOverlay {
                     event.getMouseX(),
                     event.getMouseY());
             event.getGuiGraphics().pose().popPose();
+        }
+    }
+
+    @SubscribeEvent
+    public static void onScreenMouseClick(ScreenEvent.MouseButtonPressed.Pre event) {
+        if (!(event.getScreen() instanceof InventoryScreen)) return;
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player == null || event.getButton() != 0) return;
+        AbstractContainerScreen<?> screen = (AbstractContainerScreen<?>) event.getScreen();
+        WalletLayout layout = WalletLayout.create(minecraft, screen, minecraft.player.level().dimension() == ModDimensions.DUNGEON_LEVEL);
+        int x = layout.hoverLeft() - ICON_SIZE - 4;
+        int y = layout.iconY();
+        if (event.getMouseX() >= x && event.getMouseX() <= x + ICON_SIZE && event.getMouseY() >= y && event.getMouseY() <= y + ICON_SIZE) {
+            PacketDistributor.sendToServer(OpenKnowledgeLibraryPayload.INSTANCE);
+            event.setCanceled(true);
+        }
+    }
+
+    private static void renderKnowledgeButton(GuiGraphics graphics, WalletLayout layout) {
+        int x = layout.hoverLeft() - ICON_SIZE - 4;
+        int y = layout.iconY();
+        graphics.blit(KnowledgeLibraryClientState.hasUnread() ? KNOWLEDGE_BUTTON_TOAST : KNOWLEDGE_BUTTON, x, y, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
+        if (KnowledgeLibraryClientState.hasUnread()) {
+            graphics.blit(KNOWLEDGE_TOAST, x + 11, y - 2, 0, 0, 4, 11, 4, 11);
         }
     }
 

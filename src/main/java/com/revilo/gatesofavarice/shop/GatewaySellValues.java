@@ -99,6 +99,7 @@ public final class GatewaySellValues {
         if (item == ModItems.DARK_ESSENCE.get()) return 150;
         if (item == ModItems.PRISMATIC_CORE.get()) return 10000;
         if (item == ModItems.STABILITY_PEARL.get()) return 500;
+        if (item == ModItems.USELESS_KNOWLEDGE_BOOK.get()) return 500;
         int runicValue = getRunicUnitValue(item);
         if (runicValue > 0) {
             return runicValue;

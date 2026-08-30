@@ -100,6 +100,9 @@ public final class GatewayCardData {
     }
 
     private static CardType rollTypeForBooster(BoosterRarity rarity, RandomSource random) {
+        if (rarity.allowsLoadout() && random.nextFloat() < rarity.loadoutChance()) {
+            return CardType.LOADOUT;
+        }
         if (rarity == BoosterRarity.LEGENDARY) {
             return CardType.MULTIPLIERS[random.nextInt(CardType.MULTIPLIERS.length)];
         }
@@ -110,6 +113,9 @@ public final class GatewayCardData {
     }
 
     private static double rollBoosterValue(CardType type, BoosterRarity rarity, RandomSource random) {
+        if (type == CardType.LOADOUT) {
+            return 1.0D;
+        }
         if (type.multiplier()) {
             double roll = random.nextDouble();
             double biased = roll * roll * roll;
@@ -138,7 +144,8 @@ public final class GatewayCardData {
         EFFECT_MULTIPLIER("Effect Multiplier", ChatFormatting.GOLD, 9, 1.10D, 3.00D, true),
         ABILITY_MULTIPLIER("Ability Multiplier", ChatFormatting.GOLD, 10, 1.10D, 3.00D, true),
         RARITY_MULTIPLIER("Rarity Multiplier", ChatFormatting.GOLD, 11, 1.10D, 3.00D, true),
-        CHALLENGE_MULTIPLIER("Challenge Multiplier", ChatFormatting.GOLD, 12, 1.10D, 3.00D, true);
+        CHALLENGE_MULTIPLIER("Challenge Multiplier", ChatFormatting.GOLD, 12, 1.10D, 3.00D, true),
+        LOADOUT("Loadout Card", ChatFormatting.LIGHT_PURPLE, 13, 1.00D, 1.00D);
 
         private static final CardType[] BASE = { STAT, DAMAGE, EFFECT, ABILITY, RARITY, CHALLENGE };
         private static final CardType[] MULTIPLIERS = { STAT_MULTIPLIER, DAMAGE_MULTIPLIER, EFFECT_MULTIPLIER, ABILITY_MULTIPLIER, RARITY_MULTIPLIER, CHALLENGE_MULTIPLIER };
@@ -192,18 +199,24 @@ public final class GatewayCardData {
         COMMON(0.01D, 0.03D, 0.0F, 1.2D),
         UNCOMMON(0.03D, 0.05D, 0.0F, 1.2D),
         RARE(0.05D, 0.08D, 0.12F, 1.8D),
-        EPIC(0.08D, 0.12D, 0.35F, 2.3D),
-        LEGENDARY(0.12D, 0.18D, 1.0F, 3.0D);
+        EPIC(0.08D, 0.12D, 0.35F, 0.15F, 2.3D),
+        LEGENDARY(0.12D, 0.18D, 1.0F, 0.35F, 3.0D);
 
         private final double minPercent;
         private final double maxPercent;
         private final float multiplierChance;
+        private final float loadoutChance;
         private final double maxMultiplier;
 
         BoosterRarity(double minPercent, double maxPercent, float multiplierChance, double maxMultiplier) {
+            this(minPercent, maxPercent, multiplierChance, 0.0F, maxMultiplier);
+        }
+
+        BoosterRarity(double minPercent, double maxPercent, float multiplierChance, float loadoutChance, double maxMultiplier) {
             this.minPercent = minPercent;
             this.maxPercent = maxPercent;
             this.multiplierChance = multiplierChance;
+            this.loadoutChance = loadoutChance;
             this.maxMultiplier = maxMultiplier;
         }
 
@@ -221,6 +234,14 @@ public final class GatewayCardData {
 
         public float multiplierChance() {
             return this.multiplierChance;
+        }
+
+        public boolean allowsLoadout() {
+            return this.loadoutChance > 0.0F;
+        }
+
+        public float loadoutChance() {
+            return this.loadoutChance;
         }
 
         public double maxMultiplier() {
@@ -244,6 +265,7 @@ public final class GatewayCardData {
                 case ABILITY_MULTIPLIER -> formatMultiplier(this.value) + " ability";
                 case RARITY_MULTIPLIER -> formatMultiplier(this.value) + " rarity";
                 case CHALLENGE_MULTIPLIER -> formatMultiplier(this.value) + " challenge";
+                case LOADOUT -> "Automatically grants the crystal owner a random dungeon loadout";
             };
         }
 

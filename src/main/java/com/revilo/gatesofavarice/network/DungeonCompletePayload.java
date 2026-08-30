@@ -25,6 +25,9 @@ public record DungeonCompletePayload(
         int quantityLevel,
         int mobHealth,
         int mobDamage,
+        int lootboxesLooted,
+        int coinPilesLooted,
+        int knowledgeBooksObtained,
         List<ItemStack> rewards
 ) implements CustomPacketPayload {
 
@@ -50,6 +53,9 @@ public record DungeonCompletePayload(
         buffer.writeVarInt(payload.quantityLevel);
         buffer.writeVarInt(payload.mobHealth);
         buffer.writeVarInt(payload.mobDamage);
+        buffer.writeVarInt(payload.lootboxesLooted);
+        buffer.writeVarInt(payload.coinPilesLooted);
+        buffer.writeVarInt(payload.knowledgeBooksObtained);
         buffer.writeVarInt(payload.rewards.size());
         for (ItemStack reward : payload.rewards) {
             writeStack(buffer, reward);
@@ -72,13 +78,17 @@ public record DungeonCompletePayload(
         int quantityLevel = buffer.readVarInt();
         int mobHealth = buffer.readVarInt();
         int mobDamage = buffer.readVarInt();
+        int lootboxesLooted = buffer.readVarInt();
+        int coinPilesLooted = buffer.readVarInt();
+        int knowledgeBooksObtained = buffer.readVarInt();
         int rewardCount = buffer.readVarInt();
         ArrayList<ItemStack> rewards = new ArrayList<>(rewardCount);
         for (int i = 0; i < rewardCount; i++) {
             rewards.add(readStack(buffer));
         }
         return new DungeonCompletePayload(survived, wavesComplete, bestWave, timeSpentTicks, levelPointsEarned, coinsEarned, goldCoinsEarned, mobsKilled, damageDealt,
-                damageReceived, experienceEarned, rarityLevel, quantityLevel, mobHealth, mobDamage, List.copyOf(rewards));
+                damageReceived, experienceEarned, rarityLevel, quantityLevel, mobHealth, mobDamage, lootboxesLooted, coinPilesLooted,
+                knowledgeBooksObtained, List.copyOf(rewards));
     }
 
     private static void writeStack(RegistryFriendlyByteBuf buffer, ItemStack stack) {

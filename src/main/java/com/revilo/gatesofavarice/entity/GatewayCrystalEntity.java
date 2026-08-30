@@ -25,6 +25,7 @@ public class GatewayCrystalEntity extends Entity {
     private static final String RETURN_PORTAL_KEY = "ReturnPortal";
     private static final String ADVANCE_PORTAL_KEY = "AdvancePortal";
     private static final String SHOP_PORTAL_KEY = "ShopPortal";
+    private static final String GUARANTEED_OWNER_LOADOUT_KEY = "GuaranteedOwnerLoadout";
     private static final double DEFAULT_INTERACTION_HORIZONTAL_INFLATE = 0.8D;
     private static final double DEFAULT_INTERACTION_VERTICAL_INFLATE = 0.2D;
     private static final double DUNGEON_WARP_PORTAL_VISUAL_SCALE = 5.0D;
@@ -35,6 +36,7 @@ public class GatewayCrystalEntity extends Entity {
 
     private UUID ownerId;
     private int lifeTicks;
+    private boolean guaranteedOwnerLoadout;
 
     public GatewayCrystalEntity(EntityType<? extends GatewayCrystalEntity> entityType, Level level) {
         super(entityType, level);
@@ -88,16 +90,12 @@ public class GatewayCrystalEntity extends Entity {
         } else if (this.isReturnPortal()) {
             DungeonRunManager.exitViaBailPortal(player, runOwnerId, this);
         } else {
-            if (!canUseTier(player, this.getCrystalTier())) {
-                denyTierAccess(player, this.getCrystalTier());
-                return;
-            }
             if (this.ownerId != null && !PartyManager.canEnterDungeon(player, this.ownerId)) {
                 player.displayClientMessage(Component.literal("unable to join this players gate, join their party first"), true);
                 player.setPortalCooldown();
                 return;
             }
-            if (DungeonRunManager.enterFromGateway(player, runOwnerId)) {
+            if (DungeonRunManager.enterFromGateway(player, runOwnerId, this.guaranteedOwnerLoadout)) {
                 player.setPortalCooldown();
                 if (!PartyManager.isInParty(player)) {
                     this.discard();
@@ -115,6 +113,7 @@ public class GatewayCrystalEntity extends Entity {
         this.setReturnPortal(tag.getBoolean(RETURN_PORTAL_KEY));
         this.setAdvancePortal(tag.getBoolean(ADVANCE_PORTAL_KEY));
         this.setShopPortal(tag.getBoolean(SHOP_PORTAL_KEY));
+        this.guaranteedOwnerLoadout = tag.getBoolean(GUARANTEED_OWNER_LOADOUT_KEY);
         if (tag.contains("CrystalTier")) {
             this.setCrystalTier(tag.getInt("CrystalTier"));
         }
@@ -129,6 +128,7 @@ public class GatewayCrystalEntity extends Entity {
         tag.putBoolean(RETURN_PORTAL_KEY, this.isReturnPortal());
         tag.putBoolean(ADVANCE_PORTAL_KEY, this.isAdvancePortal());
         tag.putBoolean(SHOP_PORTAL_KEY, this.isShopPortal());
+        tag.putBoolean(GUARANTEED_OWNER_LOADOUT_KEY, this.guaranteedOwnerLoadout);
         tag.putInt("CrystalTier", this.getCrystalTier());
     }
 
@@ -190,6 +190,10 @@ public class GatewayCrystalEntity extends Entity {
 
     public void setShopPortal(boolean shopPortal) {
         this.getEntityData().set(SHOP_PORTAL, shopPortal);
+    }
+
+    public void setGuaranteedOwnerLoadout(boolean guaranteedOwnerLoadout) {
+        this.guaranteedOwnerLoadout = guaranteedOwnerLoadout;
     }
 
     private net.minecraft.world.phys.AABB interactionBounds() {

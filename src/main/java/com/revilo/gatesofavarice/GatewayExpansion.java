@@ -10,6 +10,7 @@ import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
 import com.revilo.gatesofavarice.dungeon.DungeonUpgradeManager;
 import com.revilo.gatesofavarice.integration.GatewayDrownedHandler;
 import com.revilo.gatesofavarice.integration.StabilityPearlHandler;
+import com.revilo.gatesofavarice.knowledge.KnowledgeManager;
 import com.revilo.gatesofavarice.integration.CuriosCompat;
 import com.revilo.gatesofavarice.integration.DungeonBoundTooltipHandler;
 import com.revilo.gatesofavarice.integration.ArsenalWeaponTraitHandler;
@@ -72,5 +73,6 @@ public final class GatewayExpansion {
         NeoForge.EVENT_BUS.register(ShopkeeperManager.class);
         NeoForge.EVENT_BUS.register(GatewayDrownedHandler.class);
         NeoForge.EVENT_BUS.register(StabilityPearlHandler.class);
+        NeoForge.EVENT_BUS.register(KnowledgeManager.class);
     }
 }

@@ -2,6 +2,7 @@ package com.revilo.gatesofavarice.network;
 
 import com.revilo.gatesofavarice.registry.ModAttachments;
 import com.revilo.gatesofavarice.dungeon.DungeonUpgradeManager;
+import com.revilo.gatesofavarice.knowledge.KnowledgeManager;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCategory;
 import com.revilo.gatesofavarice.dungeon.DungeonHudState;
 import net.minecraft.ChatFormatting;
@@ -37,6 +38,18 @@ public final class GatewayExpansionNetwork {
                             .withStyle(enabled ? ChatFormatting.GREEN : ChatFormatting.RED),
                     true);
         });
+        registrar.playToServer(OpenKnowledgeLibraryPayload.TYPE, OpenKnowledgeLibraryPayload.STREAM_CODEC, (payload, context) -> {
+            if (context.player() instanceof ServerPlayer player) KnowledgeManager.openLibrary(player);
+        });
+        registrar.playToClient(KnowledgeLibraryPayload.TYPE, KnowledgeLibraryPayload.STREAM_CODEC, (payload, context) ->
+                context.enqueueWork(() -> {
+                    if (!FMLEnvironment.dist.isClient()) return;
+                    try {
+                        Class.forName("com.revilo.gatesofavarice.client.KnowledgeLibraryClientState")
+                                .getMethod("apply", KnowledgeLibraryPayload.class).invoke(null, payload);
+                    } catch (ReflectiveOperationException ignored) {
+                    }
+                }));
         registrar.playToClient(DungeonWaveHudPayload.TYPE, DungeonWaveHudPayload.STREAM_CODEC, (payload, context) ->
                 context.enqueueWork(() -> DungeonHudState.apply(payload)));
         registrar.playToClient(DungeonCompletePayload.TYPE, DungeonCompletePayload.STREAM_CODEC, (payload, context) ->

@@ -95,6 +95,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
+import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
 import net.neoforged.neoforge.event.entity.living.LivingHealEvent;
@@ -109,6 +110,7 @@ import net.neoforged.fml.loading.FMLPaths;
 
 public final class DungeonRunManager {
     public static final String DUNGEON_WAVE_SPAWN_KEY = "gatesofavarice.dungeon_wave_spawn";
+    private static final String DUNGEON_WAVE_INSTANCE_KEY = "gatesofavarice.dungeon_wave_instance";
     private static final Map<UUID, RunState> RUNS_BY_OWNER = new HashMap<>();
     private static final Map<UUID, UUID> PLAYER_TO_OWNER = new HashMap<>();
     private static final Map<UUID, PendingSnapshotRestore> PENDING_SNAPSHOT_RESTORES = new HashMap<>();
@@ -239,6 +241,10 @@ public final class DungeonRunManager {
     }
 
     public static boolean enterFromGateway(ServerPlayer player, UUID ownerId) {
+        return enterFromGateway(player, ownerId, false);
+    }
+
+    public static boolean enterFromGateway(ServerPlayer player, UUID ownerId, boolean guaranteedOwnerLoadout) {
         ensureLoaded(player.server);
         if (ownerId != null && !PartyManager.canEnterDungeon(player, ownerId)) {
             player.displayClientMessage(Component.literal("unable to join this players gate, join their party first"), true);
@@ -251,7 +257,20 @@ public final class DungeonRunManager {
         }
         // Party members share the leader's run, while a solo player retains an isolated run.
         ownerId = PartyManager.dungeonOwner(player, ownerId);
-        RunState run = RUNS_BY_OWNER.computeIfAbsent(ownerId, RunState::new);
+        RunState run = RUNS_BY_OWNER.get(ownerId);
+        boolean createdRun = false;
+        if (run == null) {
+            run = new RunState(ownerId);
+            run.guaranteedOwnerLoadout = guaranteedOwnerLoadout;
+            RUNS_BY_OWNER.put(ownerId, run);
+            createdRun = true;
+        }
+        if (createdRun) {
+            ServerLevel dungeon = player.server.getLevel(ModDimensions.DUNGEON_LEVEL);
+            if (dungeon != null) {
+                discardOrphanedDungeonMobs(dungeon);
+            }
+        }
         PlayerSnapshot savedDungeonLoadout = run.dungeonLoadouts.get(player.getUUID());
         run.server = player.server;
         if (run.runStartGameTime < 0L) {
@@ -269,7 +288,7 @@ public final class DungeonRunManager {
         }
         ensureBailStone(player);
         setBoundlessQuestBookHidden(true);
-        DungeonInstanceManager.teleportToDungeonInstance(player, ownerId);
+        DungeonInstanceManager.teleportToDungeonInstance(player, run.instanceId);
         restoreDungeonEntryVitals(player);
         if (player.getUUID().equals(ownerId) && run.phase == RunPhase.SELECTING_TAROT) {
             rollTarotOptions(run, player.serverLevel().random);
@@ -380,9 +399,9 @@ public final class DungeonRunManager {
         run.advancePortalId = -1;
         ServerLevel dungeon = getDungeonLevel(run);
         if (dungeon != null) {
-            DungeonInstanceManager.reloadDungeonFloor(dungeon, run.ownerId, run.waveNumber + 1, run.quantityBonusModifier);
+            DungeonInstanceManager.reloadDungeonFloor(dungeon, run.instanceId, run.waveNumber + 1, run.quantityBonusModifier);
             for (ServerPlayer participant : run.liveParticipants()) {
-                DungeonInstanceManager.teleportToDungeonInstance(participant, run.ownerId);
+                DungeonInstanceManager.teleportToDungeonInstance(participant, run.instanceId);
             }
         }
         run.phase = RunPhase.SELECTING_TAROT;
@@ -449,7 +468,16 @@ public final class DungeonRunManager {
             if (run.waveNumber == 0 && !run.dungeonLoadouts.containsKey(serverPlayer.getUUID())) {
                 rollLoadoutOptions(run, serverPlayer.serverLevel().random);
                 run.phase = RunPhase.SELECTING_LOOT;
-                for (ServerPlayer participant : run.liveParticipants()) openWaveMenu(participant, run);
+                grantGuaranteedOwnerLoadout(run, serverPlayer.serverLevel().random);
+                if (run.loadoutSelections.containsAll(run.participants)) {
+                    startWave(run);
+                } else {
+                    for (ServerPlayer participant : run.liveParticipants()) {
+                        if (!run.loadoutSelections.contains(participant.getUUID())) {
+                            openWaveMenu(participant, run);
+                        }
+                    }
+                }
                 return true;
             }
             startWave(run);
@@ -662,7 +690,34 @@ public final class DungeonRunManager {
                 survived ? 38 : 12,
                 survived ? 64 : 28,
                 survived ? 42 : 18,
+                survived ? 32 : 8,
+                survived ? 18 : 4,
+                survived ? 3 : 0,
                 List.copyOf(rewards)));
+    }
+
+    public static void recordLootboxLooted(ServerPlayer player) {
+        recordDungeonDiscovery(player, DungeonDiscovery.LOOTBOX);
+    }
+
+    public static void recordCoinPileLooted(ServerPlayer player) {
+        recordDungeonDiscovery(player, DungeonDiscovery.COIN_PILE);
+    }
+
+    public static void recordKnowledgeBookObtained(ServerPlayer player) {
+        recordDungeonDiscovery(player, DungeonDiscovery.KNOWLEDGE_BOOK);
+    }
+
+    private static void recordDungeonDiscovery(ServerPlayer player, DungeonDiscovery discovery) {
+        if (player.level().dimension() != ModDimensions.DUNGEON_LEVEL) return;
+        RunState run = getRunForPlayer(player);
+        if (run == null) return;
+        switch (discovery) {
+            case LOOTBOX -> run.lootboxesLooted++;
+            case COIN_PILE -> run.coinPilesLooted++;
+            case KNOWLEDGE_BOOK -> run.knowledgeBooksObtained++;
+        }
+        markStateDirty();
     }
 
     public static boolean debugSetWave(ServerPlayer player, int wave) {
@@ -954,8 +1009,8 @@ public final class DungeonRunManager {
     public static boolean debugTeleportDungeon(ServerPlayer player) {
         ensureLoaded(player.server);
         RunState run = getRunForPlayer(player);
-        UUID ownerId = run == null ? player.getUUID() : run.ownerId;
-        return DungeonInstanceManager.teleportToDungeonInstance(player, ownerId);
+        UUID instanceId = run == null ? player.getUUID() : run.instanceId;
+        return DungeonInstanceManager.teleportToDungeonInstance(player, instanceId);
     }
 
     public static int debugCleanupDungeonItems(ServerPlayer player) {
@@ -967,7 +1022,7 @@ public final class DungeonRunManager {
         }
         BlockPos center = run == null && player.level().dimension() == ModDimensions.DUNGEON_LEVEL
                 ? player.blockPosition()
-                : DungeonInstanceManager.instanceCenter(run == null ? player.getUUID() : run.ownerId);
+                : DungeonInstanceManager.instanceCenter(run == null ? player.getUUID() : run.instanceId);
         return clearDungeonItems(dungeon, center);
     }
 
@@ -1150,8 +1205,9 @@ public final class DungeonRunManager {
         for (RunState run : RUNS_BY_OWNER.values()) {
             ServerLevel dungeon = dungeonLevel;
             if (dungeon == null) continue;
-            DungeonInstanceManager.keepInstanceAlive(run.ownerId, dungeon);
+            DungeonInstanceManager.keepInstanceAlive(run.instanceId, dungeon);
             for (ServerPlayer participant : run.liveParticipants()) {
+                hideAuraSkillAndAbilityBooks(participant);
                 ensureBailStone(participant);
             }
 
@@ -1241,6 +1297,25 @@ public final class DungeonRunManager {
             }
             PacketDistributor.sendToPlayer(player, entry.getValue());
             iterator.remove();
+        }
+    }
+
+    @SubscribeEvent
+    public static void onLivingIncomingDamage(LivingIncomingDamageEvent event) {
+        if (event.getEntity().level().isClientSide
+                || !(event.getEntity() instanceof ServerPlayer target)
+                || !(event.getSource().getEntity() instanceof ServerPlayer attacker)
+                || attacker.level().dimension() != ModDimensions.DUNGEON_LEVEL
+                || target.level().dimension() != ModDimensions.DUNGEON_LEVEL) {
+            return;
+        }
+
+        RunState attackerRun = getRunForPlayer(attacker);
+        RunState targetRun = getRunForPlayer(target);
+        if (attackerRun != null
+                && attackerRun == targetRun
+                && PartyManager.areInSameParty(attacker.getUUID(), target.getUUID())) {
+            event.setCanceled(true);
         }
     }
 
@@ -1404,8 +1479,12 @@ public final class DungeonRunManager {
             return;
         }
         setBoundlessQuestBookHidden(true);
-        if (player.level().dimension() != ModDimensions.DUNGEON_LEVEL) {
-            DungeonInstanceManager.teleportToDungeonInstance(player, ownerId);
+        // A reconnect can preserve a dungeon dimension position even if the old
+        // instance blocks are no longer loaded. Always put the player back on
+        // the active instance's known-safe spawn rather than trusting that
+        // persisted position.
+        if (run.phase != RunPhase.SHOP) {
+            DungeonInstanceManager.teleportToDungeonInstance(player, run.instanceId);
         }
         syncHudToPlayer(player, run.phase == RunPhase.IN_WAVE, run.waveNumber, Math.max(0, run.toSpawn + run.aliveMobs.size()), Math.max(1, run.waveTotalMobs));
         if (player.getUUID().equals(run.ownerId) && (run.phase == RunPhase.SELECTING_TAROT || run.phase == RunPhase.SELECTING_LOOT)) {
@@ -1587,7 +1666,7 @@ public final class DungeonRunManager {
             player.setHealth(player.getMaxHealth());
         }
         run.wavesCompletedOnFloor++;
-        DungeonInstanceManager.spawnWaveLootboxes(level, run.ownerId, Math.max(1, run.waveNumber), run.quantityBonusModifier,
+        DungeonInstanceManager.spawnWaveLootboxes(level, run.instanceId, Math.max(1, run.waveNumber), run.quantityBonusModifier,
                 GatewayExpansionConfig.LOOT_CRATES_PER_WAVE.get());
         if (run.wavesCompletedOnFloor < wave) {
             run.phase = RunPhase.INTERMISSION;
@@ -1621,7 +1700,7 @@ public final class DungeonRunManager {
         }
         GatewayCrystalEntity portal = ModEntities.GATEWAY_CRYSTAL.get().create(level);
         if (portal == null) return;
-        net.minecraft.world.phys.Vec3 portalPos = DungeonInstanceManager.exitPortalPosition(run.ownerId);
+        net.minecraft.world.phys.Vec3 portalPos = DungeonInstanceManager.exitPortalPosition(run.instanceId);
         portal.setOwnerId(run.ownerId);
         portal.setReturnPortal(true);
         portal.moveTo(portalPos.x(), portalPos.y(), portalPos.z(), 0.0F, 0.0F);
@@ -1651,8 +1730,8 @@ public final class DungeonRunManager {
         run.aliveMobs.clear();
         run.toSpawn = 0;
         run.spawnCooldown = 0;
-        DungeonInstanceManager.reloadDungeonFloor(dungeon, run.ownerId, run.waveNumber, run.quantityBonusModifier);
-        for (ServerPlayer participant : run.liveParticipants()) DungeonInstanceManager.teleportToDungeonInstance(participant, run.ownerId);
+        DungeonInstanceManager.reloadDungeonFloor(dungeon, run.instanceId, run.waveNumber, run.quantityBonusModifier);
+        for (ServerPlayer participant : run.liveParticipants()) DungeonInstanceManager.teleportToDungeonInstance(participant, run.instanceId);
         rollTarotOptions(run, dungeon.random);
         ServerPlayer owner = run.online(run.ownerId);
         if (owner != null) openWaveMenu(owner, run);
@@ -1672,8 +1751,8 @@ public final class DungeonRunManager {
         RunState run = getRunForPlayer(player);
         ServerLevel dungeon = run == null ? null : getDungeonLevel(run);
         if (run == null || dungeon == null) return false;
-        DungeonInstanceManager.reloadDungeonFloor(dungeon, run.ownerId, Math.max(1, run.waveNumber), run.quantityBonusModifier);
-        for (ServerPlayer participant : run.liveParticipants()) DungeonInstanceManager.teleportToDungeonInstance(participant, run.ownerId);
+        DungeonInstanceManager.reloadDungeonFloor(dungeon, run.instanceId, Math.max(1, run.waveNumber), run.quantityBonusModifier);
+        for (ServerPlayer participant : run.liveParticipants()) DungeonInstanceManager.teleportToDungeonInstance(participant, run.instanceId);
         markStateDirty();
         forceCriticalSave(player.server);
         return true;
@@ -1689,7 +1768,7 @@ public final class DungeonRunManager {
         if (portal == null) return;
         Vec3 pos = run.phase == RunPhase.SHOP
                 ? DungeonInstanceManager.shopAdvancePortalPosition(run.ownerId)
-                : DungeonInstanceManager.advancePortalPosition(run.ownerId);
+                : DungeonInstanceManager.advancePortalPosition(run.instanceId);
         portal.setOwnerId(run.ownerId);
         portal.setAdvancePortal(true);
         portal.moveTo(pos.x(), pos.y(), pos.z(), 0.0F, 0.0F);
@@ -1759,7 +1838,7 @@ public final class DungeonRunManager {
         }
         GatewayCrystalEntity portal = ModEntities.GATEWAY_CRYSTAL.get().create(level);
         if (portal == null) return;
-        Vec3 pos = DungeonInstanceManager.advancePortalPosition(run.ownerId);
+        Vec3 pos = DungeonInstanceManager.advancePortalPosition(run.instanceId);
         portal.setOwnerId(run.ownerId);
         portal.setAdvancePortal(true);
         portal.setShopPortal(true);
@@ -1789,6 +1868,7 @@ public final class DungeonRunManager {
             markDungeonShopkeeper(existingShopkeeper, run.ownerId);
             run.shopkeeperId = existingShopkeeper.getId();
             run.shopkeeperUuid = existingShopkeeper.getUUID();
+            positionShopkeeper(existingShopkeeper, DungeonInstanceManager.shopkeeperPosition(run.ownerId));
             if (changed) {
                 markStateDirty();
             }
@@ -1805,6 +1885,7 @@ public final class DungeonRunManager {
             return false;
         }
         markDungeonShopkeeper(shop, run.ownerId);
+        positionShopkeeper(shop, shopPos);
         run.shopkeeperId = shop.getId();
         run.shopkeeperUuid = shop.getUUID();
         ShopkeeperManager.ensureShopSpecialists(level, run.ownerId, owner);
@@ -1927,6 +2008,12 @@ public final class DungeonRunManager {
         run.shopkeeperUuid = null;
     }
 
+    /** Keep the main trader anchored to the authored archive-shop coordinate. */
+    private static void positionShopkeeper(GatekeeperEntity trader, Vec3 position) {
+        trader.moveTo(position.x(), position.y(), position.z(), trader.getYRot(), 0.0F);
+        trader.setDeltaMovement(Vec3.ZERO);
+    }
+
     private static boolean spawnOneMob(RunState run, ServerLevel level) {
         return spawnOneMob(run, level, null);
     }
@@ -1941,7 +2028,8 @@ public final class DungeonRunManager {
         if (type == null) return false;
         Entity entity = type.create(level);
         if (!(entity instanceof LivingEntity mob)) return false;
-        net.minecraft.world.phys.Vec3 spawnPos = DungeonInstanceManager.randomMobSpawnPosition(level, run.ownerId, level.random, run.aliveMobs.size());
+        net.minecraft.world.phys.Vec3 spawnPos = DungeonInstanceManager.randomMobSpawnPosition(
+                level, run.instanceId, level.random, run.aliveMobs.size(), run.waveTotalMobs);
         if (spawnPos == null) return false;
         double x = spawnPos.x();
         double y = spawnPos.y();
@@ -1952,6 +2040,7 @@ public final class DungeonRunManager {
             aiMob.getAttribute(Attributes.FOLLOW_RANGE).setBaseValue(Math.max(96.0D, aiMob.getAttributeValue(Attributes.FOLLOW_RANGE)));
         }
         mob.getPersistentData().putBoolean(DUNGEON_WAVE_SPAWN_KEY, true);
+        mob.getPersistentData().putUUID(DUNGEON_WAVE_INSTANCE_KEY, run.instanceId);
         mob.skipDropExperience();
         applyMobScaling(mob, effectiveMobHealthMultiplier(run), run.damageMultiplier, run.speedMultiplier);
         if (rollElite(run, level.random)) {
@@ -2019,6 +2108,22 @@ public final class DungeonRunManager {
         }
         run.loadoutOptions = List.copyOf(rolled);
         run.lootOptions = List.of();
+    }
+
+    /** A Loadout Card applies only to the crystal owner, never to joining party members. */
+    private static void grantGuaranteedOwnerLoadout(RunState run, RandomSource random) {
+        if (!run.guaranteedOwnerLoadout || run.loadoutSelections.contains(run.ownerId)) {
+            return;
+        }
+        ServerPlayer owner = run.online(run.ownerId);
+        if (owner == null || !run.participants.contains(run.ownerId)) {
+            return;
+        }
+        LoadoutModels.LoadoutDefinition definition = LOADOUT_DEFINITIONS.get(random.nextInt(LOADOUT_DEFINITIONS.size()));
+        grantLoadout(owner, buildLoadoutOptionFromDefinition(definition, averageParticipantLevel(run), random), random);
+        run.loadoutSelections.add(run.ownerId);
+        owner.closeContainer();
+        owner.displayClientMessage(Component.literal("Loadout Card applied: your dungeon loadout is ready.").withStyle(ChatFormatting.LIGHT_PURPLE), false);
     }
 
     private static LoadoutOption buildLoadoutOptionFromDefinition(LoadoutModels.LoadoutDefinition definition, int avgLevel, RandomSource random) {
@@ -2582,13 +2687,40 @@ public final class DungeonRunManager {
     }
 
     private static void discardTrackedMobs(RunState run, ServerLevel level) {
+        if (level == null) {
+            run.aliveMobs.clear();
+            return;
+        }
         for (UUID mobId : List.copyOf(run.aliveMobs)) {
             Entity entity = level.getEntity(mobId);
             if (entity != null) {
                 entity.discard();
             }
         }
+        for (Entity entity : level.getAllEntities()) {
+            if (entity instanceof Player) {
+                continue;
+            }
+            CompoundTag data = entity.getPersistentData();
+            if (data.hasUUID(DUNGEON_WAVE_INSTANCE_KEY)
+                    && run.instanceId.equals(data.getUUID(DUNGEON_WAVE_INSTANCE_KEY))) {
+                entity.discard();
+            }
+        }
         run.aliveMobs.clear();
+    }
+
+    /** Removes wave mobs left by a completed or otherwise lost run before a fresh run begins. */
+    private static void discardOrphanedDungeonMobs(ServerLevel level) {
+        for (Entity entity : level.getAllEntities()) {
+            if (!(entity instanceof LivingEntity) || entity instanceof Player
+                    || !entity.getPersistentData().getBoolean(DUNGEON_WAVE_SPAWN_KEY)) {
+                continue;
+            }
+            if (findRunByTrackedMob(entity.getUUID()) == null) {
+                entity.discard();
+            }
+        }
     }
 
     private static void addDropRateLines(List<Component> lines, String tier, List<Item> pool, double tierChance) {
@@ -2718,6 +2850,11 @@ public final class DungeonRunManager {
         }
         int sourcePoints = run.levelSourcePoints.getOrDefault(player.getUUID(), 0);
         int xp = ProgressionSystem.dungeonLevelOrbReward(sourcePoints, run.levelMultiplier);
+        if (xp > 0) {
+            if (!LevelUpIntegration.awardXp(player, xp, ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_exit"))) {
+                player.giveExperiencePoints(xp);
+            }
+        }
         run.experienceEarned += xp;
         return xp;
     }
@@ -3044,6 +3181,7 @@ public final class DungeonRunManager {
             }
         }
         ServerLevel dungeon = getDungeonLevel(run);
+        discardTrackedMobs(run, dungeon);
         if (run.shopkeeperId >= 0 || run.shopkeeperUuid != null) {
             if (dungeon != null) {
                 Entity shop = run.shopkeeperId >= 0 ? dungeon.getEntity(run.shopkeeperId) : dungeon.getEntity(run.shopkeeperUuid);
@@ -3060,7 +3198,7 @@ public final class DungeonRunManager {
             Entity portal = dungeon.getEntity(run.advancePortalId);
             if (portal != null) portal.discard();
         }
-        DungeonInstanceManager.cleanupInstance(run.ownerId, dungeon);
+        DungeonInstanceManager.cleanupInstance(run.instanceId, dungeon);
         RUNS_BY_OWNER.remove(run.ownerId);
         markStateDirty();
     }
@@ -3107,8 +3245,49 @@ public final class DungeonRunManager {
     private static void clearForDungeon(ServerPlayer player) {
         clearDungeonBeltMagnet(player);
         player.getInventory().clearContent();
+        hideAuraSkillAndAbilityBooks(player);
         player.inventoryMenu.broadcastChanges();
         player.containerMenu.broadcastChanges();
+    }
+
+    /** Aura's progression books must not be accessible or usable during a dungeon run. */
+    private static void hideAuraSkillAndAbilityBooks(ServerPlayer player) {
+        boolean changed = removeAuraBooks(player.getInventory().items)
+                | removeAuraBooks(player.getInventory().armor)
+                | removeAuraBooks(player.getInventory().offhand);
+        ItemStack carried = player.containerMenu.getCarried();
+        if (isAuraSkillOrAbilityBook(carried)) {
+            player.containerMenu.setCarried(ItemStack.EMPTY);
+            changed = true;
+        }
+        if (changed) {
+            player.getInventory().setChanged();
+            player.inventoryMenu.broadcastChanges();
+            player.containerMenu.broadcastChanges();
+        }
+    }
+
+    private static boolean removeAuraBooks(List<ItemStack> stacks) {
+        boolean changed = false;
+        for (int slot = 0; slot < stacks.size(); slot++) {
+            if (isAuraSkillOrAbilityBook(stacks.get(slot))) {
+                stacks.set(slot, ItemStack.EMPTY);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    private static boolean isAuraSkillOrAbilityBook(ItemStack stack) {
+        if (stack.isEmpty()) {
+            return false;
+        }
+        ResourceLocation id = BuiltInRegistries.ITEM.getKey(stack.getItem());
+        if (!"aura".equals(id.getNamespace())) {
+            return false;
+        }
+        String path = id.getPath();
+        return path.contains("book") && (path.contains("skill") || path.contains("abilit"));
     }
 
     private static void ensureBailStone(ServerPlayer player) {
@@ -3476,6 +3655,8 @@ public final class DungeonRunManager {
     private static CompoundTag saveRun(RunState run, HolderLookup.Provider registries) {
         CompoundTag tag = new CompoundTag();
         tag.putUUID("owner", run.ownerId);
+        tag.putUUID("instance_id", run.instanceId);
+        tag.putBoolean("guaranteed_owner_loadout", run.guaranteedOwnerLoadout);
         tag.putString("phase", run.phase.name());
         tag.putInt("wave_number", run.waveNumber);
         tag.putInt("waves_completed_on_floor", run.wavesCompletedOnFloor);
@@ -3515,6 +3696,9 @@ public final class DungeonRunManager {
         tag.putInt("mobs_killed", run.mobsKilled);
         tag.putInt("coins_earned", run.coinsEarned);
         tag.putInt("experience_earned", run.experienceEarned);
+        tag.putInt("lootboxes_looted", run.lootboxesLooted);
+        tag.putInt("coin_piles_looted", run.coinPilesLooted);
+        tag.putInt("knowledge_books_obtained", run.knowledgeBooksObtained);
         tag.putFloat("damage_dealt", run.damageDealt);
         tag.putFloat("damage_received", run.damageReceived);
         if (run.shopkeeperUuid != null) {
@@ -3549,6 +3733,8 @@ public final class DungeonRunManager {
         }
         UUID ownerId = tag.getUUID("owner");
         RunState run = new RunState(ownerId);
+        run.instanceId = tag.hasUUID("instance_id") ? tag.getUUID("instance_id") : UUID.randomUUID();
+        run.guaranteedOwnerLoadout = tag.getBoolean("guaranteed_owner_loadout");
         run.server = server;
         run.participants.clear();
         run.participants.addAll(loadUuidSet(tag.getList("participants", Tag.TAG_COMPOUND)));
@@ -3627,6 +3813,9 @@ public final class DungeonRunManager {
         run.mobsKilled = tag.getInt("mobs_killed");
         run.coinsEarned = tag.getInt("coins_earned");
         run.experienceEarned = tag.getInt("experience_earned");
+        run.lootboxesLooted = tag.getInt("lootboxes_looted");
+        run.coinPilesLooted = tag.getInt("coin_piles_looted");
+        run.knowledgeBooksObtained = tag.getInt("knowledge_books_obtained");
         run.damageDealt = tag.getFloat("damage_dealt");
         run.damageReceived = tag.getFloat("damage_received");
         return run;
@@ -3802,6 +3991,9 @@ public final class DungeonRunManager {
                 (int) Math.round(run.quantityBonusModifier * 100.0D),
                 (int) Math.round(Math.max(0.0D, (run.enemyCountMultiplier - 1.0D) * 60.0D)),
                 (int) Math.round(Math.max(0.0D, (run.damageMultiplier - 1.0D) * 100.0D)),
+                run.lootboxesLooted,
+                run.coinPilesLooted,
+                run.knowledgeBooksObtained,
                 rewards
         );
     }
@@ -3818,8 +4010,12 @@ public final class DungeonRunManager {
 
     private enum WaveArchetype { UNDEAD, HORDE, ASSASSIN, ARCHER, TANK, NETHER }
 
+    private enum DungeonDiscovery { LOOTBOX, COIN_PILE, KNOWLEDGE_BOOK }
+
     private static final class RunState {
         private final UUID ownerId;
+        /** Distinct from the party owner so every newly-created run uses a fresh dungeon area. */
+        private UUID instanceId;
         private MinecraftServer server;
         private final Set<UUID> participants = new HashSet<>();
         private final Map<UUID, PlayerSnapshot> snapshots = new HashMap<>();
@@ -3845,6 +4041,7 @@ public final class DungeonRunManager {
         private List<LoadoutOption> loadoutOptions = List.of();
         private Set<UUID> loadoutSelections = new HashSet<>();
         private boolean selectingLoadout = false;
+        private boolean guaranteedOwnerLoadout = false;
         private int rerollsUsed = 0;
         private double enemyCountMultiplier = 1.0D;
         private double healthMultiplier = 1.0D;
@@ -3869,11 +4066,15 @@ public final class DungeonRunManager {
         private int mobsKilled = 0;
         private int coinsEarned = 0;
         private int experienceEarned = 0;
+        private int lootboxesLooted = 0;
+        private int coinPilesLooted = 0;
+        private int knowledgeBooksObtained = 0;
         private float damageDealt = 0.0F;
         private float damageReceived = 0.0F;
 
         private RunState(UUID ownerId) {
             this.ownerId = ownerId;
+            this.instanceId = UUID.randomUUID();
             this.participants.add(ownerId);
         }
 

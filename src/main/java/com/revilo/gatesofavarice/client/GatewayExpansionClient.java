@@ -33,6 +33,7 @@ public final class GatewayExpansionClient {
             modEventBus.register(ClientEvents.class);
             modEventBus.addListener(MagnetKeybindHandler::registerKeyMappings);
             NeoForge.EVENT_BUS.register(DungeonWaveHudOverlay.class);
+            NeoForge.EVENT_BUS.register(DungeonMythicCoinHudOverlay.class);
             NeoForge.EVENT_BUS.register(InventoryWalletOverlay.class);
             NeoForge.EVENT_BUS.addListener(MagnetKeybindHandler::onClientTick);
         }

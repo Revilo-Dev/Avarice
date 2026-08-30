@@ -69,5 +69,8 @@ public class BoosterPackItem extends Item {
         if (this.boosterRarity.allowsMultiplier()) {
             tooltipComponents.add(Component.literal("Can roll multiplier cards.").withStyle(ChatFormatting.GOLD));
         }
+        if (this.boosterRarity.allowsLoadout()) {
+            tooltipComponents.add(Component.literal("Can roll Loadout Cards.").withStyle(ChatFormatting.LIGHT_PURPLE));
+        }
     }
 }

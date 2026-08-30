@@ -39,7 +39,9 @@ public final class DungeonInstanceManager {
     // Clear the whole reserved instance area. This also removes remnants from older template layouts.
     private static final int DUNGEON_HALF_SPAN = 96;
     private static final int DUNGEON_CLEAR_HEIGHT = 80;
-    private static final int INSTANCE_CLEANUP_RADIUS = 96;
+    // Mobs can pursue a player beyond the structure footprint, so the entity
+    // sweep must extend beyond the room itself.
+    private static final int INSTANCE_CLEANUP_RADIUS = 192;
     private static final long PLATFORM_LIFETIME_TICKS = 20L * 120L;
     private static final Vec3 PLAYER_SPAWN_OFFSET = new Vec3(29.0D, 2.0D, 0.0D);
     private static final BlockPos SHOP_STRUCTURE_ORIGIN = new BlockPos(13877272, 64, -2688999);
@@ -54,6 +56,8 @@ public final class DungeonInstanceManager {
     private static final Vec3 ADVANCE_PORTAL_OFFSET = new Vec3(0.0D, 1.0D, 0.0D);
     // These are the walkable floor blocks; the former values targeted the raised structure layer above them.
     private static final int[] DUNGEON_SPAWN_SURFACE_Y = {64, 75, 85};
+    private static final int SECOND_SPAWN_LEVEL_MIN_WAVE_MOBS = 150;
+    private static final int THIRD_SPAWN_LEVEL_MIN_WAVE_MOBS = 400;
     // The assembled combat room is 96 blocks across; leave a narrow edge buffer but use its full interior.
     private static final double MOB_SPAWN_RADIUS = 46.0D;
     private static final int CENTRAL_PILLAR_MIN_X_OFFSET = -5;
@@ -154,13 +158,16 @@ public final class DungeonInstanceManager {
         spawnPoiLootboxes(level, instanceOrigin(instanceOwnerId), floor, quantityBonus, count);
     }
 
-    public static Vec3 randomMobSpawnPosition(ServerLevel level, UUID instanceOwnerId, net.minecraft.util.RandomSource random, int activeMobCount) {
+    public static Vec3 randomMobSpawnPosition(ServerLevel level, UUID instanceOwnerId, net.minecraft.util.RandomSource random,
+            int activeMobCount, int waveTotalMobs) {
         BlockPos origin = instanceOrigin(instanceOwnerId);
         double spawnRadius = 16.0D + Math.min(30.0D, Math.max(0, activeMobCount) * 0.6D);
+        int availableSpawnLevels = waveTotalMobs >= THIRD_SPAWN_LEVEL_MIN_WAVE_MOBS ? 3
+                : waveTotalMobs >= SECOND_SPAWN_LEVEL_MIN_WAVE_MOBS ? 2 : 1;
         for (int attempt = 0; attempt < 96; attempt++) {
             int x = origin.getX() + random.nextInt((int) (spawnRadius * 2.0D + 1.0D)) - (int) spawnRadius;
             int z = origin.getZ() + random.nextInt((int) (spawnRadius * 2.0D + 1.0D)) - (int) spawnRadius;
-            int y = DUNGEON_SPAWN_SURFACE_Y[random.nextInt(DUNGEON_SPAWN_SURFACE_Y.length)];
+            int y = DUNGEON_SPAWN_SURFACE_Y[random.nextInt(availableSpawnLevels)];
             BlockPos surface = new BlockPos(x, y, z);
             if (!isCentralPillarPosition(origin, x + 0.5D, z + 0.5D)
                     && level.getBlockState(surface).isFaceSturdy(level, surface, net.minecraft.core.Direction.UP)

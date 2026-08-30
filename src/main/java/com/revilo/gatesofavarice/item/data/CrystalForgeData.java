@@ -180,6 +180,10 @@ public final class CrystalForgeData {
         return 0;
     }
 
+    public static boolean hasLoadoutCard(ItemStack crystal) {
+        return readCards(crystal).stream().anyMatch(card -> card.type() == GatewayCardData.CardType.LOADOUT);
+    }
+
     public static int cardSlotsForTier(int tier) {
         return switch (Mth.clamp(tier, 1, 5)) {
             case 1 -> 3;

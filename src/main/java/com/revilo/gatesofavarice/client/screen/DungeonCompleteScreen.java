@@ -250,6 +250,9 @@ public class DungeonCompleteScreen extends Screen {
         this.statLines.add(StatLine.number("Qunatity level", this.payload.quantityLevel(), "%"));
         this.statLines.add(StatLine.number("Mob Health", this.payload.mobHealth(), "%"));
         this.statLines.add(StatLine.number("Mob Damage", this.payload.mobDamage(), "%"));
+        this.statLines.add(StatLine.number("Lootboxes Looted", this.payload.lootboxesLooted(), ""));
+        this.statLines.add(StatLine.number("Coin Piles Looted", this.payload.coinPilesLooted(), ""));
+        this.statLines.add(StatLine.number("Knowledge Books Obtained", this.payload.knowledgeBooksObtained(), ""));
     }
 
     private float statRevealProgress() {

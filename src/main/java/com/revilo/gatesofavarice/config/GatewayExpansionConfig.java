@@ -19,6 +19,7 @@ public final class GatewayExpansionConfig {
     public static final ModConfigSpec.IntValue MAX_ACTIVE_WAVE_MOBS;
     public static final ModConfigSpec.IntValue LOOT_CRATES_PER_WAVE;
     public static final ModConfigSpec.DoubleValue RUNE_LOOT_CRATE_DROP_CHANCE;
+    public static final ModConfigSpec.ConfigValue<java.util.List<? extends String>> KNOWLEDGE_ENTRIES;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -41,6 +42,31 @@ public final class GatewayExpansionConfig {
                 .defineInRange("lootCratesPerWave", 3, 0, 32);
         RUNE_LOOT_CRATE_DROP_CHANCE = builder.comment("Chance for an otherwise rolled Runic item to remain in a loot crate.")
                 .defineInRange("runeLootCrateDropChance", 0.10D, 0.0D, 1.0D);
+        builder.pop();
+        builder.push("knowledge");
+        KNOWLEDGE_ENTRIES = builder.comment("Knowledge entries: id|rarity|title|description|unlocked-item namespace. The first matching entry unlocks a gated namespace.")
+                .defineListAllowEmpty("entries", () -> java.util.List.of(
+                        "create_foundations|common|Knowledge of Kinetics|The Create mod's basic machinery and components.|create",
+                        "dark_utilities_foundations|common|Knowledge of Dark Utilities|The Dark Utilities mod's blocks and tools.|darkutils",
+                        "create_mixing|uncommon|Knowledge of Mixing|Mechanical mixers and their craft.|",
+                        "create_trains|legendary|Knowledge of Trains|Railways, stations, and schedules.|",
+                        "create_blaze_brewing|rare|Knowledge of Blaze Brewing|Heated mixing and blaze burners.|",
+                        "create_crushing|common|Knowledge of Crushing|Crushing wheels and ore processing.|",
+                        "create_belts|common|Knowledge of Belts|Belts, funnels, and item movement.|",
+                        "create_filters|uncommon|Knowledge of Filters|Precise item filtering and routing.|",
+                        "create_logistics|rare|Knowledge of Logistics|Stock links, requests, and vaults.|",
+                        "create_fluids|uncommon|Knowledge of Fluids|Pipes, pumps, and fluid handling.|",
+                        "create_contraptions|epic|Knowledge of Contraptions|Moving machines and mechanical bearings.|",
+                        "create_deployers|rare|Knowledge of Deployment|Deployers that work with a mechanical hand.|",
+                        "create_encased_fans|uncommon|Knowledge of Airflow|Encased fans and bulk processing.|",
+                        "darkutils_plates|common|Knowledge of Movement Plates|Movement, speed, and launch plates.|",
+                        "darkutils_filters|uncommon|Knowledge of Dark Filters|Advanced filtering and item control.|",
+                        "darkutils_charms|rare|Knowledge of Charms|Charms and personal utility.|",
+                        "darkutils_angel|epic|Knowledge of the Angel Block|Building where no platform exists.|",
+                        "darkutils_traps|uncommon|Knowledge of Traps|Dark traps and mob control.|",
+                        "darkutils_wither|legendary|Knowledge of Withering|Wither tools and dangerous utilities.|",
+                        "darkutils_portals|epic|Knowledge of Dark Passage|Teleportation and dimensional utility.|"
+                ), value -> value instanceof String text && text.split("\\|", -1).length >= 5);
         builder.pop();
         builder.push("loadout");
         LOADOUT_STAT_ROLL_MULTIPLIER = builder.defineInRange("statRollMultiplier", 1.0D, 0.1D, 10.0D);

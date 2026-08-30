@@ -9,6 +9,7 @@ import com.revilo.gatesofavarice.item.GatewayCardItem;
 import com.revilo.gatesofavarice.item.GatewaySwordItem;
 import com.revilo.gatesofavarice.item.GoldCoinItem;
 import com.revilo.gatesofavarice.item.HeartFragmentItem;
+import com.revilo.gatesofavarice.item.GodlyKnowledgeItem;
 import com.revilo.gatesofavarice.item.LootMaterialItem;
 import com.revilo.gatesofavarice.item.MagnetItem;
 import com.revilo.gatesofavarice.item.MythicCoinItem;
@@ -39,21 +40,22 @@ public final class ModItems {
     private static final FoodProperties ARCANE_APPLE_FOOD = new FoodProperties.Builder().nutrition(4).saturationModifier(0.3F).alwaysEdible().build();
 
     public static final DeferredHolder<Item, CrystalItem> TIER_1_CRYSTAL = ITEMS.register("tier_1_crystal",
-            () -> new CrystalItem(new CrystalItem.CrystalTier(1, 0, 19), new Item.Properties()));
+            () -> new CrystalItem(new CrystalItem.CrystalTier(1), new Item.Properties()));
     public static final DeferredHolder<Item, CrystalItem> TIER_2_CRYSTAL = ITEMS.register("tier_2_crystal",
-            () -> new CrystalItem(new CrystalItem.CrystalTier(2, 20, 49), new Item.Properties()));
+            () -> new CrystalItem(new CrystalItem.CrystalTier(2), new Item.Properties()));
     public static final DeferredHolder<Item, CrystalItem> TIER_3_CRYSTAL = ITEMS.register("tier_3_crystal",
-            () -> new CrystalItem(new CrystalItem.CrystalTier(3, 50, 69), new Item.Properties()));
+            () -> new CrystalItem(new CrystalItem.CrystalTier(3), new Item.Properties()));
     public static final DeferredHolder<Item, CrystalItem> TIER_4_CRYSTAL = ITEMS.register("tier_4_crystal",
-            () -> new CrystalItem(new CrystalItem.CrystalTier(4, 70, 89), new Item.Properties()));
+            () -> new CrystalItem(new CrystalItem.CrystalTier(4), new Item.Properties()));
     public static final DeferredHolder<Item, CrystalItem> TIER_5_CRYSTAL = ITEMS.register("tier_5_crystal",
-            () -> new CrystalItem(new CrystalItem.CrystalTier(5, 90, 100), new Item.Properties()));
+            () -> new CrystalItem(new CrystalItem.CrystalTier(5), new Item.Properties()));
 
     public static final DeferredHolder<Item, MythicCoinItem> MYTHIC_COIN = ITEMS.register("mythic_coin",
             () -> new MythicCoinItem(new Item.Properties().stacksTo(99)));
-    // Placeholder reward for the knowledge system; intentionally has no texture yet.
     public static final DeferredHolder<Item, Item> USELESS_KNOWLEDGE_BOOK = ITEMS.register("useless_knowledge_book",
             () -> new Item(new Item.Properties().stacksTo(16).rarity(Rarity.RARE)));
+    public static final DeferredHolder<Item, GodlyKnowledgeItem> GODLY_KNOWLEDGE_BOOK = ITEMS.register("godly_knowledge_book",
+            () -> new GodlyKnowledgeItem(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC)));
     public static final DeferredHolder<Item, GoldCoinItem> GOLD_COIN = ITEMS.register("gold_coin",
             () -> new GoldCoinItem(new Item.Properties().stacksTo(99).rarity(Rarity.UNCOMMON)));
     public static final DeferredHolder<Item, StabilityPearlItem> STABILITY_PEARL = ITEMS.register("stability_pearl",

@@ -207,14 +207,27 @@ public final class ShopkeeperManager {
     }
 
     private static void ensureSpecialist(ServerLevel level, Vec3 position, String role, Component name, Player summoner) {
-        boolean present = !level.getEntitiesOfClass(GatekeeperEntity.class,
+        GatekeeperEntity existing = level.getEntitiesOfClass(GatekeeperEntity.class,
                 new net.minecraft.world.phys.AABB(position, position).inflate(2.0D),
-                entity -> role.equals(entity.getPersistentData().getString(SHOP_SPECIALIST_ROLE_KEY))).isEmpty();
-        if (present) return;
+                entity -> role.equals(entity.getPersistentData().getString(SHOP_SPECIALIST_ROLE_KEY)))
+                .stream()
+                .findFirst()
+                .orElse(null);
+        if (existing != null) {
+            positionKeeper(existing, position);
+            return;
+        }
         GatekeeperEntity trader = spawnShopkeeper(level, position.x(), position.y(), position.z(), summoner);
         if (trader == null) return;
         trader.getPersistentData().putString(SHOP_SPECIALIST_ROLE_KEY, role);
         trader.setCustomName(name);
+        positionKeeper(trader, position);
+    }
+
+    /** The shop structure has authored stalls, so keep each specialist on its supplied stall coordinate. */
+    private static void positionKeeper(GatekeeperEntity trader, Vec3 position) {
+        trader.moveTo(position.x(), position.y(), position.z(), trader.getYRot(), 0.0F);
+        trader.setDeltaMovement(Vec3.ZERO);
     }
 
     public static boolean isShopkeeper(GatekeeperEntity trader) {

@@ -52,29 +52,17 @@ public class CrystalItem extends Item {
     }
 
     @Override
-    public void inventoryTick(ItemStack stack, Level level, net.minecraft.world.entity.Entity entity, int slotId, boolean isSelected) {
-        if (level instanceof ServerLevel serverLevel) {
-            CrystalForgeData.ensureProfile(stack, this.crystalTier.minLevel(), this.crystalTier.maxLevel(), serverLevel.random);
-        }
-        super.inventoryTick(stack, level, entity, slotId, isSelected);
-    }
-
-    @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand usedHand) {
         ItemStack stack = player.getItemInHand(usedHand);
         if (!(level instanceof ServerLevel serverLevel)) {
             return InteractionResultHolder.sidedSuccess(stack, true);
         }
-        if (player instanceof ServerPlayer serverPlayer && !GatewayCrystalEntity.canUseTier(serverPlayer, this.crystalTier.tier())) {
-            GatewayCrystalEntity.denyTierAccess(serverPlayer, this.crystalTier.tier());
-            return InteractionResultHolder.fail(stack);
-        }
-
         GatewayCrystalEntity gateway = new GatewayCrystalEntity(serverLevel);
         Vec3 spawnPos = resolveSpawnPosition(player);
         gateway.moveTo(spawnPos.x, spawnPos.y, spawnPos.z, player.getYRot(), 0.0F);
         gateway.setCrystalTier(this.crystalTier.tier());
         gateway.setOwnerId(player.getUUID());
+        gateway.setGuaranteedOwnerLoadout(CrystalForgeData.hasLoadoutCard(stack));
         serverLevel.addFreshEntity(gateway);
 
         if (!player.getAbilities().instabuild) {
@@ -99,6 +87,7 @@ public class CrystalItem extends Item {
         return new Vec3(fallback.x, player.getY(), fallback.z);
     }
 
-    public record CrystalTier(int tier, int minLevel, int maxLevel) {
+    /** Crystal tier now controls deck capacity only. */
+    public record CrystalTier(int tier) {
     }
 }
