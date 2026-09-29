@@ -23,6 +23,7 @@ import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.BlockHitResult;
 
 public class LootboxBlock extends BaseEntityBlock {
+    // registers the block codec for world serialization
     public static final MapCodec<LootboxBlock> CODEC = simpleCodec(LootboxBlock::new);
 
     public LootboxBlock() {
@@ -51,6 +52,7 @@ public class LootboxBlock extends BaseEntityBlock {
         if (!(player instanceof net.minecraft.server.level.ServerPlayer serverPlayer)) {
             return InteractionResult.PASS;
         }
+        // gives the loot stored in the block entity then removes the opened crate
         lootbox.burstLoot((ServerLevel) level, pos, serverPlayer);
         level.levelEvent(2001, pos, Block.getId(Blocks.SPRUCE_PLANKS.defaultBlockState()));
         level.removeBlock(pos, false);
@@ -66,6 +68,7 @@ public class LootboxBlock extends BaseEntityBlock {
     public void setPlacedBy(Level level, BlockPos pos, BlockState state, LivingEntity placer, ItemStack stack) {
         super.setPlacedBy(level, pos, state, placer, stack);
         BlockEntity be = level.getBlockEntity(pos);
+        // restores the crate contents saved on the placed item
         if (be instanceof LootboxBlockEntity lootbox && placer instanceof ServerPlayer serverPlayer) {
             lootbox.readFromItemStack(stack, serverPlayer);
         }

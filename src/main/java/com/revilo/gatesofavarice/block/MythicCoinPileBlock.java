@@ -18,9 +18,11 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.BlockHitResult;
 
-// A dungeon reward cache which bursts into the collectible Mythic Coins
+// collectable dungeon reward block that bursts into mythic coin orbs
 public final class MythicCoinPileBlock extends Block {
+    // registers the block codec for world serialization
     public static final MapCodec<MythicCoinPileBlock> CODEC = simpleCodec(MythicCoinPileBlock::new);
+    // defines the total coin value range and baseline orb count
     private static final int MIN_VALUE = 20;
     private static final int MAX_VALUE = 50;
     private static final int BASE_CLUMP_SIZE = 3;
@@ -43,6 +45,7 @@ public final class MythicCoinPileBlock extends Block {
         if (level.isClientSide) return InteractionResult.SUCCESS;
         if (!(player instanceof ServerPlayer serverPlayer)) return InteractionResult.PASS;
 
+        // spawns the coin rewards and records the dungeon objective
         burst((ServerLevel) level, pos, serverPlayer);
         DungeonRunManager.recordCoinPileLooted(serverPlayer);
         level.removeBlock(pos, false);
@@ -51,12 +54,15 @@ public final class MythicCoinPileBlock extends Block {
 
     @Override
     public void spawnDestroyParticles(Level level, Player player, BlockPos pos, BlockState state) {
+        // suppresses default break particles because opening has its own effects
     }
 
     private static void burst(ServerLevel level, BlockPos pos, ServerPlayer player) {
+        // scales the orb count with the players coin multiplier without exceeding the value
         int totalValue = Mth.nextInt(level.random, MIN_VALUE, MAX_VALUE);
         int clumpSize = Mth.clamp((int) Math.ceil(BASE_CLUMP_SIZE * MythicCoinWallet.getTotalMultiplier(player)), 0, totalValue);
         for (int index = 0; index < clumpSize; index++) {
+            // splits the remaining value evenly across the remaining orbs
             int remainingOrbs = clumpSize - index;
             int value = (totalValue + remainingOrbs - 1) / remainingOrbs;
             totalValue -= value;

@@ -19,8 +19,9 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.BlockHitResult;
 
-/** A rare dungeon discovery reserved for the upcoming knowledge system. */
+// collectable dungeon block that gives the player a knowledge book
 public final class KnowledgeBookBlock extends Block {
+    // registers the block codec for world serialization
     public static final MapCodec<KnowledgeBookBlock> CODEC = simpleCodec(KnowledgeBookBlock::new);
 
     public KnowledgeBookBlock() {
@@ -41,9 +42,11 @@ public final class KnowledgeBookBlock extends Block {
         if (level.isClientSide) return InteractionResult.SUCCESS;
         if (!(player instanceof ServerPlayer)) return InteractionResult.PASS;
 
+        // rolls the small chance for a useless book before creating a godly book
         ItemStack reward = level.random.nextFloat() < 0.22F
                 ? new ItemStack(ModItems.USELESS_KNOWLEDGE_BOOK.get())
                 : KnowledgeManager.createGodlyBook((ServerPlayer) player, level.random);
+        // drops the reward and records the dungeon objective before removing the block
         popResource(level, pos, reward);
         DungeonRunManager.recordKnowledgeBookObtained((ServerPlayer) player);
         level.playSound(null, pos, net.minecraft.sounds.SoundEvents.ENCHANTMENT_TABLE_USE, net.minecraft.sounds.SoundSource.BLOCKS, 0.7F, 1.1F);
@@ -54,6 +57,7 @@ public final class KnowledgeBookBlock extends Block {
     @Override
     public void animateTick(BlockState state, Level level, BlockPos pos, RandomSource random) {
         if (random.nextInt(3) != 0) return;
+        // adds an enchanted particle effect above the block
         level.addParticle(ParticleTypes.ENCHANT,
                 pos.getX() + 0.25D + random.nextDouble() * 0.5D,
                 pos.getY() + 0.2D + random.nextDouble() * 0.45D,

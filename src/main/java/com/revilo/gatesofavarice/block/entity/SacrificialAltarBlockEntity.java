@@ -22,9 +22,11 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.MenuProvider;
 
-/** Temporary sell inventory.  Contents are sacrificed at half value when its menu closes. */
+// altar inventory that sells contents for half value when its menu closes
 public final class SacrificialAltarBlockEntity extends BlockEntity implements Container, MenuProvider {
+    // provides two rows of altar inventory slots
     public static final int SLOT_COUNT = 18;
+    // stores items waiting to be sold or returned to the player
     private NonNullList<ItemStack> items = NonNullList.withSize(SLOT_COUNT, ItemStack.EMPTY);
 
     public SacrificialAltarBlockEntity(BlockPos pos, BlockState state) {
@@ -42,11 +44,13 @@ public final class SacrificialAltarBlockEntity extends BlockEntity implements Co
 
     @Override public Component getDisplayName() { return Component.translatable("block.gatesofavarice.sacrificial_altar"); }
 
+    // opens the altar menu using this inventory and world position
     @Override public AbstractContainerMenu createMenu(int containerId, Inventory inventory, Player player) {
         return new SacrificialAltarMenu(containerId, inventory, this, worldPosition);
     }
 
     public void sacrificeContents(ServerPlayer player) {
+        // totals sellable items while returning anything that cannot be sold
         int total = 0;
         for (int slot = 0; slot < SLOT_COUNT; slot++) {
             ItemStack stack = removeItemNoUpdate(slot);
@@ -59,6 +63,7 @@ public final class SacrificialAltarBlockEntity extends BlockEntity implements Co
             }
         }
         if (total > 0) {
+            // deposits the half value reward and confirms the completed sacrifice
             MythicCoinWallet.add(player, total);
             player.level().playSound(null, worldPosition, SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.75F, 1.25F);
             player.displayClientMessage(Component.literal("Sacrificed items for " + total + " Mythic Coins (50% value)."), true);
@@ -66,11 +71,13 @@ public final class SacrificialAltarBlockEntity extends BlockEntity implements Co
         setChanged();
     }
 
+    // saves altar items with the block entity data
     @Override protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.saveAdditional(tag, registries);
         ContainerHelper.saveAllItems(tag, items, registries);
     }
 
+    // resets then restores altar items after loading the world
     @Override protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
         items = NonNullList.withSize(SLOT_COUNT, ItemStack.EMPTY);

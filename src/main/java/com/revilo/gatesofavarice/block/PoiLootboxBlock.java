@@ -21,8 +21,9 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.BlockHitResult;
 
-// A dungeon point-of-interest reward cache. Its rarity is assigned on placement.
+// point of interest reward crate with a rarity chosen when placed
 public class PoiLootboxBlock extends BaseEntityBlock {
+    // registers the block codec for world serialization
     public static final MapCodec<PoiLootboxBlock> CODEC = simpleCodec(PoiLootboxBlock::new);
 
     public PoiLootboxBlock() {
@@ -49,6 +50,7 @@ public class PoiLootboxBlock extends BaseEntityBlock {
         if (!(player instanceof ServerPlayer serverPlayer)) return InteractionResult.PASS;
         BlockEntity blockEntity = level.getBlockEntity(pos);
         if (!(blockEntity instanceof PoiLootboxBlockEntity lootbox)) return InteractionResult.PASS;
+        // opens the stored rewards then marks the dungeon lootbox objective complete
         lootbox.open((ServerLevel) level, pos, serverPlayer);
         DungeonRunManager.recordLootboxLooted(serverPlayer);
         level.levelEvent(2001, pos, Block.getId(Blocks.SPRUCE_PLANKS.defaultBlockState()));
@@ -64,6 +66,7 @@ public class PoiLootboxBlock extends BaseEntityBlock {
     @Override
     public void setPlacedBy(Level level, BlockPos pos, BlockState state, LivingEntity placer, ItemStack stack) {
         super.setPlacedBy(level, pos, state, placer, stack);
+        // assigns rarity only on the server so the placed crate has one authoritative result
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof PoiLootboxBlockEntity lootbox) {
             lootbox.assignRandomRarity(level.random);
         }

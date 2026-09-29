@@ -33,9 +33,12 @@ import net.minecraft.world.level.BlockGetter;
 
 public class GatewayWorkbenchBlock extends BaseEntityBlock implements EntityBlock {
 
+    // registers the block codec for world serialization
     public static final MapCodec<GatewayWorkbenchBlock> CODEC = simpleCodec(GatewayWorkbenchBlock::new);
+    // stores the direction used for the model and collision shape
     public static final DirectionProperty FACING = HorizontalDirectionalBlock.FACING;
 
+    // uses a separate shape for each horizontal model rotation
     private static final VoxelShape SHAPE_NORTH = Shapes.or(
             box(0.0D, 0.0D, 0.0D, 16.0D, 2.0D, 16.0D),
             box(2.0D, 2.0D, 3.0D, 14.0D, 12.0D, 13.0D),
@@ -81,6 +84,7 @@ public class GatewayWorkbenchBlock extends BaseEntityBlock implements EntityBloc
 
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hitResult) {
+        // opens the workbench inventory only from the server
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof GatewayWorkbenchBlockEntity blockEntity) {
             player.openMenu(blockEntity);
         }
@@ -89,6 +93,7 @@ public class GatewayWorkbenchBlock extends BaseEntityBlock implements EntityBloc
 
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
+        // faces the workbench toward the player who placed it
         return this.defaultBlockState().setValue(FACING, context.getHorizontalDirection().getOpposite());
     }
 
@@ -109,6 +114,7 @@ public class GatewayWorkbenchBlock extends BaseEntityBlock implements EntityBloc
 
     @Override
     protected VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos, CollisionContext context) {
+        // matches the outline with the current block direction
         return switch (state.getValue(FACING)) {
             case EAST -> SHAPE_EAST;
             case SOUTH -> SHAPE_SOUTH;
@@ -134,6 +140,7 @@ public class GatewayWorkbenchBlock extends BaseEntityBlock implements EntityBloc
 
     @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
+        // returns stored items before the workbench block entity is removed
         if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof GatewayWorkbenchBlockEntity blockEntity) {
             Containers.dropContents(level, pos, blockEntity);
             level.updateNeighbourForOutputSignal(pos, this);
@@ -143,6 +150,7 @@ public class GatewayWorkbenchBlock extends BaseEntityBlock implements EntityBloc
 
     @Override
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> blockEntityType) {
+        // keeps the server block entity marked for saving
         return createTickerHelper(blockEntityType, ModBlockEntities.GATEWAY_WORKBENCH.get(), GatewayWorkbenchBlockEntity::serverTick);
     }
 }

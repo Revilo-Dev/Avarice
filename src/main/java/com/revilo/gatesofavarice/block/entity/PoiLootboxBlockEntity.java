@@ -30,7 +30,9 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
 public class PoiLootboxBlockEntity extends BlockEntity {
+    // saves the rolled crate rarity with the block entity data
     private static final String RARITY_KEY = "poi_lootbox_rarity";
+    // keeps the placement rarity until the crate is opened
     private PoiLootboxRarity rarity = PoiLootboxRarity.COMMON;
 
     public PoiLootboxBlockEntity(BlockPos pos, BlockState state) {
@@ -38,30 +40,34 @@ public class PoiLootboxBlockEntity extends BlockEntity {
     }
 
     public void assignRandomRarity(RandomSource random) {
+        // rolls the initial rarity when the crate is placed
         this.rarity = PoiLootboxRarity.roll(random);
         setChanged();
     }
 
     public void open(ServerLevel level, BlockPos pos, ServerPlayer player) {
+        // gets dungeon and player progression used to scale the rewards
         int floor = DungeonRunManager.getCurrentFloor(player);
         int playerLevel = LevelUpIntegration.getEffectiveLevel(player);
-        // A crate can be placed at any tier, but its rewards must still respect player progression.
-        // In particular, Lunarium is in the RARE table and cannot be obtained at level 1.
+        // limits upgraded rarity so rewards stay within the players current progression
         PoiLootboxRarity effectiveRarity = rarity.upgrade(DungeonRunManager.getLootboxRarityBonus(player), level.random)
                 .capForPlayerLevel(playerLevel);
         LootTable table = level.getServer().reloadableRegistries().getLootTable(effectiveRarity.lootTable());
         LootParams params = new LootParams.Builder(level)
                 .withParameter(LootContextParams.ORIGIN, Vec3.atCenterOf(pos))
                 .create(LootContextParamSets.CHEST);
+        // adds party dungeon floor and player level bonuses to the reward rolls
         int rolls = effectiveRarity.baseRolls() + Math.max(0, DungeonRunManager.getDungeonPartySize(player) - 1)
                 + DungeonRunManager.getLootboxAmountBonus(player)
                 + Math.min(2, Math.max(0, floor - 1) / 10) + Math.min(1, Math.max(0, playerLevel) / 50);
+        // increases stack sizes with dungeon and player level progression
         double quantityMultiplier = effectiveRarity.quantityMultiplier() + DungeonRunManager.getLootboxQuantityBonus(player)
                 + Math.min(0.75D, Math.max(0, floor - 1) * 0.025D + Math.max(0, playerLevel) * 0.003D);
         for (int i = 0; i < rolls; i++) {
             List<ItemStack> rewards = table.getRandomItems(params, level.random.nextLong());
             for (ItemStack reward : rewards) {
                 if (reward.is(ModItems.GATEWAY_CARD.get())) {
+                    // upgrades gateway card drops into boosters based on crate rarity
                     GatewayCardData.BoosterRarity cardRarity = effectiveRarity == PoiLootboxRarity.LEGENDARY
                             ? GatewayCardData.BoosterRarity.LEGENDARY
                             : GatewayCardData.BoosterRarity.EPIC;
@@ -71,6 +77,7 @@ public class PoiLootboxBlockEntity extends BlockEntity {
                         && level.random.nextDouble() > GatewayExpansionConfig.RUNE_LOOT_CRATE_DROP_CHANCE.get()) {
                     continue;
                 }
+                // scales normal rewards after rune filtering
                 scaleCount(reward, quantityMultiplier, level.random);
                 Containers.dropItemStack(level, pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D, reward);
             }
@@ -79,6 +86,7 @@ public class PoiLootboxBlockEntity extends BlockEntity {
     }
 
     private static void spawnRarityParticles(ServerLevel level, BlockPos pos, PoiLootboxRarity rarity) {
+        // plays the base wooden crate opening effect
         level.sendParticles(
                 new BlockParticleOption(ParticleTypes.BLOCK, Blocks.SPRUCE_PLANKS.defaultBlockState()).setPos(pos),
                 pos.getX() + 0.5D, pos.getY() + 0.7D, pos.getZ() + 0.5D,
@@ -86,9 +94,11 @@ public class PoiLootboxBlockEntity extends BlockEntity {
         );
         level.playSound(null, pos, net.minecraft.sounds.SoundEvents.BARREL_OPEN, net.minecraft.sounds.SoundSource.BLOCKS, 0.75F, 1.0F);
         if (rarity.ordinal() >= PoiLootboxRarity.RARE.ordinal()) {
+            // gives rare crates an extra ascending sound
             level.playSound(null, pos, net.minecraft.sounds.SoundEvents.NOTE_BLOCK_PLING.value(), net.minecraft.sounds.SoundSource.BLOCKS,
                     0.9F, 1.0F + rarity.ordinal() * 0.12F);
         }
+        // selects the particle color that matches the rolled rarity
         DustParticleOptions particle = switch (rarity) {
             case COMMON -> null;
             case UNCOMMON -> dust(0x57D65D);
@@ -106,7 +116,7 @@ public class PoiLootboxBlockEntity extends BlockEntity {
     }
 
     private static void scaleCount(ItemStack stack, double multiplier, RandomSource random) {
-        // Runes are single, rare rewards; quantity bonuses must not duplicate them.
+        // keeps runes as single rare rewards despite quantity bonuses
         if (BuiltInRegistries.ITEM.getKey(stack.getItem()).getNamespace().equals("runic")) return;
         double scaled = stack.getCount() * multiplier;
         int count = (int) Math.floor(scaled);
@@ -116,17 +126,20 @@ public class PoiLootboxBlockEntity extends BlockEntity {
 
     @Override
     protected void saveAdditional(CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries) {
+        // saves the crate rarity when the world is written to disk
         super.saveAdditional(tag, registries);
         tag.putString(RARITY_KEY, rarity.name());
     }
 
     @Override
     protected void loadAdditional(CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries) {
+        // restores the crate rarity and falls back safely for invalid saved values
         super.loadAdditional(tag, registries);
         rarity = PoiLootboxRarity.byName(tag.getString(RARITY_KEY));
     }
 
     public enum PoiLootboxRarity {
+        // defines weighted loot tables reward rolls and player level gates
         COMMON(55, "common", 4, 1.25D, 0),
         UNCOMMON(27, "uncommon", 4, 1.15D, 8),
         RARE(12, "rare", 3, 1.0D, 20),
@@ -161,6 +174,7 @@ public class PoiLootboxBlockEntity extends BlockEntity {
         }
 
         private static PoiLootboxRarity roll(RandomSource random) {
+            // chooses a rarity using the configured weight totals
             int roll = random.nextInt(100);
             int accumulated = 0;
             for (PoiLootboxRarity rarity : values()) {
@@ -171,12 +185,14 @@ public class PoiLootboxBlockEntity extends BlockEntity {
         }
 
         private PoiLootboxRarity upgrade(double rarityBonus, RandomSource random) {
+            // converts rarity bonus into whole and partial upgrade steps
             int steps = (int) Math.floor(Math.max(0.0D, rarityBonus) * 4.0D);
             if (random.nextDouble() < Math.max(0.0D, rarityBonus) * 4.0D - steps) steps++;
             return values()[Math.min(values().length - 1, ordinal() + steps)];
         }
 
         private PoiLootboxRarity capForPlayerLevel(int playerLevel) {
+            // prevents a crate from using a table above the players level gate
             PoiLootboxRarity allowed = COMMON;
             for (PoiLootboxRarity candidate : values()) {
                 if (playerLevel >= candidate.requiredPlayerLevel) allowed = candidate;
@@ -185,6 +201,7 @@ public class PoiLootboxBlockEntity extends BlockEntity {
         }
 
         private static PoiLootboxRarity byName(String name) {
+            // handles missing or outdated saved rarity names with the common default
             try {
                 return valueOf(name);
             } catch (IllegalArgumentException ignored) {

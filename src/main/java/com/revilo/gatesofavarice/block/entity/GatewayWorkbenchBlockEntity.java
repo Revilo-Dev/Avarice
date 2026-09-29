@@ -23,8 +23,10 @@ import net.minecraft.world.level.block.state.BlockState;
 
 public class GatewayWorkbenchBlockEntity extends BlockEntity implements Container, MenuProvider {
 
+    // keeps this inventory aligned with the custom workbench menu slots
     public static final int SLOT_COUNT = GatewayWorkbenchSlots.CUSTOM_SLOT_COUNT;
 
+    // holds the crafting inputs and outputs stored by the placed workbench
     private final NonNullList<ItemStack> items = NonNullList.withSize(SLOT_COUNT, ItemStack.EMPTY);
 
     public GatewayWorkbenchBlockEntity(BlockPos pos, BlockState blockState) {
@@ -32,6 +34,7 @@ public class GatewayWorkbenchBlockEntity extends BlockEntity implements Containe
     }
 
     public static void serverTick(Level level, BlockPos pos, BlockState state, GatewayWorkbenchBlockEntity blockEntity) {
+        // marks the inventory dirty regularly so server saves capture its contents
         if (level.getGameTime() % 200L == 0L) {
             setChanged(level, pos, state);
         }
@@ -44,6 +47,7 @@ public class GatewayWorkbenchBlockEntity extends BlockEntity implements Containe
 
     @Override
     public AbstractContainerMenu createMenu(int containerId, Inventory playerInventory, Player player) {
+        // provides menu access tied to this exact level and block position
         return new GatewayWorkbenchMenu(containerId, playerInventory, this, ContainerLevelAccess.create(Objects.requireNonNull(this.level), this.worldPosition));
     }
 
@@ -94,6 +98,7 @@ public class GatewayWorkbenchBlockEntity extends BlockEntity implements Containe
 
     @Override
     public boolean stillValid(Player player) {
+        // closes the menu when the workbench no longer exists or the player walks away
         if (this.level == null || this.level.getBlockEntity(this.worldPosition) != this) {
             return false;
         }
@@ -102,6 +107,7 @@ public class GatewayWorkbenchBlockEntity extends BlockEntity implements Containe
 
     @Override
     public boolean canPlaceItem(int slot, ItemStack stack) {
+        // delegates slot rules to the shared workbench slot definitions
         return GatewayWorkbenchSlots.mayPlace(slot, stack);
     }
 
@@ -113,12 +119,14 @@ public class GatewayWorkbenchBlockEntity extends BlockEntity implements Containe
 
     @Override
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        // saves the workbench inventory with the block entity data
         super.saveAdditional(tag, registries);
         ContainerHelper.saveAllItems(tag, this.items, registries);
     }
 
     @Override
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        // restores the workbench inventory after loading the world
         super.loadAdditional(tag, registries);
         ContainerHelper.loadAllItems(tag, this.items, registries);
     }

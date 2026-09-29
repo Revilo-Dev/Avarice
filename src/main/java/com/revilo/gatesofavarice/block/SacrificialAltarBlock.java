@@ -16,8 +16,9 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.BlockHitResult;
 
-// allows for selling items mid run, uses sell GUI, sell value is -50%
+// dungeon altar that sells deposited items for half their normal value
 public final class SacrificialAltarBlock extends BaseEntityBlock {
+    // registers the block codec for world serialization
     public static final MapCodec<SacrificialAltarBlock> CODEC = simpleCodec(SacrificialAltarBlock::new);
 
     public SacrificialAltarBlock(BlockBehaviour.Properties properties) {
@@ -34,6 +35,7 @@ public final class SacrificialAltarBlock extends BaseEntityBlock {
     @Override
     protected InteractionResult useWithoutItem(net.minecraft.world.level.block.state.BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (level.isClientSide) return InteractionResult.SUCCESS;
+        // opens the server menu bound to this altar inventory
         if (player instanceof ServerPlayer serverPlayer && level.getBlockEntity(pos) instanceof SacrificialAltarBlockEntity altar) {
             serverPlayer.openMenu(altar, buffer -> buffer.writeBlockPos(pos));
             return InteractionResult.CONSUME;
@@ -45,6 +47,7 @@ public final class SacrificialAltarBlock extends BaseEntityBlock {
     @Override public RenderShape getRenderShape(net.minecraft.world.level.block.state.BlockState state) { return RenderShape.MODEL; }
 
     @Override public void onRemove(net.minecraft.world.level.block.state.BlockState state, Level level, BlockPos pos, net.minecraft.world.level.block.state.BlockState newState, boolean movedByPiston) {
+        // drops unsold items when the altar is replaced or destroyed
         if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof SacrificialAltarBlockEntity altar) {
             Containers.dropContents(level, pos, altar);
         }

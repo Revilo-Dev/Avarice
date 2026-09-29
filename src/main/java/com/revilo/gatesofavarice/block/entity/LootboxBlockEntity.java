@@ -29,10 +29,13 @@ import net.minecraft.world.phys.Vec3;
 
 public class LootboxBlockEntity extends BlockEntity {
 
+    // stores lootbox data inside the custom item data namespace
     private static final String ROOT_KEY = "gatesofavarice";
     private static final String LOOT_KEY = "lootbox_loot";
     private static final String LEVEL_ORBS_KEY = "lootbox_level_orbs";
+    // identifies dungeon experience awarded by an opened lootbox
     private static final ResourceLocation DUNGEON_LOOTBOX_XP_SOURCE = ResourceLocation.fromNamespaceAndPath("levelup", "dungeon_lootbox_orbs");
+    // holds rewards and experience until the player opens the crate
     private NonNullList<ItemStack> loot = NonNullList.create();
     private int storedLevelOrbs;
 
@@ -41,6 +44,7 @@ public class LootboxBlockEntity extends BlockEntity {
     }
 
     public void readFromItemStack(ItemStack stack, ServerPlayer placer) {
+        // rolls seeded loot when a generated lootbox item is placed
         SeededContainerLoot containerLoot = stack.get(DataComponents.CONTAINER_LOOT);
         if (containerLoot != null && this.level instanceof ServerLevel serverLevel) {
             LootParams params = new LootParams.Builder(serverLevel)
@@ -52,6 +56,7 @@ public class LootboxBlockEntity extends BlockEntity {
             setChanged();
             return;
         }
+        // otherwise restores rewards that were saved on a previously filled lootbox item
         CompoundTag root = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag().getCompound(ROOT_KEY);
         this.loot = NonNullList.create();
         this.storedLevelOrbs = root.getInt(LEVEL_ORBS_KEY);
@@ -66,6 +71,7 @@ public class LootboxBlockEntity extends BlockEntity {
     }
 
     public void writeToItemStack(ItemStack stack) {
+        // writes the stored rewards so the lootbox can keep its contents as an item
         CompoundTag all = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
         CompoundTag root = all.getCompound(ROOT_KEY);
         if (this.level != null) {
@@ -91,6 +97,7 @@ public class LootboxBlockEntity extends BlockEntity {
     }
 
     public void burstLoot(ServerLevel level, BlockPos pos, ServerPlayer player) {
+        // plays opening effects before dropping every allowed stored reward
         spawnOpenParticles(level, pos);
         for (ItemStack stack : this.loot) {
             if (!stack.isEmpty() && (!net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).getNamespace().equals("runic")
@@ -99,17 +106,20 @@ public class LootboxBlockEntity extends BlockEntity {
             }
         }
         if (this.storedLevelOrbs > 0) {
+            // gives vanilla levels and sends dungeon experience through the active integration
             ExperienceOrb.award(level, Vec3.atCenterOf(pos).add(0.0D, 1.0D, 0.0D), this.storedLevelOrbs);
             if (!DungeonRunManager.queueDungeonXp(player, this.storedLevelOrbs, DUNGEON_LOOTBOX_XP_SOURCE)) {
                 LevelUpIntegration.awardXp(player, this.storedLevelOrbs, DUNGEON_LOOTBOX_XP_SOURCE);
             }
         }
+        // clears the opened crate so rewards cannot be collected twice
         this.loot.clear();
         this.storedLevelOrbs = 0;
         setChanged();
     }
 
     private static void spawnOpenParticles(ServerLevel level, BlockPos pos) {
+        // creates the wooden crate opening sound and debris effect
         level.playSound(null, pos, net.minecraft.sounds.SoundEvents.BARREL_OPEN, net.minecraft.sounds.SoundSource.BLOCKS, 0.8F, 1.0F);
         level.sendParticles(
                 new BlockParticleOption(ParticleTypes.BLOCK, Blocks.SPRUCE_PLANKS.defaultBlockState()).setPos(pos),
