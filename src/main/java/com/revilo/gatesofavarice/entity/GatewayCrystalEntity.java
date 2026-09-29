@@ -73,6 +73,16 @@ public class GatewayCrystalEntity extends Entity {
             return;
         }
 
+        double angle = (this.tickCount * 0.18D) + (this.getId() * 0.71D);
+        double radius = 1.15D + 0.18D * Math.sin(this.tickCount * 0.11D);
+        double x = this.getX() + Math.cos(angle) * radius;
+        double z = this.getZ() + Math.sin(angle) * radius;
+        double y = this.getY() + 0.45D + (this.tickCount % 28) * 0.045D;
+        serverLevel.sendParticles(net.minecraft.core.particles.ParticleTypes.PORTAL, x, y, z, 1, 0.03D, 0.03D, 0.03D, 0.0D);
+        if (this.isReturnPortal()) {
+            serverLevel.sendParticles(net.minecraft.core.particles.ParticleTypes.CRIMSON_SPORE, x, y, z, 1, 0.02D, 0.02D, 0.02D, 0.0D);
+        }
+
         List<ServerPlayer> players = serverLevel.getEntitiesOfClass(ServerPlayer.class, this.interactionBounds(),
                 player -> !player.isSpectator() && !player.isPassenger() && !player.isOnPortalCooldown());
         // A portal transfer has one entrant.  Processing every nearby player let a host

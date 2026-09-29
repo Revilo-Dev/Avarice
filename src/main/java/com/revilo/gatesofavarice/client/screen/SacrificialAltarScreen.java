@@ -12,6 +12,8 @@ import net.minecraft.world.entity.player.Inventory;
 public final class SacrificialAltarScreen extends AbstractContainerScreen<SacrificialAltarMenu> {
     private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/shop/shop-sell-gui.png");
     private static final ResourceLocation BUTTON_TEXTURE = ResourceLocation.withDefaultNamespace("widget/button");
+    private static final ResourceLocation BUTTON_HIGHLIGHTED_TEXTURE = ResourceLocation.withDefaultNamespace("widget/button_highlighted");
+    private static final ResourceLocation BUTTON_DISABLED_TEXTURE = ResourceLocation.withDefaultNamespace("widget/button_disabled");
     private static final int BUTTON_X = 117;
     private static final int BUTTON_Y = 56;
     private static final int BUTTON_WIDTH = 51;
@@ -26,18 +28,21 @@ public final class SacrificialAltarScreen extends AbstractContainerScreen<Sacrif
     }
 
     @Override protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
-        graphics.blit(TEXTURE, leftPos, topPos, 0, 0, imageWidth, imageHeight, imageWidth, imageHeight);
+        graphics.blit(TEXTURE, leftPos, topPos, 0, 0, imageWidth, imageHeight, 256, 256);
         int value = menu.getSacrificeValue();
         int buttonX = leftPos + BUTTON_X;
         int buttonY = topPos + BUTTON_Y;
-        graphics.blit(BUTTON_TEXTURE, buttonX, buttonY, 0, 0, BUTTON_WIDTH, BUTTON_HEIGHT, BUTTON_WIDTH, BUTTON_HEIGHT);
+        boolean enabled = value > 0;
+        boolean hovered = mouseX >= buttonX && mouseX < buttonX + BUTTON_WIDTH && mouseY >= buttonY && mouseY < buttonY + BUTTON_HEIGHT;
+        graphics.blitSprite(enabled ? (hovered ? BUTTON_HIGHLIGHTED_TEXTURE : BUTTON_TEXTURE) : BUTTON_DISABLED_TEXTURE,
+                buttonX, buttonY, BUTTON_WIDTH, BUTTON_HEIGHT);
         graphics.drawCenteredString(font, Component.literal("SACRIFICE"), buttonX + BUTTON_WIDTH / 2, buttonY + 4, value > 0 ? 0xF4E9FF : 0x777777);
         graphics.renderItem(new net.minecraft.world.item.ItemStack(ModItems.MYTHIC_COIN.get()), leftPos + 134, topPos + 23);
-        graphics.drawCenteredString(font, Component.literal(Integer.toString(value)), leftPos + 150, topPos + 44, 0xB06CFF);
+        graphics.drawCenteredString(font, Component.literal(Integer.toString(value)), leftPos + 142, topPos + 44, 0xB06CFF);
     }
 
     @Override protected void renderLabels(GuiGraphics graphics, int mouseX, int mouseY) {
-        graphics.drawString(font, Component.literal("Sacrifice items for 50% value"), 8, 78, 0xD7F0D9, false);
+        graphics.drawCenteredString(font, Component.literal("Sacrifice items for 50% value"), imageWidth / 2, imageHeight + 8, 0xFF5555);
     }
 
     @Override

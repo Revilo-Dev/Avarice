@@ -5,33 +5,35 @@ import com.revilo.gatesofavarice.dungeon.ModDimensions;
 import com.revilo.gatesofavarice.registry.ModItems;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
+import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 
 /** Always-visible Mythic Coin counter for a dungeon run. */
 public final class DungeonMythicCoinHudOverlay {
     private static final int MARGIN = 8;
     private static final int ICON_SIZE = 16;
+    private static final ResourceLocation LAYER_ID = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_mythic_coin_counter");
 
     private DungeonMythicCoinHudOverlay() {
     }
 
-    @SubscribeEvent
-    public static void onRenderGui(RenderGuiEvent.Post event) {
+    public static void registerGuiLayer(RegisterGuiLayersEvent event) {
+        event.registerAboveAll(LAYER_ID, DungeonMythicCoinHudOverlay::render);
+    }
+
+    private static void render(GuiGraphics graphics, net.minecraft.client.DeltaTracker deltaTracker) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.player == null || minecraft.options.hideGui
                 || minecraft.player.level().dimension() != ModDimensions.DUNGEON_LEVEL) {
             return;
         }
 
-        GuiGraphics graphics = event.getGuiGraphics();
         String coins = formatCompactValue(MythicCoinWallet.get(minecraft.player));
         int width = ICON_SIZE + 3 + minecraft.font.width(coins);
-        int x = minecraft.getWindow().getGuiScaledWidth() - MARGIN - width;
-        int y = minecraft.getWindow().getGuiScaledHeight() - MARGIN - ICON_SIZE;
+        int x = MARGIN;
+        int y = MARGIN;
 
-        graphics.fill(x - 4, y - 3, x + width + 4, y + ICON_SIZE + 3, 0xB0100818);
         graphics.renderItem(new ItemStack(ModItems.MYTHIC_COIN.get()), x, y);
         int textX = x + ICON_SIZE + 3;
         int textY = y + 4;

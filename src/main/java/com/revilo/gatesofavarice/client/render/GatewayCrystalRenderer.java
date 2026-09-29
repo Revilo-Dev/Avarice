@@ -23,6 +23,7 @@ public final class GatewayCrystalRenderer extends EntityRenderer<GatewayCrystalE
     private static final int TIER_3_COLOR = 0x5F4082;
     private static final int TIER_4_COLOR = 0x824079;
     private static final int TIER_5_COLOR = 0x824050;
+    private static final int EXIT_COLOR = 0xC52E35;
 
     public GatewayCrystalRenderer(EntityRendererProvider.Context context) {
         super(context);
@@ -47,7 +48,7 @@ public final class GatewayCrystalRenderer extends EntityRenderer<GatewayCrystalE
         VertexConsumer consumer = buffer.getBuffer(RenderType.entityTranslucent(this.getTextureLocation(entity)));
         PoseStack.Pose pose = poseStack.last();
         Matrix4f poseMatrix = pose.pose();
-        int tintColor = tintColorForTier(entity.getCrystalTier());
+        int tintColor = entity.isReturnPortal() ? EXIT_COLOR : tintColorForTier(entity.getCrystalTier());
 
         addVertex(consumer, pose, poseMatrix, -halfWidth, 0.0F, 0.0F, 0.0F, maxV, packedLight, tintColor);
         addVertex(consumer, pose, poseMatrix, halfWidth, 0.0F, 0.0F, 1.0F, maxV, packedLight, tintColor);

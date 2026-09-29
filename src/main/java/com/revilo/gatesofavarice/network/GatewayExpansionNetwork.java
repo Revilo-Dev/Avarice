@@ -41,6 +41,12 @@ public final class GatewayExpansionNetwork {
         registrar.playToServer(OpenKnowledgeLibraryPayload.TYPE, OpenKnowledgeLibraryPayload.STREAM_CODEC, (payload, context) -> {
             if (context.player() instanceof ServerPlayer player) KnowledgeManager.openLibrary(player);
         });
+        registrar.playToServer(RedeemKnowledgeBookPayload.TYPE, RedeemKnowledgeBookPayload.STREAM_CODEC, (payload, context) -> {
+            if (!(context.player() instanceof ServerPlayer player)) return;
+            int slot = payload.inventorySlot();
+            if (slot < 0 || slot >= player.getInventory().items.size()) return;
+            KnowledgeManager.redeem(player, player.getInventory().getItem(slot));
+        });
         registrar.playToClient(KnowledgeLibraryPayload.TYPE, KnowledgeLibraryPayload.STREAM_CODEC, (payload, context) ->
                 context.enqueueWork(() -> {
                     if (!FMLEnvironment.dist.isClient()) return;

@@ -226,7 +226,11 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         }
         this.renderCoinFlights(guiGraphics, partialTick);
 
-        if (this.activePage == Page.BUY && this.renderUpgradePreviewTooltipIfHovered(guiGraphics, mouseX, mouseY)) {
+        if (this.activePage == Page.BUY && this.renderSpecialistTooltip(guiGraphics, mouseX, mouseY)) {
+            return;
+        }
+
+        if (this.activePage == Page.BUY && this.isUpgradeVendor() && this.renderUpgradePreviewTooltipIfHovered(guiGraphics, mouseX, mouseY)) {
             return;
         }
         if (this.activePage == Page.BUY && this.renderUpgradeTooltip(guiGraphics, mouseX, mouseY)) {
@@ -243,9 +247,15 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         guiGraphics.blit(this.activePage == Page.BUY ? BUY_GUI_TEXTURE : SELL_GUI_TEXTURE, this.leftPos, this.topPos, 0, 0, this.imageWidth, this.imageHeight, 256, 256);
         this.renderWallet(guiGraphics);
         if (this.activePage == Page.BUY) {
-            this.renderUpgradePanel(guiGraphics, mouseX, mouseY);
-            this.renderRerollButton(guiGraphics);
-            this.renderBackButton(guiGraphics);
+            if (this.menu.getShopRoleId() == 4) {
+                this.renderMerchantPanel(guiGraphics, mouseX, mouseY);
+            } else if (this.menu.getShopRoleId() == 5) {
+                this.renderTarotDealerPanel(guiGraphics, mouseX, mouseY);
+            } else {
+                this.renderUpgradePanel(guiGraphics, mouseX, mouseY);
+                this.renderRerollButton(guiGraphics);
+                this.renderBackButton(guiGraphics);
+            }
         } else {
             this.renderSellPanel(guiGraphics, mouseX, mouseY);
         }
@@ -253,7 +263,12 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
 
     @Override
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        guiGraphics.drawString(this.font, Component.translatable("screen.gatesofavarice.shopkeeper.title"), 6, 4, 0x404040, false);
+        Component label = this.isEnchanter()
+                ? Component.literal("Enchanting").withStyle(ChatFormatting.LIGHT_PURPLE)
+                : this.isArmorer()
+                ? Component.literal("Runic Inscriptions").withStyle(ChatFormatting.RED)
+                : Component.translatable("screen.gatesofavarice.shopkeeper.title");
+        guiGraphics.drawString(this.font, label, 6, 4, 0x404040, false);
     }
 
     @Override
@@ -269,6 +284,20 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
                 return true;
             }
             if (this.activePage == Page.BUY) {
+                if (this.menu.getShopRoleId() == 4) {
+                    int offerIndex = this.getMerchantOfferIndex(mouseX, mouseY);
+                    if (offerIndex >= 0 && this.minecraft != null && this.minecraft.gameMode != null) {
+                        this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, offerIndex);
+                        return true;
+                    }
+                } else if (this.menu.getShopRoleId() == 5) {
+                    int tarotIndex = this.getTarotPurchaseIndex(mouseX, mouseY);
+                    if (tarotIndex >= 0 && this.minecraft != null && this.minecraft.gameMode != null) {
+                        this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, ShopkeeperMenu.TAROT_BUTTON_ID_OFFSET + tarotIndex);
+                        return true;
+                    }
+                }
+                if (!this.isUpgradeVendor()) return super.mouseClicked(mouseX, mouseY, button);
                 if (!this.categorySelection && this.isHoveringBackButton(mouseX, mouseY) && this.minecraft != null && this.minecraft.gameMode != null) {
                     this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, ShopkeeperMenu.BACK_BUTTON_ID);
                     return true;
@@ -308,7 +337,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private void renderUpgradePanel(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         if (this.categorySelection) {
             this.renderCategoryCards(guiGraphics, mouseX, mouseY);
-            guiGraphics.drawCenteredString(this.font, Component.literal("Pick upgrade deck").withStyle(ChatFormatting.GOLD), this.leftPos + 88, this.topPos + 64, 0xFFF0B8);
+            guiGraphics.drawCenteredString(this.font, Component.literal(this.isArmorer() ? "Pick inscription target" : "Pick upgrade deck").withStyle(ChatFormatting.GOLD), this.leftPos + 88, this.topPos + 64, 0xFFF0B8);
             return;
         }
 
@@ -319,6 +348,89 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         this.renderUpgradeCards(guiGraphics, mouseX, mouseY);
     }
 
+    private boolean isUpgradeVendor() {
+        return this.menu.getShopRoleId() == 2 || this.menu.getShopRoleId() == 3 || this.menu.getShopRoleId() == 0;
+    }
+
+    private boolean isEnchanter() {
+        return this.menu.getShopRoleId() == 3;
+    }
+
+    private boolean isArmorer() {
+        return this.menu.getShopRoleId() == 2;
+    }
+
+    private int visibleCategoryCount() {
+        return this.isEnchanter() || this.isArmorer() ? 3 : UpgradeCategory.values().length;
+    }
+
+    private int visibleCategoryIndex(int visibleIndex) {
+        return visibleIndex;
+    }
+
+    private void renderMerchantPanel(GuiGraphics graphics, int mouseX, int mouseY) {
+        List<com.revilo.gatesofavarice.shop.ShopOfferDefinition> offers = this.menu.getOffers();
+        graphics.drawCenteredString(this.font, "Rare Dungeon Goods", this.leftPos + 88, this.topPos + 5, 0xFFE2B85C);
+        for (int index = 0; index < Math.min(ShopkeeperMenu.GRID_SLOT_COUNT, offers.size()); index++) {
+            int x = this.leftPos + 14 + (index % 5) * 31;
+            int y = this.topPos + 18 + (index / 5) * 27;
+            int color = this.menu.canAfford(index) ? 0x884C3827 : 0x88602020;
+            graphics.fill(x - 3, y - 3, x + 21, y + 23, color);
+            graphics.renderItem(offers.get(index).previewStack(), x, y);
+            graphics.drawCenteredString(this.font, Integer.toString(this.menu.getOfferPrice(index)), x + 8, y + 16, 0xFFF2CF71);
+        }
+    }
+
+    private void renderTarotDealerPanel(GuiGraphics graphics, int mouseX, int mouseY) {
+        graphics.drawCenteredString(this.font, "Extra Tarot Choices", this.leftPos + 88, this.topPos + 6, 0xFFD77CFF);
+        for (int index = 0; index < 3; index++) {
+            int x = this.leftPos + 34 + index * 45;
+            int y = this.topPos + 25;
+            int cost = (index + 1) * (index + 1) * 500;
+            graphics.fill(x - 5, y - 5, x + 25, y + 35, this.menu.getWalletBalance() >= cost ? 0x88572B73 : 0x88602020);
+            graphics.renderItem(new ItemStack(Items.PAPER, index + 1), x + 2, y);
+            graphics.drawCenteredString(this.font, "+" + (index + 1), x + 10, y + 17, 0xFFFFFFFF);
+            graphics.drawCenteredString(this.font, Integer.toString(cost), x + 10, y + 27, 0xFFF2CF71);
+        }
+    }
+
+    private int getMerchantOfferIndex(double mouseX, double mouseY) {
+        for (int index = 0; index < Math.min(ShopkeeperMenu.GRID_SLOT_COUNT, this.menu.getOffers().size()); index++) {
+            int x = this.leftPos + 11 + (index % 5) * 31;
+            int y = this.topPos + 15 + (index / 5) * 27;
+            if (mouseX >= x && mouseX < x + 24 && mouseY >= y && mouseY < y + 26) return index;
+        }
+        return -1;
+    }
+
+    private int getTarotPurchaseIndex(double mouseX, double mouseY) {
+        for (int index = 0; index < 3; index++) {
+            int x = this.leftPos + 29 + index * 45;
+            int y = this.topPos + 20;
+            if (mouseX >= x && mouseX < x + 30 && mouseY >= y && mouseY < y + 40) return index;
+        }
+        return -1;
+    }
+
+    private boolean renderSpecialistTooltip(GuiGraphics graphics, int mouseX, int mouseY) {
+        if (this.menu.getShopRoleId() == 4) {
+            int index = this.getMerchantOfferIndex(mouseX, mouseY);
+            if (index >= 0 && index < this.menu.getOffers().size()) {
+                var offer = this.menu.getOffers().get(index);
+                graphics.renderTooltip(this.font, List.of(offer.title(), offer.description()), java.util.Optional.empty(), mouseX, mouseY);
+                return true;
+            }
+        } else if (this.menu.getShopRoleId() == 5) {
+            int index = this.getTarotPurchaseIndex(mouseX, mouseY);
+            if (index >= 0) {
+                int amount = index + 1;
+                graphics.renderTooltip(this.font, Component.literal("Add " + amount + " choice" + (amount == 1 ? "" : "s") + " to the next floor's Tarot draw"), mouseX, mouseY);
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void renderSelectionCounter(GuiGraphics guiGraphics) {
         int remaining = Math.max(0, this.maxCardSelections - this.selectedCardCount);
         Component label = Component.literal("Select " + remaining + " Cards").withStyle(remaining > 0 ? ChatFormatting.LIGHT_PURPLE : ChatFormatting.RED);
@@ -326,7 +438,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private void renderCategoryCards(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        int count = UpgradeCategory.values().length;
+        int count = this.visibleCategoryCount();
         int totalWidth = Math.round(count * CARD_W * CATEGORY_CARD_SCALE + Math.max(0, count - 1) * CATEGORY_CARD_GAP);
         int startX = this.leftPos + BUY_AREA_LEFT + (buyAreaWidth() - totalWidth) / 2;
         int y = this.topPos + BUY_AREA_TOP + 12;
@@ -338,7 +450,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             int drawX = animatedCardX(x, i, startX, CATEGORY_CARD_SCALE);
             int drawY = animatedCardY(y, i, CATEGORY_CARD_SCALE);
             this.drawCard(guiGraphics, hovered ? CATEGORY_CARD_HOVERED : CATEGORY_CARD, drawX, drawY, drawScale);
-            this.renderCategoryCardContents(guiGraphics, drawX, drawY, i, drawScale);
+            this.renderCategoryCardContents(guiGraphics, drawX, drawY, this.visibleCategoryIndex(i), drawScale);
         }
         guiGraphics.disableScissor();
     }
@@ -432,7 +544,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             return;
         }
         this.animationTick++;
-        int cardCount = Math.max(1, this.categorySelection ? UpgradeCategory.values().length : Math.min(8, this.upgradeCards.size()));
+        int cardCount = Math.max(1, this.categorySelection ? this.visibleCategoryCount() : Math.min(8, this.upgradeCards.size()));
         int drawEnd = (cardCount - 1) * DRAW_STAGGER_TICKS + DRAW_DURATION_TICKS;
         if (this.animationState == AnimationState.DRAWING && this.animationTick > drawEnd) {
             this.animationState = AnimationState.IDLE;
@@ -593,7 +705,9 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
 
     private void renderTabs(GuiGraphics guiGraphics) {
         this.renderTab(guiGraphics, Page.BUY, TAB_BUY_Y, Component.translatable("screen.gatesofavarice.shopkeeper.tab_buy"));
-        this.renderTab(guiGraphics, Page.SELL, TAB_SELL_Y, Component.translatable("screen.gatesofavarice.shopkeeper.tab_sell"));
+        if (!this.isEnchanter()) {
+            this.renderTab(guiGraphics, Page.SELL, TAB_SELL_Y, Component.translatable("screen.gatesofavarice.shopkeeper.tab_sell"));
+        }
     }
 
     private void renderTab(GuiGraphics guiGraphics, Page page, int tabY, Component label) {
@@ -627,9 +741,10 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         int hoveredIndex = this.getUpgradeSelectionIndex(mouseX, mouseY);
         if (hoveredIndex >= 0) {
             if (this.categorySelection) {
+                int categoryIndex = this.visibleCategoryIndex(hoveredIndex);
                 guiGraphics.renderComponentTooltip(this.font, List.of(
-                        Component.literal(fullCategoryName(hoveredIndex)).withStyle(ChatFormatting.GOLD),
-                        Component.literal(categorySummary(hoveredIndex)).withStyle(ChatFormatting.GRAY)
+                        Component.literal(fullCategoryName(categoryIndex)).withStyle(ChatFormatting.GOLD),
+                        Component.literal(categorySummary(categoryIndex)).withStyle(ChatFormatting.GRAY)
                 ), mouseX, mouseY);
                 return true;
             }
@@ -678,8 +793,9 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             return;
         }
         if (this.categorySelection) {
-            if (index >= 0 && index < UpgradeCategory.values().length) {
-                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, ShopkeeperMenu.CATEGORY_BUTTON_ID_OFFSET + index);
+            if (index >= 0 && index < this.visibleCategoryCount()) {
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId,
+                        ShopkeeperMenu.CATEGORY_BUTTON_ID_OFFSET + this.visibleCategoryIndex(index));
             }
             return;
         }
@@ -972,7 +1088,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
 
     private int getUpgradeSelectionIndex(double mouseX, double mouseY) {
         if (this.categorySelection) {
-            int count = UpgradeCategory.values().length;
+            int count = this.visibleCategoryCount();
             int totalWidth = Math.round(count * CARD_W * CATEGORY_CARD_SCALE + Math.max(0, count - 1) * CATEGORY_CARD_GAP);
             int startX = this.leftPos + BUY_AREA_LEFT + (buyAreaWidth() - totalWidth) / 2;
             int y = this.topPos + BUY_AREA_TOP + 12;
@@ -1039,7 +1155,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             this.setActivePage(Page.BUY);
             return true;
         }
-        if (this.isHoveringTab(mouseX, mouseY, TAB_SELL_Y)) {
+        if (!this.isEnchanter() && this.isHoveringTab(mouseX, mouseY, TAB_SELL_Y)) {
             this.setActivePage(Page.SELL);
             return true;
         }
@@ -1053,6 +1169,9 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private void setActivePage(Page page) {
+        if (this.isEnchanter() && page == Page.SELL) {
+            return;
+        }
         if (this.activePage == page) {
             return;
         }

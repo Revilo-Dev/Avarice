@@ -43,12 +43,14 @@ import net.revilodev.runic.synergy.SynergyRegistry;
 
 public final class DungeonUpgradeManager {
     private static final Map<UUID, UpgradeSession> SESSIONS = new HashMap<>();
+    private static final Map<UUID, String> SHOP_MODES = new HashMap<>();
 
     private DungeonUpgradeManager() {}
 
     @SubscribeEvent
     public static void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         SESSIONS.remove(event.getEntity().getUUID());
+        SHOP_MODES.remove(event.getEntity().getUUID());
     }
 
     public static boolean openUpgradeScreen(ServerPlayer player) {
@@ -363,10 +365,36 @@ public final class DungeonUpgradeManager {
         }
         boolean includeSynergyCard = session.waveOwnerId != null && DungeonRunManager.isSynergyCardWave(session.waveOwnerId);
         List<UpgradeCard> generated = pricedCards(RunicUpgradeService.generateUpgradeCards(player, target, session.instance, session.definition, category, waveNumber, session.cardGenerationNonce, includeSynergyCard), waveNumber);
+        if (session.waveOwnerId == null) {
+            String shopMode = SHOP_MODES.getOrDefault(player.getUUID(), "enchanter");
+            List<UpgradeCard> unfiltered = generated;
+            generated = generated.stream().filter(card -> "armorer".equals(shopMode)
+                    ? isRunicInscriptionCard(card.type())
+                    : card.type() == UpgradeCardType.ADD_OR_UPGRADE_EFFECT).toList();
+            if (generated.isEmpty() && "armorer".equals(shopMode)) {
+                generated = unfiltered.stream().filter(card -> card.type() != UpgradeCardType.ADD_OR_UPGRADE_EFFECT).toList();
+            }
+            if ("armorer".equals(shopMode)) {
+                generated = generated.stream().map(DungeonUpgradeManager::asInscriptionCard).toList();
+            }
+        }
         if (generated.size() <= count) {
             return generated;
         }
         return List.copyOf(generated.subList(0, count));
+    }
+
+    private static boolean isRunicInscriptionCard(UpgradeCardType type) {
+        return switch (type) {
+            case INCREASE_EXISTING_STAT_PERCENT, INCREASE_EXISTING_STAT_FLAT, ADD_NEW_RUNE_STAT,
+                    ADD_IMPLICIT, UPGRADE_ARMOR_BASE_STAT, APPLY_SYNERGY -> true;
+            default -> false;
+        };
+    }
+
+    private static UpgradeCard asInscriptionCard(UpgradeCard card) {
+        return new UpgradeCard(card.id(), card.type(), card.category(), "Runic Inscription", card.targetLabel(),
+                card.changeLabel(), card.currentValue(), card.newValue(), card.tier(), card.cost());
     }
 
     private static int maxShopSelections(ServerPlayer player) {
@@ -599,6 +627,18 @@ public final class DungeonUpgradeManager {
         RunicItemData.addSynergy(target, synergyId);
         target.set(DataComponents.ENCHANTMENT_GLINT_OVERRIDE, true);
         return true;
+    }
+
+    public static boolean openShopUpgradeScreen(ServerPlayer player, String shopMode) {
+        String normalizedMode = shopMode == null ? "enchanter" : shopMode;
+        String previousMode = SHOP_MODES.put(player.getUUID(), normalizedMode);
+        UpgradeSession existing = SESSIONS.get(player.getUUID());
+        if (existing != null && previousMode != null && !previousMode.equals(normalizedMode)) {
+            existing.activeCategory = null;
+            existing.cardsByCategory.clear();
+            existing.cardsById.clear();
+        }
+        return openShopUpgradeScreen(player);
     }
 
     private static void upgradeDungeonMagnet(ServerPlayer player, RandomSource random) {

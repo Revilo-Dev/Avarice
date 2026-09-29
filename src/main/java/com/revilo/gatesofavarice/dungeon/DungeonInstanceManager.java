@@ -26,7 +26,6 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -45,11 +44,14 @@ public final class DungeonInstanceManager {
     private static final long PLATFORM_LIFETIME_TICKS = 20L * 120L;
     private static final Vec3 PLAYER_SPAWN_OFFSET = new Vec3(29.0D, 2.0D, 0.0D);
     private static final BlockPos SHOP_STRUCTURE_ORIGIN = new BlockPos(13877272, 64, -2688999);
-    private static final Vec3 SHOP_PLAYER_SPAWN = new Vec3(13877272.0D, 65.0D, -2688999.0D);
-    private static final Vec3 SHOP_ARCHIVIST_POSITION = new Vec3(13877272.0D, 64.0D, -2688982.0D);
-    private static final Vec3 SHOP_ARMORER_POSITION = new Vec3(13877253.0D, 64.0D, -2689000.0D);
-    private static final Vec3 SHOP_ENCHANTER_POSITION = new Vec3(13877291.0D, 64.0D, -2689001.0D);
-    private static final Vec3 SHOP_ADVANCE_PORTAL_POSITION = new Vec3(13877272.0D, 64.0D, -2689018.0D);
+    private static final Vec3 SHOP_PLAYER_SPAWN = new Vec3(13877296.5D, 65.0D, -2688978.5D);
+    private static final Vec3 SHOP_ARCHIVIST_POSITION = new Vec3(13877315.0D, 64.0D, -2688976.0D);
+    private static final Vec3 SHOP_ARMORER_POSITION = new Vec3(13877277.0D, 65.0D, -2688975.0D);
+    private static final Vec3 SHOP_ENCHANTER_POSITION = new Vec3(13877295.0D, 65.0D, -2688956.0D);
+    private static final Vec3 SHOP_MERCHANT_POSITION = new Vec3(13877293.0D, 65.0D, -2688975.0D);
+    private static final Vec3 SHOP_TAROT_DEALER_POSITION = new Vec3(13877300.0D, 65.0D, -2688975.0D);
+    private static final Vec3 SHOP_EXIT_PORTAL_POSITION = new Vec3(13877288.0D, 62.0D, -2688992.0D);
+    private static final Vec3 SHOP_ADVANCE_PORTAL_POSITION = new Vec3(13877301.0D, 62.0D, -2688992.0D);
     private static final String SHOP_STRUCTURE_ID = "t1-archive1";
     private static final Vec3 EXIT_PORTAL_OFFSET = new Vec3(0.0D, 5.0D, 8.0D);
     private static final Vec3 SHOPKEEPER_OFFSET = new Vec3(0.0D, 4.0D, 0.0D);
@@ -144,6 +146,12 @@ public final class DungeonInstanceManager {
 
     public static Vec3 enchanterPosition(UUID instanceOwnerId) { return SHOP_ENCHANTER_POSITION; }
 
+    public static Vec3 merchantPosition(UUID instanceOwnerId) { return SHOP_MERCHANT_POSITION; }
+
+    public static Vec3 tarotDealerPosition(UUID instanceOwnerId) { return SHOP_TAROT_DEALER_POSITION; }
+
+    public static Vec3 shopExitPortalPosition(UUID instanceOwnerId) { return SHOP_EXIT_PORTAL_POSITION; }
+
     public static Vec3 shopAdvancePortalPosition(UUID instanceOwnerId) { return SHOP_ADVANCE_PORTAL_POSITION; }
 
     public static Vec3 advancePortalPosition(UUID instanceOwnerId) {
@@ -206,6 +214,12 @@ public final class DungeonInstanceManager {
         ACTIVE_DUNGEONS.put(origin.immutable(), dungeonLevel.getGameTime() + PLATFORM_LIFETIME_TICKS);
     }
 
+    public static void keepShopAlive(ServerLevel dungeonLevel) {
+        if (dungeonLevel == null) return;
+        ensureInstance(dungeonLevel, SHOP_STRUCTURE_ORIGIN, InstanceLayout.SHOP);
+        ACTIVE_DUNGEONS.put(SHOP_STRUCTURE_ORIGIN, Long.MAX_VALUE);
+    }
+
     /** Rebuilds the combat room so every floor starts with a fresh structure and POIs. */
     public static void reloadDungeonFloor(ServerLevel level, UUID instanceOwnerId, int floor, double quantityBonus) {
         BlockPos origin = instanceOrigin(instanceOwnerId);
@@ -244,7 +258,7 @@ public final class DungeonInstanceManager {
         extinguishFireNearDungeonPlayers(dungeonLevel);
         ArrayList<BlockPos> expiredDungeons = new ArrayList<>();
         for (Map.Entry<BlockPos, Long> entry : ACTIVE_DUNGEONS.entrySet()) {
-            if (gameTime >= entry.getValue()) {
+            if (INSTANCE_LAYOUTS.get(entry.getKey()) != InstanceLayout.SHOP && gameTime >= entry.getValue()) {
                 clearDungeonEntities(dungeonLevel, entry.getKey());
                 clearDungeonVolume(dungeonLevel, entry.getKey());
                 expiredDungeons.add(entry.getKey());
@@ -270,7 +284,7 @@ public final class DungeonInstanceManager {
     private static void ensureInstance(ServerLevel level, BlockPos origin, InstanceLayout layout) {
         boolean alreadyActive = ACTIVE_DUNGEONS.containsKey(origin);
         InstanceLayout activeLayout = INSTANCE_LAYOUTS.get(origin);
-        long expiresAt = level.getGameTime() + PLATFORM_LIFETIME_TICKS;
+        long expiresAt = layout == InstanceLayout.SHOP ? Long.MAX_VALUE : level.getGameTime() + PLATFORM_LIFETIME_TICKS;
         ACTIVE_DUNGEONS.put(origin.immutable(), expiresAt);
 
         if (alreadyActive && activeLayout == layout) {
@@ -295,7 +309,7 @@ public final class DungeonInstanceManager {
             GatewayExpansion.LOGGER.error("Missing shop structure {}", SHOP_STRUCTURE_ID);
             return;
         }
-        StructurePlaceSettings settings = new StructurePlaceSettings().setIgnoreEntities(false);
+        StructurePlaceSettings settings = new StructurePlaceSettings().setIgnoreEntities(true);
         if (!template.get().placeInWorld(level, origin, origin, settings, level.random, 2)) {
             GatewayExpansion.LOGGER.error("Failed to place shop structure {} at {}", SHOP_STRUCTURE_ID, origin);
         }
@@ -322,12 +336,7 @@ public final class DungeonInstanceManager {
     }
 
     private static void placeDungeonStructure(ServerLevel level, BlockPos origin) {
-        // The exported tier-one pieces are 48x48 and are authored facing out from their local origin.
-        // Rotate them in-place around the 48x48 piece centre so every entrance faces the room centre.
-        StructurePlaceSettings settings = new StructurePlaceSettings()
-                .setIgnoreEntities(false)
-                .setRotation(Rotation.CLOCKWISE_180)
-                .setRotationPivot(new BlockPos(24, 0, 24));
+        StructurePlaceSettings settings = new StructurePlaceSettings().setIgnoreEntities(true);
         for (DungeonStructurePiece piece : DUNGEON_PIECES) {
             Optional<StructureTemplate> template = loadDungeonPiece(level, piece);
             if (template.isEmpty()) {
@@ -335,8 +344,7 @@ public final class DungeonInstanceManager {
                 continue;
             }
 
-            // Rotation around (24, 24) is one block wider on the positive axes; offset back to retain the 96x96 layout.
-            BlockPos placementOrigin = origin.offset(piece.xOffset() - 1, 0, piece.zOffset() - 1);
+            BlockPos placementOrigin = origin.offset(piece.xOffset(), 0, piece.zOffset());
             boolean placed = template.get().placeInWorld(level, placementOrigin, placementOrigin, settings, level.random, 2);
             if (!placed) {
                 GatewayExpansion.LOGGER.error("Failed to place dungeon structure piece {} at {}", piece.templateId(), placementOrigin);
@@ -472,7 +480,7 @@ public final class DungeonInstanceManager {
                 for (int z = minZ; z <= maxZ; z++) {
                     BlockPos clearPos = new BlockPos(x, y, z);
                     if (!level.getBlockState(clearPos).isAir()) {
-                        level.setBlock(clearPos, Blocks.AIR.defaultBlockState(), 3);
+                        level.setBlock(clearPos, Blocks.AIR.defaultBlockState(), 2);
                     }
                 }
             }

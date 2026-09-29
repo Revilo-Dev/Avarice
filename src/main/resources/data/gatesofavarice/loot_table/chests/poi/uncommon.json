@@ -12,6 +12,14 @@
     "rolls": 1,
     "conditions": [{ "condition": "minecraft:random_chance", "chance": 0.05 }],
     "entries": [
+      { "type": "minecraft:item", "name": "minecraft:bread", "weight": 3, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 1, "max": 2 } }] },
+      { "type": "minecraft:item", "name": "minecraft:baked_potato", "weight": 3, "functions": [{ "function": "minecraft:set_count", "count": { "type": "minecraft:uniform", "min": 1, "max": 2 } }] },
+      { "type": "minecraft:item", "name": "minecraft:cooked_beef", "weight": 2, "functions": [{ "function": "minecraft:set_count", "count": 1 }] }
+    ]
+  }, {
+    "rolls": 1,
+    "conditions": [{ "condition": "minecraft:random_chance", "chance": 0.05 }],
+    "entries": [
       { "type": "minecraft:item", "name": "runic:repair_rune", "weight": 3 },
       { "type": "minecraft:item", "name": "runic:expansion_rune", "weight": 1 }
     ]

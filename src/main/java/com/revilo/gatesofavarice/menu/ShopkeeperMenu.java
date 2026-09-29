@@ -37,6 +37,7 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
     public static final int CATEGORY_BUTTON_ID_OFFSET = 1000;
     public static final int CARD_BUTTON_ID_OFFSET = 1100;
     public static final int BUY_ALL_BUTTON_ID_OFFSET = 200;
+    public static final int TAROT_BUTTON_ID_OFFSET = 1200;
     public static final int SELL_SLOT_COUNT = 18;
     private static final int TEMP_OFFER_COUNT = GRID_SLOT_COUNT;
     private static final int DATA_REROLL_COST = 0;
@@ -45,7 +46,8 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
     private static final int DATA_STOCK_START = DATA_TEMP_START + TEMP_OFFER_COUNT;
     private static final int DATA_PRICE_START = DATA_STOCK_START + GRID_SLOT_COUNT;
     private static final int DATA_DUNGEON_BAIL_AVAILABLE = DATA_PRICE_START + GRID_SLOT_COUNT;
-    private static final int DATA_SIZE = DATA_DUNGEON_BAIL_AVAILABLE + 1;
+    private static final int DATA_SHOP_ROLE = DATA_DUNGEON_BAIL_AVAILABLE + 1;
+    private static final int DATA_SIZE = DATA_SHOP_ROLE + 1;
     private static final int SELL_GRID_X = 8;
     private static final int SELL_GRID_Y = 14;
     private static final int SELL_COLUMNS = 6;
@@ -69,8 +71,11 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
         this.addDataSlots(this.syncedData);
         this.clearSyncedData();
         this.syncFromTrader();
-        if (!inventory.player.level().isClientSide && inventory.player instanceof ServerPlayer serverPlayer) {
-            DungeonUpgradeManager.openShopUpgradeScreen(serverPlayer);
+        Entity entity = inventory.player.level().getEntity(shopkeeperId);
+        String role = entity instanceof GatekeeperEntity trader ? ShopkeeperManager.getSpecialistRole(trader) : "";
+        if (!inventory.player.level().isClientSide && inventory.player instanceof ServerPlayer serverPlayer
+                && ("enchanter".equals(role) || "armorer".equals(role))) {
+            DungeonUpgradeManager.openShopUpgradeScreen(serverPlayer, role);
         }
     }
 
@@ -153,6 +158,11 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
         }
         if (id == BACK_BUTTON_ID) {
             return DungeonUpgradeManager.openShopUpgradeScreen(serverPlayer);
+        }
+
+        if (id >= TAROT_BUTTON_ID_OFFSET && id < TAROT_BUTTON_ID_OFFSET + 3 && this.getShopRoleId() == 5) {
+            int amount = id - TAROT_BUTTON_ID_OFFSET + 1;
+            return DungeonRunManager.purchaseExtraTarotChoices(serverPlayer, amount);
         }
 
         if (id >= CATEGORY_BUTTON_ID_OFFSET && id < CATEGORY_BUTTON_ID_OFFSET + UpgradeCategory.values().length) {
@@ -333,6 +343,10 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
         return false;
     }
 
+    public int getShopRoleId() {
+        return Math.max(0, this.syncedData.get(DATA_SHOP_ROLE));
+    }
+
     public String getUpgradeSessionId() {
         if (!(this.player instanceof ServerPlayer serverPlayer)) {
             return "";
@@ -398,6 +412,7 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
             this.syncedData.set(DATA_PRICE_START + index, 0);
         }
         this.syncedData.set(DATA_DUNGEON_BAIL_AVAILABLE, 0);
+        this.syncedData.set(DATA_SHOP_ROLE, 0);
         this.refreshOffersFromData();
     }
 
@@ -427,6 +442,7 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
         ServerPlayer menuPlayer = this.player instanceof ServerPlayer serverPlayer ? serverPlayer : null;
         this.syncedData.set(DATA_DUNGEON_BAIL_AVAILABLE,
                 menuPlayer != null && DungeonRunManager.canOwnerBailFromShop(menuPlayer, this.shopkeeperId) ? 1 : 0);
+        this.syncedData.set(DATA_SHOP_ROLE, ShopkeeperManager.getSpecialistRoleId(trader));
         this.refreshOffersFromData();
     }
 

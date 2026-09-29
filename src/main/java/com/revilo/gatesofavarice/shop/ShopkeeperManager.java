@@ -7,6 +7,7 @@ import com.revilo.gatesofavarice.entity.GatekeeperEntity;
 import com.revilo.gatesofavarice.dungeon.ModDimensions;
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
 import com.revilo.gatesofavarice.item.MythicCoinStackData;
+import com.revilo.gatesofavarice.knowledge.KnowledgeManager;
 import com.revilo.gatesofavarice.menu.ShopkeeperMenu;
 import com.revilo.gatesofavarice.registry.ModEntities;
 import com.revilo.gatesofavarice.registry.ModItems;
@@ -152,9 +153,13 @@ public final class ShopkeeperManager {
         if (DungeonRunManager.tryResumePendingWaveMenu(player, trader.getId())) {
             return;
         }
+        if ("archive_keeper".equals(getSpecialistRole(trader))) {
+            KnowledgeManager.openLibrary(player);
+            return;
+        }
         MenuProvider provider = new net.minecraft.world.SimpleMenuProvider(
                 (containerId, inventory, ignored) -> new ShopkeeperMenu(containerId, inventory, trader.getId()),
-                Component.translatable("entity.gatesofavarice.shopkeeper"));
+                trader.getDisplayName());
         player.openMenu(provider, buffer -> buffer.writeInt(trader.getId()));
     }
 
@@ -200,10 +205,12 @@ public final class ShopkeeperManager {
         return serverLevel.addFreshEntity(trader) ? trader : null;
     }
 
-    /** Keeps the two specialist traders present in the archive shop layout. */
+    /** Keeps every role-specific trader present in the archive shop layout. */
     public static void ensureShopSpecialists(ServerLevel level, java.util.UUID instanceOwnerId, Player summoner) {
         ensureSpecialist(level, DungeonInstanceManager.armorerPosition(instanceOwnerId), "armorer", Component.literal("Armorer").withStyle(ChatFormatting.RED), summoner);
         ensureSpecialist(level, DungeonInstanceManager.enchanterPosition(instanceOwnerId), "enchanter", Component.literal("Enchanter").withStyle(ChatFormatting.LIGHT_PURPLE), summoner);
+        ensureSpecialist(level, DungeonInstanceManager.merchantPosition(instanceOwnerId), "merchant", Component.literal("Merchant").withStyle(ChatFormatting.GOLD), summoner);
+        ensureSpecialist(level, DungeonInstanceManager.tarotDealerPosition(instanceOwnerId), "tarot_dealer", Component.literal("Tarot Dealer").withStyle(ChatFormatting.DARK_PURPLE), summoner);
     }
 
     private static void ensureSpecialist(ServerLevel level, Vec3 position, String role, Component name, Player summoner) {
@@ -232,6 +239,27 @@ public final class ShopkeeperManager {
 
     public static boolean isShopkeeper(GatekeeperEntity trader) {
         return trader.getPersistentData().getBoolean(SHOPKEEPER_KEY);
+    }
+
+    public static String getSpecialistRole(GatekeeperEntity trader) {
+        return trader.getPersistentData().getString(SHOP_SPECIALIST_ROLE_KEY);
+    }
+
+    public static void setSpecialistRole(GatekeeperEntity trader, String role, Component name) {
+        trader.getPersistentData().putString(SHOP_SPECIALIST_ROLE_KEY, role);
+        trader.setCustomName(name);
+        trader.setCustomNameVisible(true);
+    }
+
+    public static int getSpecialistRoleId(GatekeeperEntity trader) {
+        return switch (getSpecialistRole(trader)) {
+            case "archive_keeper" -> 1;
+            case "armorer" -> 2;
+            case "enchanter" -> 3;
+            case "merchant" -> 4;
+            case "tarot_dealer" -> 5;
+            default -> 0;
+        };
     }
 
     public static java.util.List<ShopOfferDefinition> getOffers(GatekeeperEntity trader) {
