@@ -70,6 +70,8 @@ public final class LoadoutModels {
         ITEM_REWARD_GATEWAY_CARD,
         ITEM_REROLL_PRIMARY_WEAPON,
         ITEM_REROLL_SECONDARY_WEAPON,
+        UPGRADE_AMMO_TYPE,
+        UPGRADE_AMMO_COUNT,
         APPLY_SYNERGY
     }
 

@@ -25,7 +25,7 @@ public final class MythicCoinPileBlock extends Block {
     // defines the total coin value range and baseline orb count
     private static final int MIN_VALUE = 20;
     private static final int MAX_VALUE = 50;
-    private static final int BASE_CLUMP_SIZE = 3;
+    private static final int BASE_CLUMP_SIZE = 18;
 
     public MythicCoinPileBlock() {
         this(BlockBehaviour.Properties.of().mapColor(MapColor.GOLD).strength(0.5F).noOcclusion());

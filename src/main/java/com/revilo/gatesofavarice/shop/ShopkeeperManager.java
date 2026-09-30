@@ -210,18 +210,19 @@ public final class ShopkeeperManager {
         ensureSpecialist(level, DungeonInstanceManager.armorerPosition(instanceOwnerId), "armorer", Component.literal("Armorer").withStyle(ChatFormatting.RED), summoner);
         ensureSpecialist(level, DungeonInstanceManager.enchanterPosition(instanceOwnerId), "enchanter", Component.literal("Enchanter").withStyle(ChatFormatting.LIGHT_PURPLE), summoner);
         ensureSpecialist(level, DungeonInstanceManager.merchantPosition(instanceOwnerId), "merchant", Component.literal("Merchant").withStyle(ChatFormatting.GOLD), summoner);
-        ensureSpecialist(level, DungeonInstanceManager.tarotDealerPosition(instanceOwnerId), "tarot_dealer", Component.literal("Tarot Dealer").withStyle(ChatFormatting.DARK_PURPLE), summoner);
+        ensureSpecialist(level, DungeonInstanceManager.tarotDealerPosition(instanceOwnerId), "tarot_dealer", Component.literal("Booster Dealer").withStyle(ChatFormatting.DARK_PURPLE), summoner);
     }
 
     private static void ensureSpecialist(ServerLevel level, Vec3 position, String role, Component name, Player summoner) {
-        GatekeeperEntity existing = level.getEntitiesOfClass(GatekeeperEntity.class,
+        java.util.List<GatekeeperEntity> matches = level.getEntitiesOfClass(GatekeeperEntity.class,
                 new net.minecraft.world.phys.AABB(position, position).inflate(2.0D),
-                entity -> role.equals(entity.getPersistentData().getString(SHOP_SPECIALIST_ROLE_KEY)))
-                .stream()
-                .findFirst()
-                .orElse(null);
+                entity -> role.equals(entity.getPersistentData().getString(SHOP_SPECIALIST_ROLE_KEY)));
+        GatekeeperEntity existing = matches.isEmpty() ? null : matches.getFirst();
         if (existing != null) {
+            existing.setCustomName(name);
+            existing.setCustomNameVisible(true);
             positionKeeper(existing, position);
+            for (GatekeeperEntity duplicate : matches) if (duplicate != existing) duplicate.discard();
             return;
         }
         GatekeeperEntity trader = spawnShopkeeper(level, position.x(), position.y(), position.z(), summoner);

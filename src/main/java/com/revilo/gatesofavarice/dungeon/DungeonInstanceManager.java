@@ -50,8 +50,8 @@ public final class DungeonInstanceManager {
     private static final Vec3 SHOP_ENCHANTER_POSITION = new Vec3(13877295.0D, 65.0D, -2688956.0D);
     private static final Vec3 SHOP_MERCHANT_POSITION = new Vec3(13877293.0D, 65.0D, -2688975.0D);
     private static final Vec3 SHOP_TAROT_DEALER_POSITION = new Vec3(13877300.0D, 65.0D, -2688975.0D);
-    private static final Vec3 SHOP_EXIT_PORTAL_POSITION = new Vec3(13877288.0D, 62.0D, -2688992.0D);
-    private static final Vec3 SHOP_ADVANCE_PORTAL_POSITION = new Vec3(13877301.0D, 62.0D, -2688992.0D);
+    private static final Vec3 SHOP_EXIT_PORTAL_POSITION = new Vec3(13877288.0D, 65.0D, -2688992.0D);
+    private static final Vec3 SHOP_ADVANCE_PORTAL_POSITION = new Vec3(13877301.0D, 65.0D, -2688992.0D);
     private static final String SHOP_STRUCTURE_ID = "t1-archive1";
     private static final Vec3 EXIT_PORTAL_OFFSET = new Vec3(0.0D, 5.0D, 8.0D);
     private static final Vec3 SHOPKEEPER_OFFSET = new Vec3(0.0D, 4.0D, 0.0D);
@@ -288,6 +288,13 @@ public final class DungeonInstanceManager {
         ACTIVE_DUNGEONS.put(origin.immutable(), expiresAt);
 
         if (alreadyActive && activeLayout == layout) {
+            return;
+        }
+
+        if (layout == InstanceLayout.SHOP && level.hasChunkAt(SHOP_STRUCTURE_ORIGIN)
+                && !level.getEntitiesOfClass(com.revilo.gatesofavarice.entity.GatekeeperEntity.class,
+                new AABB(SHOP_STRUCTURE_ORIGIN).inflate(64.0D)).isEmpty()) {
+            INSTANCE_LAYOUTS.put(origin.immutable(), layout);
             return;
         }
 

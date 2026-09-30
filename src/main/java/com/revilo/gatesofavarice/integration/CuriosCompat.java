@@ -61,6 +61,26 @@ public final class CuriosCompat {
                 .orElse(ItemStack.EMPTY);
     }
 
+    public static boolean replaceBeltMagnet(ServerPlayer player, ItemStack replacement) {
+        if (!(replacement.getItem() instanceof MagnetItem replacementMagnet)) {
+            return false;
+        }
+        return CuriosApi.getCuriosInventory(player).map(handler -> handler.findCurio("belt", 0)
+                .filter(result -> result.stack().getItem() instanceof MagnetItem)
+                .filter(result -> isBetter(replacementMagnet, replacement, (MagnetItem) result.stack().getItem(), result.stack()))
+                .map(result -> {
+                    handler.setEquippedCurio("belt", 0, replacement);
+                    return true;
+                })
+                .orElse(false)).orElse(false);
+    }
+
+    private static boolean isBetter(MagnetItem candidate, ItemStack candidateStack, MagnetItem current, ItemStack currentStack) {
+        return candidate.bonusRange(candidateStack) > current.bonusRange(currentStack)
+                || candidate.bonusRange(candidateStack) == current.bonusRange(currentStack)
+                && candidate.pullSpeed(candidateStack) > current.pullSpeed(currentStack);
+    }
+
     public static void clearDungeonBeltMagnet(ServerPlayer player) {
         CuriosApi.getCuriosInventory(player).ifPresent(handler -> handler.findCurio("belt", 0)
                 .filter(result -> result.stack().getItem() instanceof MagnetItem)

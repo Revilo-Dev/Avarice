@@ -11,6 +11,7 @@ import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.network.chat.Component;
 import org.joml.Matrix4f;
 
 public final class GatewayCrystalRenderer extends EntityRenderer<GatewayCrystalEntity> {
@@ -62,6 +63,14 @@ public final class GatewayCrystalRenderer extends EntityRenderer<GatewayCrystalE
     @Override
     public ResourceLocation getTextureLocation(GatewayCrystalEntity entity) {
         return TEXTURE;
+    }
+
+    @Override
+    protected void renderNameTag(GatewayCrystalEntity entity, Component displayName, PoseStack poseStack, MultiBufferSource buffer, int packedLight, float partialTick) {
+        poseStack.pushPose();
+        if (entity.isReturnPortal() || entity.isAdvancePortal()) poseStack.translate(0.0D, 3.0D, 0.0D);
+        super.renderNameTag(entity, displayName, poseStack, buffer, packedLight, partialTick);
+        poseStack.popPose();
     }
 
     private static void addVertex(VertexConsumer consumer, PoseStack.Pose pose, Matrix4f poseMatrix,

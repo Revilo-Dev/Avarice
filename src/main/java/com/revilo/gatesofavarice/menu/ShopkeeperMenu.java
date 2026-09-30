@@ -7,6 +7,9 @@ import com.revilo.gatesofavarice.dungeon.DungeonUpgradeManager;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCategory;
 import com.revilo.gatesofavarice.entity.GatekeeperEntity;
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
+import com.revilo.gatesofavarice.integration.CuriosCompat;
+import com.revilo.gatesofavarice.integration.ModCompat;
+import com.revilo.gatesofavarice.item.MagnetItem;
 import com.revilo.gatesofavarice.progression.ProgressionSystem;
 import com.revilo.gatesofavarice.registry.ModMenus;
 import com.revilo.gatesofavarice.registry.ModItems;
@@ -512,6 +515,10 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
 
     private void grantPurchasedReward(ServerPlayer player, ShopOfferDefinition offer) {
         ItemStack reward = offer.createStack(player.getRandom(), this.getPlayerLevel());
+        if (this.replaceOwnedMagnet(player, reward)) {
+            player.inventoryMenu.broadcastChanges();
+            return;
+        }
         if (DungeonRunManager.isPlayerInActiveRun(player)) {
             if (!isShopBoosterPack(reward)) {
                 DungeonRunManager.rollAndBindForActiveRun(player, reward, player.getRandom());
@@ -526,6 +533,35 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
         if (!player.getInventory().add(reward)) {
             player.drop(reward, false);
         }
+    }
+
+    private boolean replaceOwnedMagnet(ServerPlayer player, ItemStack replacement) {
+        if (!(replacement.getItem() instanceof MagnetItem replacementMagnet)) {
+            return false;
+        }
+        if (ModCompat.isAnyLoaded("curios") && CuriosCompat.replaceBeltMagnet(player, replacement)) {
+            return true;
+        }
+        return replaceBetterMagnet(player.getInventory().items, replacement, replacementMagnet)
+                || replaceBetterMagnet(player.getInventory().offhand, replacement, replacementMagnet)
+                || replaceBetterMagnet(player.getInventory().armor, replacement, replacementMagnet);
+    }
+
+    private static boolean replaceBetterMagnet(List<ItemStack> stacks, ItemStack replacement, MagnetItem replacementMagnet) {
+        for (int index = 0; index < stacks.size(); index++) {
+            ItemStack current = stacks.get(index);
+            if (!(current.getItem() instanceof MagnetItem currentMagnet)) {
+                continue;
+            }
+            boolean isBetter = replacementMagnet.bonusRange(replacement) > currentMagnet.bonusRange(current)
+                    || replacementMagnet.bonusRange(replacement) == currentMagnet.bonusRange(current)
+                    && replacementMagnet.pullSpeed(replacement) > currentMagnet.pullSpeed(current);
+            if (isBetter) {
+                stacks.set(index, replacement);
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isShopBoosterPack(ItemStack stack) {

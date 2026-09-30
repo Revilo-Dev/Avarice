@@ -44,6 +44,7 @@ import net.revilodev.runic.synergy.SynergyRegistry;
 public final class DungeonUpgradeManager {
     private static final Map<UUID, UpgradeSession> SESSIONS = new HashMap<>();
     private static final Map<UUID, String> SHOP_MODES = new HashMap<>();
+    private static final int ENCHANTER_SHOP_CARD_COUNT = 5;
 
     private DungeonUpgradeManager() {}
 
@@ -276,8 +277,13 @@ public final class DungeonUpgradeManager {
         int waveNumber = getSessionWaveNumber(session);
         session.activeCategory = category;
         List<UpgradeCard> cards = session.cardsByCategory.get(category);
-        if (cards == null) {
-            cards = generateShopCards(player, session, category, target, waveNumber, RunicUpgradeService.CARD_COUNT);
+        boolean enchanterShop = session.waveOwnerId == null
+                && "enchanter".equals(SHOP_MODES.getOrDefault(player.getUUID(), "enchanter"));
+        if (cards == null || (enchanterShop && cards.size() != ENCHANTER_SHOP_CARD_COUNT)) {
+            int cardCount = enchanterShop
+                    ? ENCHANTER_SHOP_CARD_COUNT
+                    : RunicUpgradeService.CARD_COUNT;
+            cards = generateShopCards(player, session, category, target, waveNumber, cardCount);
             session.cardsByCategory.put(category, cards);
         }
         rebuildShopCardIndex(session);
@@ -363,21 +369,46 @@ public final class DungeonUpgradeManager {
         if (count <= 0) {
             return List.of();
         }
+        if (session.waveOwnerId == null && "enchanter".equals(SHOP_MODES.getOrDefault(player.getUUID(), "enchanter"))) {
+            return generateEnchanterShopCards(player, session, category, target, waveNumber, count);
+        }
         boolean includeSynergyCard = session.waveOwnerId != null && DungeonRunManager.isSynergyCardWave(session.waveOwnerId);
         List<UpgradeCard> generated = pricedCards(RunicUpgradeService.generateUpgradeCards(player, target, session.instance, session.definition, category, waveNumber, session.cardGenerationNonce, includeSynergyCard), waveNumber);
         if (session.waveOwnerId == null) {
             String shopMode = SHOP_MODES.getOrDefault(player.getUUID(), "enchanter");
             List<UpgradeCard> unfiltered = generated;
-            generated = generated.stream().filter(card -> "armorer".equals(shopMode)
-                    ? isRunicInscriptionCard(card.type())
-                    : card.type() == UpgradeCardType.ADD_OR_UPGRADE_EFFECT).toList();
+            generated = generated.stream().filter(card -> isRunicInscriptionCard(card.type())).toList();
             if (generated.isEmpty() && "armorer".equals(shopMode)) {
                 generated = unfiltered.stream().filter(card -> card.type() != UpgradeCardType.ADD_OR_UPGRADE_EFFECT).toList();
             }
             if ("armorer".equals(shopMode)) {
                 generated = generated.stream().map(DungeonUpgradeManager::asInscriptionCard).toList();
+                if (category == UpgradeCategory.PRIMARY_WEAPON && DungeonRunManager.getAmmoPerWave(player) > 0) {
+                    java.util.ArrayList<UpgradeCard> ammoCards = new java.util.ArrayList<>();
+                    ResourceLocation ammoId = DungeonRunManager.getAmmoType(player);
+                    if (!ammoId.equals(ResourceLocation.withDefaultNamespace("firework_rocket"))) {
+                        ammoCards.add(new UpgradeCard("ammo_type_" + session.cardGenerationNonce, UpgradeCardType.UPGRADE_AMMO_TYPE,
+                                category, "Bow Ammunition", "Ammo", "Upgrade ammo type", ammoId.getPath(), "Next tier", 2, 0));
+                    }
+                    int countNow = DungeonRunManager.getAmmoPerWave(player);
+                    ammoCards.add(new UpgradeCard("ammo_count_" + session.cardGenerationNonce, UpgradeCardType.UPGRADE_AMMO_COUNT,
+                            category, "Larger Quiver", "Ammo", "+10 per wave", Integer.toString(countNow), Integer.toString(countNow + 10), 1, 0));
+                    ammoCards.addAll(generated);
+                    generated = pricedCards(ammoCards, waveNumber);
+                }
             }
         }
+        if (generated.size() <= count) {
+            return generated;
+        }
+        return List.copyOf(generated.subList(0, count));
+    }
+
+    private static List<UpgradeCard> generateEnchanterShopCards(ServerPlayer player, UpgradeSession session,
+            UpgradeCategory category, ItemStack target, int waveNumber, int count) {
+        List<UpgradeCard> generated = pricedCards(RunicUpgradeService.generateUpgradeCards(player, target,
+                session.instance, session.definition, category, waveNumber,
+                session.cardGenerationNonce, false), waveNumber);
         if (generated.size() <= count) {
             return generated;
         }
@@ -442,6 +473,8 @@ public final class DungeonUpgradeManager {
             case ITEM_REWARD_ABILITY -> 80;
             case ITEM_REWARD_GATEWAY_CARD -> 260;
             case ITEM_REWARD_FOOD, ITEM_REWARD_RESTOCK, UPGRADE_ITEM_SUPPLY -> 30;
+            case UPGRADE_AMMO_TYPE -> 700;
+            case UPGRADE_AMMO_COUNT -> 180;
             default -> 0;
         };
         int cost = base + waveScale + tierScale + typeScale + arrowBundleTierCost(card.changeLabel());
@@ -551,6 +584,14 @@ public final class DungeonUpgradeManager {
                     applyItemUpgrade(player, definition, card);
                     return;
                 }
+                case UPGRADE_AMMO_TYPE -> {
+                    DungeonRunManager.upgradeAmmoType(player);
+                    return;
+                }
+                case UPGRADE_AMMO_COUNT -> {
+                    DungeonRunManager.upgradeAmmoCount(player, 10);
+                    return;
+                }
                 case ADD_OR_UPGRADE_EFFECT -> {
                     String raw = switch (card.changeLabel()) {
                         case "Thorns" -> "minecraft:thorns";
@@ -599,7 +640,13 @@ public final class DungeonUpgradeManager {
         RandomSource random = player.getRandom();
         switch (card.type()) {
             case ITEM_REWARD_FOOD -> giveBoundStack(player, new ItemStack(com.revilo.gatesofavarice.registry.ModItems.HEART_FRAGMENT.get(), 8 + random.nextInt(9)));
-            case ITEM_REWARD_RESTOCK, UPGRADE_ITEM_SUPPLY -> giveBoundStack(player, rollRestockReward(random, definition, card.changeLabel()));
+            case ITEM_REWARD_RESTOCK, UPGRADE_ITEM_SUPPLY -> {
+                if (card.changeLabel().endsWith("Arrows") || "Arrow Bundle".equals(card.changeLabel())) {
+                    DungeonRunManager.upgradeAmmoCount(player, 32);
+                } else {
+                    giveBoundStack(player, rollRestockReward(random, definition, card.changeLabel()));
+                }
+            }
             case ITEM_REWARD_ABILITY -> {
                 giveBoundStack(player, new ItemStack(com.revilo.gatesofavarice.registry.ModItems.ARCANE_APPLE.get(), 1 + random.nextInt(3)));
             }

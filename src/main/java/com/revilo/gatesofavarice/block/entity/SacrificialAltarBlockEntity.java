@@ -1,6 +1,6 @@
 package com.revilo.gatesofavarice.block.entity;
 
-import com.revilo.gatesofavarice.currency.MythicCoinWallet;
+import com.revilo.gatesofavarice.entity.MythicCoinOrbEntity;
 import com.revilo.gatesofavarice.menu.SacrificialAltarMenu;
 import com.revilo.gatesofavarice.registry.ModBlockEntities;
 import com.revilo.gatesofavarice.shop.GatewaySellValues;
@@ -63,8 +63,18 @@ public final class SacrificialAltarBlockEntity extends BlockEntity implements Co
             }
         }
         if (total > 0) {
-            // deposits the half value reward and confirms the completed sacrifice
-            MythicCoinWallet.add(player, total);
+            // Each sacrificed coin is represented by its own collectible orb.
+            if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                for (int coin = 0; coin < total; coin++) {
+                    double angle = coin * 2.399963229728653D;
+                    double radius = 0.18D + (coin % 9) * 0.035D;
+                    MythicCoinOrbEntity.spawn(serverLevel,
+                            worldPosition.getX() + 0.5D + Math.cos(angle) * radius,
+                            worldPosition.getY() + 0.8D + (coin % 5) * 0.035D,
+                            worldPosition.getZ() + 0.5D + Math.sin(angle) * radius,
+                            1);
+                }
+            }
             player.level().playSound(null, worldPosition, SoundEvents.FIRE_EXTINGUISH, SoundSource.BLOCKS, 0.75F, 1.25F);
             player.displayClientMessage(Component.literal("Sacrificed items for " + total + " Mythic Coins (50% value)."), true);
         }

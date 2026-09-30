@@ -27,6 +27,12 @@ public final class SacrificialAltarScreen extends AbstractContainerScreen<Sacrif
         inventoryLabelY = 10000;
     }
 
+    @Override
+    protected void init() {
+        super.init();
+        this.topPos += 4;
+    }
+
     @Override protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
         graphics.blit(TEXTURE, leftPos, topPos, 0, 0, imageWidth, imageHeight, 256, 256);
         int value = menu.getSacrificeValue();

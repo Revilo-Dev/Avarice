@@ -1,11 +1,13 @@
 package com.revilo.gatesofavarice.client;
 
 import com.revilo.gatesofavarice.dungeon.DungeonHudState;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
@@ -20,7 +22,6 @@ public final class DungeonWaveHudOverlay {
     private static final int WAVE_TEXT_TOP = 12;
     private static final int WAVE_TEXT_RIGHT = 139;
     private static final int WAVE_TEXT_BOTTOM = 18;
-    private static final int SIDEBAR_WIDTH = 158;
     private static final int SIDEBAR_PADDING = 8;
 
     private DungeonWaveHudOverlay() {
@@ -33,14 +34,26 @@ public final class DungeonWaveHudOverlay {
             return;
         }
 
-        if (DungeonHudState.hasRunStats() && isTabDown(minecraft)) {
-            renderStatsSidebar(event.getGuiGraphics(), minecraft);
-            renderPartySidebar(event.getGuiGraphics(), minecraft);
+        GuiGraphics guiGraphics = event.getGuiGraphics();
+        boolean tabDown = isTabDown(minecraft);
+        if (DungeonHudState.inRun()) {
+            int screenWidth = minecraft.getWindow().getGuiScaledWidth();
+            int screenHeight = minecraft.getWindow().getGuiScaledHeight();
+            if (tabDown) {
+                DungeonDeckRenderer.renderFullDeck(guiGraphics, minecraft.font, DungeonHudState.deck(),
+                        screenWidth / 2, screenHeight - 8, screenWidth - 24);
+                renderPartySidebar(guiGraphics, minecraft);
+            } else {
+                DungeonDeckRenderer.renderCompact(guiGraphics, minecraft.font, DungeonHudState.deck(),
+                        screenWidth - 8, screenHeight - 8);
+            }
         }
 
         if (!DungeonHudState.active()) {
             return;
         }
+
+        renderAmmo(guiGraphics, minecraft, tabDown);
 
         int screenWidth = minecraft.getWindow().getGuiScaledWidth();
         int x = (screenWidth - BAR_WIDTH) / 2;
@@ -50,11 +63,11 @@ public final class DungeonWaveHudOverlay {
         int remaining = Mth.clamp(DungeonHudState.mobsRemaining(), 0, total);
         int filled = Math.round(BAR_WIDTH * ((total - remaining) / (float) total));
 
-        event.getGuiGraphics().blit(BAR_TEXTURE, x, y, 0, 0, BAR_WIDTH, BAR_HEIGHT, BAR_WIDTH, BAR_HEIGHT);
+        guiGraphics.blit(BAR_TEXTURE, x, y, 0, 0, BAR_WIDTH, BAR_HEIGHT, BAR_WIDTH, BAR_HEIGHT);
         if (filled > 0) {
-            event.getGuiGraphics().enableScissor(x, y, x + filled, y + BAR_HEIGHT);
-            event.getGuiGraphics().blit(PROGRESS_TEXTURE, x, y, 0, 0, BAR_WIDTH, BAR_HEIGHT, BAR_WIDTH, BAR_HEIGHT);
-            event.getGuiGraphics().disableScissor();
+            guiGraphics.enableScissor(x, y, x + filled, y + BAR_HEIGHT);
+            guiGraphics.blit(PROGRESS_TEXTURE, x, y, 0, 0, BAR_WIDTH, BAR_HEIGHT, BAR_WIDTH, BAR_HEIGHT);
+            guiGraphics.disableScissor();
         }
 
         int countdownTicks = DungeonHudState.nextWaveCountdownTicks();
@@ -65,55 +78,39 @@ public final class DungeonWaveHudOverlay {
                 : Component.literal("Floor " + DungeonHudState.floorNumber() + "  Wave " + DungeonHudState.waveInFloor());
         int waveTextAreaWidth = WAVE_TEXT_RIGHT - WAVE_TEXT_LEFT;
         int waveTextX = x + WAVE_TEXT_LEFT + (waveTextAreaWidth - minecraft.font.width(waveLabel)) / 2;
-        event.getGuiGraphics().drawString(minecraft.font, waveLabel, waveTextX, y + WAVE_TEXT_TOP, 0xFFFFFF, false);
+        guiGraphics.drawString(minecraft.font, waveLabel, waveTextX, y + WAVE_TEXT_TOP, 0xFFFFFF, false);
 
         if (countdownTicks > 0) {
             int seconds = Mth.ceil(countdownTicks / 20.0F);
             Component countdownLabel = Component.literal("Next wave in " + seconds + "s");
             int countdownWidth = minecraft.font.width(countdownLabel);
-            event.getGuiGraphics().drawString(minecraft.font, countdownLabel, x + (BAR_WIDTH - countdownWidth) / 2, y + BAR_HEIGHT + 4, 0xFFE36B, false);
+            guiGraphics.drawString(minecraft.font, countdownLabel, x + (BAR_WIDTH - countdownWidth) / 2, y + BAR_HEIGHT + 4, 0xFFE36B, false);
         } else if (!DungeonHudState.upgradePhase() && !DungeonHudState.gatewayOpen()) {
             Component mobsLabel = Component.literal(remaining + " mobs remaining");
             int mobsLabelWidth = minecraft.font.width(mobsLabel);
-            event.getGuiGraphics().drawString(minecraft.font, mobsLabel, x + (BAR_WIDTH - mobsLabelWidth) / 2, y + BAR_HEIGHT + 4, 0xFFFFFF, false);
+            guiGraphics.drawString(minecraft.font, mobsLabel, x + (BAR_WIDTH - mobsLabelWidth) / 2, y + BAR_HEIGHT + 4, 0xFFFFFF, false);
         }
     }
 
-    private static void renderStatsSidebar(GuiGraphics guiGraphics, Minecraft minecraft) {
-        int screenWidth = minecraft.getWindow().getGuiScaledWidth();
-        int screenHeight = minecraft.getWindow().getGuiScaledHeight();
-        int x = screenWidth - SIDEBAR_WIDTH + 12;
-        int y = 40;
-        int lineHeight = 11;
-        int statCount = Math.max(1, DungeonHudState.statLines().size());
-        int height = Math.min(screenHeight - y - 8, SIDEBAR_PADDING * 2 + 12 + lineHeight * (4 + statCount));
-
-        guiGraphics.fill(x, y, x + SIDEBAR_WIDTH, y + height, 0xD0101010);
-        guiGraphics.fill(x, y, x + SIDEBAR_WIDTH, y + 1, 0x80E0B85A);
-        guiGraphics.fill(x, y + height - 1, x + SIDEBAR_WIDTH, y + height, 0x803F3320);
-
-        int textX = x + SIDEBAR_PADDING;
-        int textY = y + SIDEBAR_PADDING;
-        guiGraphics.drawString(minecraft.font, Component.literal("Play Time: " + formatTime(DungeonHudState.playTimeTicks())), textX, textY, 0xFFFFFF, false);
-        textY += lineHeight;
-        guiGraphics.drawString(minecraft.font, Component.literal("Mob Kills: " + DungeonHudState.mobsKilled()), textX, textY, 0xFFFFFF, false);
-        textY += lineHeight + 4;
-        guiGraphics.drawString(minecraft.font, Component.literal("Modified Stats"), textX, textY, 0xFFE36B, false);
-        textY += lineHeight;
-
-        if (DungeonHudState.statLines().isEmpty()) {
-            guiGraphics.drawString(minecraft.font, Component.literal("No modifiers yet"), textX, textY, 0xA8A8A8, false);
-            return;
-        }
-
-        int bottom = y + height - SIDEBAR_PADDING;
-        for (String statLine : DungeonHudState.statLines()) {
-            if (textY + 9 > bottom) {
-                break;
-            }
-            guiGraphics.drawString(minecraft.font, Component.literal(statLine), textX, textY, statColor(statLine), false);
-            textY += lineHeight;
-        }
+    private static void renderAmmo(GuiGraphics guiGraphics, Minecraft minecraft, boolean expandedDeck) {
+        if (DungeonHudState.ammoCount() <= 0) return;
+        ItemStack ammo = new ItemStack(BuiltInRegistries.ITEM.get(DungeonHudState.ammoItem()));
+        if (ammo.isEmpty()) return;
+        int centerX = minecraft.getWindow().getGuiScaledWidth() / 2;
+        int y = expandedDeck
+                ? minecraft.getWindow().getGuiScaledHeight() - 22
+                - DungeonDeckRenderer.fullDeckHeight(minecraft.getWindow().getGuiScaledWidth() - 24)
+                : minecraft.getWindow().getGuiScaledHeight() - 48;
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(centerX - 5, y, 0.0F);
+        guiGraphics.pose().scale(0.625F, 0.625F, 1.0F);
+        guiGraphics.renderItem(ammo, 0, 0);
+        guiGraphics.pose().popPose();
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(centerX + 7, y + 2, 0.0F);
+        guiGraphics.pose().scale(0.5F, 0.5F, 1.0F);
+        guiGraphics.drawString(minecraft.font, Component.literal("x" + DungeonHudState.ammoCount()), 0, 0, 0xFFFFFF, true);
+        guiGraphics.pose().popPose();
     }
 
     private static void renderPartySidebar(GuiGraphics guiGraphics, Minecraft minecraft) {
@@ -148,18 +145,4 @@ public final class DungeonWaveHudOverlay {
         DungeonHudState.clear();
     }
 
-    private static String formatTime(long ticks) {
-        long totalSeconds = Math.max(0L, ticks / 20L);
-        long minutes = totalSeconds / 60L;
-        long seconds = totalSeconds % 60L;
-        return minutes + ":" + String.format(java.util.Locale.ROOT, "%02d", seconds);
-    }
-
-    private static int statColor(String statLine) {
-        String normalized = statLine.toLowerCase(java.util.Locale.ROOT);
-        if (normalized.startsWith("mob ") || normalized.startsWith("elite ")) {
-            return 0xFFD5D5;
-        }
-        return 0xD7F0D9;
-    }
 }

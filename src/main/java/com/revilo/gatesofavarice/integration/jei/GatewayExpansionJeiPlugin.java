@@ -64,6 +64,7 @@ public final class GatewayExpansionJeiPlugin implements IModPlugin {
 
     @Override
     public void onRuntimeAvailable(IJeiRuntime jeiRuntime) {
+        JeiOverlayVisibility.initialize(jeiRuntime);
     }
 
     private static List<ItemStack> crystalStacks() {

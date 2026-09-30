@@ -430,7 +430,7 @@ public class DungeonUpgradeCardsScreen extends Screen {
             return ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/gui/dungeon/icons/projectile_resistance.png");
         }
         String iconName = switch (card.changeLabel()) {
-            case "Restock", "Arrow Bundle", "Food Bundle" -> "capacity";
+            case "Restock", "Arrow Bundle", "Food Bundle", "+10 per wave" -> "capacity";
             case "Food", "Heart Fragment", "Heart Fragments" -> "health";
             case "Primary" -> "attack_damage";
             case "Secondary" -> "undead_damage";
@@ -480,7 +480,10 @@ public class DungeonUpgradeCardsScreen extends Screen {
         return switch (label) {
             case "supply" -> "capacity";
             case "current" -> "power";
-            default -> label.toLowerCase(Locale.ROOT).replace(' ', '_');
+            default -> {
+                String normalized = label.toLowerCase(Locale.ROOT).replace(' ', '_');
+                yield normalized.matches("[a-z0-9/._-]+") ? normalized : "power";
+            }
         };
     }
 

@@ -66,6 +66,10 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private static final float UPGRADE_CARD_SCALE = 0.28F;
     private static final int UPGRADE_CARD_GAP = 8;
     private static final int UPGRADE_CARD_ROW_GAP = 1;
+    private static final int ENCHANTER_CARD_COUNT = 5;
+    private static final int ENCHANTER_CARDS_PER_ROW = 5;
+    private static final float ENCHANTER_CARD_SCALE = 0.38F;
+    private static final int ENCHANTER_CARD_GAP = 4;
     private static final int REROLL_X = 153;
     private static final int REROLL_Y = 67;
     private static final int REROLL_RENDER_SIZE = 10;
@@ -91,7 +95,8 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private static final int NEXT_WAVE_BUTTON_WIDTH = 200;
     private static final int NEXT_WAVE_BUTTON_HEIGHT = 20;
     private static final float SELL_HOLD_TICKS = 20.0F;
-    private static final int SELL_COIN_PARTICLE_LIMIT = 24;
+    private static final int SELL_COIN_PARTICLE_LIMIT = 100;
+    private static final int BUY_COIN_PARTICLE_LIMIT = 24;
     private static final int COIN_TRAIL_SEGMENTS = 4;
     private static final int DRAW_STAGGER_TICKS = 3;
     private static final int DRAW_DURATION_TICKS = 8;
@@ -382,7 +387,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private void renderTarotDealerPanel(GuiGraphics graphics, int mouseX, int mouseY) {
-        graphics.drawCenteredString(this.font, "Extra Tarot Choices", this.leftPos + 88, this.topPos + 6, 0xFFD77CFF);
+        graphics.drawCenteredString(this.font, "Extra Booster Cards", this.leftPos + 88, this.topPos + 6, 0xFFD77CFF);
         for (int index = 0; index < 3; index++) {
             int x = this.leftPos + 34 + index * 45;
             int y = this.topPos + 25;
@@ -424,7 +429,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             int index = this.getTarotPurchaseIndex(mouseX, mouseY);
             if (index >= 0) {
                 int amount = index + 1;
-                graphics.renderTooltip(this.font, Component.literal("Add " + amount + " choice" + (amount == 1 ? "" : "s") + " to the next floor's Tarot draw"), mouseX, mouseY);
+                graphics.renderTooltip(this.font, Component.literal("Add " + amount + " card" + (amount == 1 ? "" : "s") + " to the next booster pack"), mouseX, mouseY);
                 return true;
             }
         }
@@ -456,28 +461,31 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private void renderUpgradeCards(GuiGraphics guiGraphics, int mouseX, int mouseY) {
-        int count = Math.min(8, this.upgradeCards.size());
-        int columns = Math.min(UPGRADE_CARDS_PER_ROW, count);
-        int totalWidth = Math.round(columns * CARD_W * UPGRADE_CARD_SCALE + Math.max(0, columns - 1) * UPGRADE_CARD_GAP);
+        int count = displayedUpgradeCardCount();
+        int cardsPerRow = upgradeCardsPerRow();
+        float cardScale = upgradeCardScale();
+        int cardGap = upgradeCardGap();
+        int columns = Math.min(cardsPerRow, count);
+        int totalWidth = Math.round(columns * CARD_W * cardScale + Math.max(0, columns - 1) * cardGap);
         int startX = this.leftPos + BUY_AREA_LEFT + (buyAreaWidth() - totalWidth) / 2;
-        int startY = this.topPos + BUY_AREA_TOP + 11;
+        int startY = upgradeCardsStartY();
         guiGraphics.enableScissor(this.leftPos + BUY_AREA_LEFT, this.topPos + BUY_AREA_TOP, this.leftPos + BUY_AREA_RIGHT, this.topPos + BUY_AREA_BOTTOM);
         for (int i = 0; i < count; i++) {
             UpgradeCard card = this.upgradeCards.get(i);
-            int row = i / UPGRADE_CARDS_PER_ROW;
-            int column = i % UPGRADE_CARDS_PER_ROW;
-            int x = startX + Math.round(column * CARD_W * UPGRADE_CARD_SCALE) + (column * UPGRADE_CARD_GAP);
-            int y = startY + row * (Math.round(CARD_H * UPGRADE_CARD_SCALE) + UPGRADE_CARD_ROW_GAP);
+            int row = i / cardsPerRow;
+            int column = i % cardsPerRow;
+            int x = startX + Math.round(column * CARD_W * cardScale) + (column * cardGap);
+            int y = startY + row * (Math.round(CARD_H * cardScale) + UPGRADE_CARD_ROW_GAP);
             boolean blocked = this.isBlockedByRuneSlots(card);
             boolean limitReached = this.isSelectionLimitReached();
             boolean disabled = blocked || limitReached;
-            boolean hovered = !disabled && this.isMouseOverScaledCard(mouseX, mouseY, x, y, UPGRADE_CARD_SCALE);
-            float drawScale = hovered && this.animationState == AnimationState.IDLE ? UPGRADE_CARD_SCALE * HOVER_SCALE_MULTIPLIER : UPGRADE_CARD_SCALE;
-            int drawX = animatedCardX(x, i, startX, UPGRADE_CARD_SCALE);
+            boolean hovered = !disabled && this.isMouseOverScaledCard(mouseX, mouseY, x, y, cardScale);
+            float drawScale = hovered && this.animationState == AnimationState.IDLE ? cardScale * HOVER_SCALE_MULTIPLIER : cardScale;
+            int drawX = animatedCardX(x, i, startX, cardScale);
             if (this.limitShakeIndex == i && this.limitShakeTicks > 0) {
                 drawX += Mth.floor(Mth.sin(this.limitShakeTicks * 1.7F) * 3.0F);
             }
-            int drawY = animatedCardY(y, i, UPGRADE_CARD_SCALE);
+            int drawY = animatedCardY(y, i, cardScale);
             this.drawCard(guiGraphics, resolveCardTexture(card, hovered), drawX, drawY, drawScale);
             this.renderUpgradeCardContents(guiGraphics, drawX, drawY, card, drawScale);
             if (disabled) {
@@ -544,7 +552,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             return;
         }
         this.animationTick++;
-        int cardCount = Math.max(1, this.categorySelection ? this.visibleCategoryCount() : Math.min(8, this.upgradeCards.size()));
+        int cardCount = Math.max(1, this.categorySelection ? this.visibleCategoryCount() : displayedUpgradeCardCount());
         int drawEnd = (cardCount - 1) * DRAW_STAGGER_TICKS + DRAW_DURATION_TICKS;
         if (this.animationState == AnimationState.DRAWING && this.animationTick > drawEnd) {
             this.animationState = AnimationState.IDLE;
@@ -704,8 +712,10 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private void renderTabs(GuiGraphics guiGraphics) {
-        this.renderTab(guiGraphics, Page.BUY, TAB_BUY_Y, Component.translatable("screen.gatesofavarice.shopkeeper.tab_buy"));
         if (!this.isEnchanter()) {
+            this.renderTab(guiGraphics, Page.BUY, TAB_BUY_Y, Component.translatable("screen.gatesofavarice.shopkeeper.tab_buy"));
+        }
+        if (this.hasSellTab()) {
             this.renderTab(guiGraphics, Page.SELL, TAB_SELL_Y, Component.translatable("screen.gatesofavarice.shopkeeper.tab_sell"));
         }
     }
@@ -956,7 +966,11 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
 
     private void createCoinFlights() {
         this.coinFlights.clear();
-        int totalParticles = 0;
+        int totalValue = this.menu.getSellValue();
+        int totalParticles = Math.min(SELL_COIN_PARTICLE_LIMIT, Math.max(1, totalValue));
+        int emittedParticles = 0;
+        int cumulativeValue = 0;
+        int lastSellSlot = this.findLastSellSlot();
         for (int slotIndex = 0; slotIndex < ShopkeeperMenu.SELL_SLOT_COUNT; slotIndex++) {
             ItemStack stack = this.menu.getSellStack(slotIndex);
             int stackValue = GatewaySellValues.getStackValue(stack);
@@ -964,7 +978,10 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
                 continue;
             }
             Slot slot = this.menu.slots.get(slotIndex);
-            int particles = Math.min(SELL_COIN_PARTICLE_LIMIT, Math.max(1, stackValue));
+            cumulativeValue += stackValue;
+            int particles = slotIndex == lastSellSlot
+                    ? totalParticles - emittedParticles
+                    : Math.round(totalParticles * (cumulativeValue / (float) totalValue)) - emittedParticles;
             for (int particleIndex = 0; particleIndex < particles; particleIndex++) {
                 float offsetX = ((particleIndex % 4) - 1.5F) * 2.0F;
                 float offsetY = ((particleIndex / 4) - 1.0F) * 2.0F;
@@ -973,18 +990,18 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
                         this.topPos + slot.y + 8.0F + offsetY,
                         this.getWalletIconX() + 4.0F,
                         this.topPos + 10.0F,
-                        totalParticles + particleIndex,
-                        particleIndex == particles - 1 && slotIndex == this.findLastSellSlot()
+                        emittedParticles + particleIndex,
+                        particleIndex == particles - 1 && slotIndex == lastSellSlot
                 ));
             }
-            totalParticles += particles;
+            emittedParticles += particles;
         }
     }
 
     private void createBuyCoinFlights(int unitCost, int purchaseCount) {
         int totalCost = unitCost * purchaseCount;
         int existing = this.coinFlights.size();
-        int particles = Math.min(SELL_COIN_PARTICLE_LIMIT, Math.max(1, totalCost));
+        int particles = Math.min(BUY_COIN_PARTICLE_LIMIT, Math.max(1, totalCost));
         float startX = this.getWalletIconX() + 4.0F;
         float startY = this.topPos + 10.0F;
         float endX = this.coinTargetX;
@@ -1101,17 +1118,20 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             return -1;
         }
 
-        int count = Math.min(8, this.upgradeCards.size());
-        int columns = Math.min(UPGRADE_CARDS_PER_ROW, count);
-        int totalWidth = Math.round(columns * CARD_W * UPGRADE_CARD_SCALE + Math.max(0, columns - 1) * UPGRADE_CARD_GAP);
+        int count = displayedUpgradeCardCount();
+        int cardsPerRow = upgradeCardsPerRow();
+        float cardScale = upgradeCardScale();
+        int cardGap = upgradeCardGap();
+        int columns = Math.min(cardsPerRow, count);
+        int totalWidth = Math.round(columns * CARD_W * cardScale + Math.max(0, columns - 1) * cardGap);
         int startX = this.leftPos + BUY_AREA_LEFT + (buyAreaWidth() - totalWidth) / 2;
-        int startY = this.topPos + BUY_AREA_TOP + 11;
+        int startY = upgradeCardsStartY();
         for (int i = 0; i < count; i++) {
-            int row = i / UPGRADE_CARDS_PER_ROW;
-            int column = i % UPGRADE_CARDS_PER_ROW;
-            int x = startX + Math.round(column * CARD_W * UPGRADE_CARD_SCALE) + (column * UPGRADE_CARD_GAP);
-            int y = startY + row * (Math.round(CARD_H * UPGRADE_CARD_SCALE) + UPGRADE_CARD_ROW_GAP);
-            if (this.isMouseOverScaledCard(mouseX, mouseY, x, y, UPGRADE_CARD_SCALE)) {
+            int row = i / cardsPerRow;
+            int column = i % cardsPerRow;
+            int x = startX + Math.round(column * CARD_W * cardScale) + (column * cardGap);
+            int y = startY + row * (Math.round(CARD_H * cardScale) + UPGRADE_CARD_ROW_GAP);
+            if (this.isMouseOverScaledCard(mouseX, mouseY, x, y, cardScale)) {
                 return i;
             }
         }
@@ -1151,11 +1171,11 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private boolean clickTab(double mouseX, double mouseY) {
-        if (this.isHoveringTab(mouseX, mouseY, TAB_BUY_Y)) {
+        if (!this.isEnchanter() && this.isHoveringTab(mouseX, mouseY, TAB_BUY_Y)) {
             this.setActivePage(Page.BUY);
             return true;
         }
-        if (!this.isEnchanter() && this.isHoveringTab(mouseX, mouseY, TAB_SELL_Y)) {
+        if (this.hasSellTab() && this.isHoveringTab(mouseX, mouseY, TAB_SELL_Y)) {
             this.setActivePage(Page.SELL);
             return true;
         }
@@ -1169,7 +1189,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private void setActivePage(Page page) {
-        if (this.isEnchanter() && page == Page.SELL) {
+        if (page == Page.SELL && !this.hasSellTab()) {
             return;
         }
         if (this.activePage == page) {
@@ -1186,6 +1206,30 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
 
     private void applyPageLayout() {
         this.menu.setSellPageActive(this.activePage == Page.SELL);
+    }
+
+    private boolean hasSellTab() {
+        return !this.isEnchanter() && !this.isArmorer();
+    }
+
+    private int displayedUpgradeCardCount() {
+        return Math.min(this.isEnchanter() ? ENCHANTER_CARD_COUNT : 8, this.upgradeCards.size());
+    }
+
+    private int upgradeCardsPerRow() {
+        return this.isEnchanter() ? ENCHANTER_CARDS_PER_ROW : UPGRADE_CARDS_PER_ROW;
+    }
+
+    private float upgradeCardScale() {
+        return this.isEnchanter() ? ENCHANTER_CARD_SCALE : UPGRADE_CARD_SCALE;
+    }
+
+    private int upgradeCardGap() {
+        return this.isEnchanter() ? ENCHANTER_CARD_GAP : UPGRADE_CARD_GAP;
+    }
+
+    private int upgradeCardsStartY() {
+        return this.topPos + BUY_AREA_TOP + (this.isEnchanter() ? 22 : 11);
     }
 
     private static ResourceLocation resolveCardTexture(UpgradeCard card, boolean hovered) {
@@ -1213,7 +1257,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             return ResourceLocation.fromNamespaceAndPath("gatesofavarice", "textures/item/loot/arcane_apple.png");
         }
         String iconName = switch (card.changeLabel()) {
-            case "Restock", "Arrow Bundle", "Food Bundle" -> "capacity";
+            case "Restock", "Arrow Bundle", "Food Bundle", "+10 per wave" -> "capacity";
             case "Food", "Heart Fragment", "Heart Fragments" -> "health";
             case "Primary" -> "attack_damage";
             case "Secondary" -> "undead_damage";
@@ -1263,7 +1307,10 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         return switch (label) {
             case "supply" -> "capacity";
             case "current" -> "power";
-            default -> label.toLowerCase(Locale.ROOT).replace(' ', '_');
+            default -> {
+                String normalized = label.toLowerCase(Locale.ROOT).replace(' ', '_');
+                yield normalized.matches("[a-z0-9/._-]+") ? normalized : "power";
+            }
         };
     }
 

@@ -1,11 +1,14 @@
 package com.revilo.gatesofavarice.dungeon;
 
 import com.revilo.gatesofavarice.network.DungeonWaveHudPayload;
+import com.revilo.gatesofavarice.dungeon.DungeonDeck.CardState;
 import java.util.List;
+import net.minecraft.resources.ResourceLocation;
 
 public final class DungeonHudState {
 
     private static volatile boolean active;
+    private static volatile boolean inRun;
     private static volatile boolean upgradePhase;
     private static volatile boolean gatewayOpen;
     private static volatile int floorNumber;
@@ -16,7 +19,9 @@ public final class DungeonHudState {
     private static volatile long playTimeTicks;
     private static volatile long playTimeReceivedAtMillis;
     private static volatile int mobsKilled;
-    private static volatile List<String> statLines = List.of();
+    private static volatile ResourceLocation ammoItem = ResourceLocation.withDefaultNamespace("air");
+    private static volatile int ammoCount;
+    private static volatile List<CardState> deck = DungeonDeck.empty();
     private static volatile String partyName = "";
     private static volatile List<String> partyMembers = List.of();
 
@@ -25,6 +30,7 @@ public final class DungeonHudState {
 
     public static void apply(DungeonWaveHudPayload payload) {
         active = payload.active();
+        inRun = payload.inRun();
         upgradePhase = payload.upgradePhase();
         gatewayOpen = payload.gatewayOpen();
         floorNumber = payload.floorNumber();
@@ -35,13 +41,16 @@ public final class DungeonHudState {
         playTimeTicks = payload.playTimeTicks();
         playTimeReceivedAtMillis = System.currentTimeMillis();
         mobsKilled = payload.mobsKilled();
-        statLines = List.copyOf(payload.statLines());
+        ammoItem = payload.ammoItem();
+        ammoCount = payload.ammoCount();
+        deck = DungeonDeck.normalize(payload.deck());
         partyName = payload.partyName();
         partyMembers = List.copyOf(payload.partyMembers());
     }
 
     public static void clear() {
         active = false;
+        inRun = false;
         upgradePhase = false;
         gatewayOpen = false;
         floorNumber = 0;
@@ -52,13 +61,19 @@ public final class DungeonHudState {
         playTimeTicks = 0L;
         playTimeReceivedAtMillis = 0L;
         mobsKilled = 0;
-        statLines = List.of();
+        ammoItem = ResourceLocation.withDefaultNamespace("air");
+        ammoCount = 0;
+        deck = DungeonDeck.empty();
         partyName = "";
         partyMembers = List.of();
     }
 
     public static boolean active() {
         return active;
+    }
+
+    public static boolean inRun() {
+        return inRun;
     }
 
     public static boolean upgradePhase() {
@@ -88,7 +103,7 @@ public final class DungeonHudState {
     }
 
     public static boolean hasRunStats() {
-        return playTimeTicks > 0L || mobsKilled > 0 || !statLines.isEmpty();
+        return inRun || playTimeTicks > 0L || mobsKilled > 0;
     }
 
     public static long playTimeTicks() {
@@ -103,8 +118,12 @@ public final class DungeonHudState {
         return mobsKilled;
     }
 
-    public static List<String> statLines() {
-        return statLines;
+    public static ResourceLocation ammoItem() { return ammoItem; }
+
+    public static int ammoCount() { return ammoCount; }
+
+    public static List<CardState> deck() {
+        return deck;
     }
 
     public static String partyName() { return partyName; }

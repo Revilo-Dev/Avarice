@@ -32,11 +32,11 @@ public final class ProgressionSystem {
         return Math.max(2, base + bonus);
     }
 
-    public static int dungeonCoinReward(int playerLevel, int waveNumber, double quantityModifier, double coinModifier) {
+    public static int dungeonCoinReward(int playerLevel, int waveNumber, double coinModifier) {
         int safeLevel = normalizedLevel(playerLevel);
         int safeWave = Math.max(1, waveNumber);
         int base = 15 + safeWave * 8 + safeLevel * 2;
-        double multiplier = 1.0D + Math.max(0.0D, quantityModifier) + Math.max(0.0D, coinModifier);
+        double multiplier = 1.0D + Math.max(0.0D, coinModifier);
         return Math.max(5, (int) Math.round(base * multiplier));
     }
 
