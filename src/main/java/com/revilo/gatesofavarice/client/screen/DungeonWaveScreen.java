@@ -161,7 +161,7 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
                 ? DungeonDeck.withPulls(this.menu.deck(), selectedOption.pulledCardCounts())
                 : this.menu.deck();
         DungeonDeckRenderer.renderFullDeck(guiGraphics, this.font, displayedDeck,
-                this.width / 2, this.height - 8, Math.max(120, this.width - 24));
+                this.width / 2, this.height - 8, Math.max(120, this.width - 24), true);
 
         if (showingPull) {
             renderPulledCards(guiGraphics, selectedOption);
@@ -206,7 +206,7 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
         int cardHeight = Math.round(DungeonDeckRenderer.cardHeight() * scale);
         int totalWidth = pulledTypes.size() * cardWidth + (pulledTypes.size() - 1) * gap;
         int startX = (this.width - totalWidth) / 2;
-        int targetY = Math.max(28, Math.min(boosterFocusY() - 62, boosterDeckTop() - cardHeight - 14));
+        int targetY = Math.max(33, Math.min(boosterFocusY() - 57, boosterDeckTop() - cardHeight - 9));
         int originX = (this.width - cardWidth) / 2;
         int originY = boosterFocusY() + (BOOSTER_H - cardHeight) / 2;
         int flightTicks = Math.max(6, BOOSTER_REVEAL_TICKS
@@ -224,7 +224,7 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
             int drawX = Mth.floor(Mth.lerp(progress, originX, targetX));
             int drawY = Mth.floor(Mth.lerp(progress, originY, targetY));
             CardType type = CardType.values()[typeIndex];
-            DungeonDeckRenderer.renderCard(guiGraphics, this.font, type,
+        DungeonDeckRenderer.renderCard(guiGraphics, this.font, type,
                     new CardState(count, count * type.effectPercent()), drawX, drawY, scale);
         }
     }

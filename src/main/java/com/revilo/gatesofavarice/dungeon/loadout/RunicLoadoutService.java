@@ -196,7 +196,7 @@ public final class RunicLoadoutService {
     }
 
     public static int runeSlotsForPlayerLevel(int playerLevel) {
-        return Math.max(4, Math.min(18, 4 + Math.max(0, playerLevel) * 3 / 10));
+        return Math.max(4, Math.min(12, 4 + Math.max(0, playerLevel) / 10));
     }
 
     public static int runeSlotsCapacity(ItemStack stack) {

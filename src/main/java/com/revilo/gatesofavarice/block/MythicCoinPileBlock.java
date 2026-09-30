@@ -45,7 +45,7 @@ public final class MythicCoinPileBlock extends Block {
         if (level.isClientSide) return InteractionResult.SUCCESS;
         if (!(player instanceof ServerPlayer serverPlayer)) return InteractionResult.PASS;
 
-        // spawns the coin rewards and records the dungeon objective
+        // spawns the coin rewards and records the objective
         burst((ServerLevel) level, pos, serverPlayer);
         DungeonRunManager.recordCoinPileLooted(serverPlayer);
         level.removeBlock(pos, false);
@@ -54,7 +54,7 @@ public final class MythicCoinPileBlock extends Block {
 
     @Override
     public void spawnDestroyParticles(Level level, Player player, BlockPos pos, BlockState state) {
-        // suppresses default break particles because opening has its own effects
+        // suppresses default break particles because opening has its own particle effect
     }
 
     private static void burst(ServerLevel level, BlockPos pos, ServerPlayer player) {

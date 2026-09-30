@@ -2,6 +2,7 @@ package com.revilo.gatesofavarice.entity;
 
 import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
+import com.revilo.gatesofavarice.network.OpenDungeonExitConfirmationPayload;
 import com.revilo.gatesofavarice.party.PartyManager;
 import com.revilo.gatesofavarice.registry.ModEntities;
 import java.util.List;
@@ -16,6 +17,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.Level;
+import net.neoforged.neoforge.network.PacketDistributor;
 
 public class GatewayCrystalEntity extends Entity {
 
@@ -69,18 +71,6 @@ public class GatewayCrystalEntity extends Entity {
             return;
         }
 
-        if ((this.tickCount & 15) == 0) {
-            double angle = (this.tickCount * 0.18D) + (this.getId() * 0.71D);
-            double radius = 1.15D + 0.18D * Math.sin(this.tickCount * 0.11D);
-            double x = this.getX() + Math.cos(angle) * radius;
-            double z = this.getZ() + Math.sin(angle) * radius;
-            double y = this.getY() + 0.45D + (this.tickCount % 28) * 0.045D;
-            serverLevel.sendParticles(net.minecraft.core.particles.ParticleTypes.PORTAL, x, y, z, 1, 0.03D, 0.03D, 0.03D, 0.0D);
-            if (this.isReturnPortal() && (this.tickCount & 31) == 0) {
-                serverLevel.sendParticles(net.minecraft.core.particles.ParticleTypes.CRIMSON_SPORE, x, y, z, 1, 0.02D, 0.02D, 0.02D, 0.0D);
-            }
-        }
-
         List<ServerPlayer> players = serverLevel.getEntitiesOfClass(ServerPlayer.class, this.interactionBounds(),
                 player -> !player.isSpectator() && !player.isPassenger() && !player.isOnPortalCooldown());
         // A portal transfer has one entrant.  Processing every nearby player let a host
@@ -96,7 +86,8 @@ public class GatewayCrystalEntity extends Entity {
         } else if (this.isAdvancePortal()) {
             DungeonRunManager.advanceThroughFloorGateway(player, runOwnerId, this);
         } else if (this.isReturnPortal()) {
-            DungeonRunManager.exitViaBailPortal(player, runOwnerId, this);
+            player.setPortalCooldown();
+            PacketDistributor.sendToPlayer(player, new OpenDungeonExitConfirmationPayload(this.getId()));
         } else {
             if (this.ownerId != null && !PartyManager.canEnterDungeon(player, this.ownerId)) {
                 player.displayClientMessage(Component.literal("unable to join this players gate, join their party first"), true);

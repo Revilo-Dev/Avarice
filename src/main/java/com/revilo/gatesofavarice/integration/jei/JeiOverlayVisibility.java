@@ -35,7 +35,7 @@ final class JeiOverlayVisibility {
             toggleOverlayEnabled = type.getMethod("toggleOverlayEnabled");
             isBookmarkOverlayEnabled = type.getMethod("isBookmarkOverlayEnabled");
             toggleBookmarkEnabled = type.getMethod("toggleBookmarkEnabled");
-        } catch (ReflectiveOperationException ignored) {
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
             toggleState = null;
         }
     }
@@ -75,7 +75,7 @@ final class JeiOverlayVisibility {
                 restoreBookmarks = false;
                 hiddenByGateway = false;
             }
-        } catch (ReflectiveOperationException ignored) {
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
             toggleState = null;
         }
     }

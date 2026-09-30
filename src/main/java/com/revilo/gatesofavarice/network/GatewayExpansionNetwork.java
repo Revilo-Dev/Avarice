@@ -5,6 +5,8 @@ import com.revilo.gatesofavarice.dungeon.DungeonUpgradeManager;
 import com.revilo.gatesofavarice.knowledge.KnowledgeManager;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCategory;
 import com.revilo.gatesofavarice.dungeon.DungeonHudState;
+import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
+import com.revilo.gatesofavarice.entity.GatewayCrystalEntity;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -47,6 +49,19 @@ public final class GatewayExpansionNetwork {
             if (slot < 0 || slot >= player.getInventory().items.size()) return;
             KnowledgeManager.redeem(player, player.getInventory().getItem(slot));
         });
+        registrar.playToServer(ConfirmDungeonExitPayload.TYPE, ConfirmDungeonExitPayload.STREAM_CODEC, (payload, context) -> {
+            if (!(context.player() instanceof ServerPlayer player)) return;
+            if (!(player.level().getEntity(payload.portalEntityId()) instanceof GatewayCrystalEntity portal)
+                    || !portal.isReturnPortal() || player.distanceToSqr(portal) > 64.0D) {
+                return;
+            }
+            if (!payload.exitDungeon()) {
+                player.setPortalCooldown();
+                return;
+            }
+            java.util.UUID ownerId = portal.getOwnerId() == null ? player.getUUID() : portal.getOwnerId();
+            DungeonRunManager.exitViaBailPortal(player, ownerId, portal);
+        });
         registrar.playToClient(KnowledgeLibraryPayload.TYPE, KnowledgeLibraryPayload.STREAM_CODEC, (payload, context) ->
                 context.enqueueWork(() -> {
                     if (!FMLEnvironment.dist.isClient()) return;
@@ -66,6 +81,15 @@ public final class GatewayExpansionNetwork {
                     try {
                         Class<?> handler = Class.forName("com.revilo.gatesofavarice.client.DungeonCompleteClientHandler");
                         handler.getMethod("open", DungeonCompletePayload.class).invoke(null, payload);
+                    } catch (ReflectiveOperationException ignored) {
+                    }
+                }));
+        registrar.playToClient(OpenDungeonExitConfirmationPayload.TYPE, OpenDungeonExitConfirmationPayload.STREAM_CODEC, (payload, context) ->
+                context.enqueueWork(() -> {
+                    if (!FMLEnvironment.dist.isClient()) return;
+                    try {
+                        Class<?> handler = Class.forName("com.revilo.gatesofavarice.client.DungeonExitConfirmationClientHandler");
+                        handler.getMethod("open", OpenDungeonExitConfirmationPayload.class).invoke(null, payload);
                     } catch (ReflectiveOperationException ignored) {
                     }
                 }));

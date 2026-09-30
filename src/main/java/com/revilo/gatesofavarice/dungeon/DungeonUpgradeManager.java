@@ -277,10 +277,10 @@ public final class DungeonUpgradeManager {
         int waveNumber = getSessionWaveNumber(session);
         session.activeCategory = category;
         List<UpgradeCard> cards = session.cardsByCategory.get(category);
-        boolean enchanterShop = session.waveOwnerId == null
-                && "enchanter".equals(SHOP_MODES.getOrDefault(player.getUUID(), "enchanter"));
-        if (cards == null || (enchanterShop && cards.size() != ENCHANTER_SHOP_CARD_COUNT)) {
-            int cardCount = enchanterShop
+        boolean specialistShop = session.waveOwnerId == null
+                && isSpecialistShop(SHOP_MODES.getOrDefault(player.getUUID(), "enchanter"));
+        if (cards == null || (specialistShop && cards.size() != ENCHANTER_SHOP_CARD_COUNT)) {
+            int cardCount = specialistShop
                     ? ENCHANTER_SHOP_CARD_COUNT
                     : RunicUpgradeService.CARD_COUNT;
             cards = generateShopCards(player, session, category, target, waveNumber, cardCount);
@@ -402,6 +402,10 @@ public final class DungeonUpgradeManager {
             return generated;
         }
         return List.copyOf(generated.subList(0, count));
+    }
+
+    private static boolean isSpecialistShop(String shopMode) {
+        return "enchanter".equals(shopMode) || "armorer".equals(shopMode);
     }
 
     private static List<UpgradeCard> generateEnchanterShopCards(ServerPlayer player, UpgradeSession session,

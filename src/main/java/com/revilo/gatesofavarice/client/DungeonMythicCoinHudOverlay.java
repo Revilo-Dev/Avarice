@@ -1,6 +1,7 @@
 package com.revilo.gatesofavarice.client;
 
 import com.revilo.gatesofavarice.currency.MythicCoinWallet;
+import com.revilo.gatesofavarice.dungeon.DungeonHudState;
 import com.revilo.gatesofavarice.dungeon.ModDimensions;
 import com.revilo.gatesofavarice.registry.ModItems;
 import net.minecraft.client.Minecraft;
@@ -13,7 +14,10 @@ import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 public final class DungeonMythicCoinHudOverlay {
     private static final int MARGIN = 8;
     private static final int ICON_SIZE = 16;
+    private static final int TIME_OFFSET_X = 6;
     private static final ResourceLocation LAYER_ID = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_mythic_coin_counter");
+    private static long pausedPlayTimeTicks;
+    private static boolean clockPaused;
 
     private DungeonMythicCoinHudOverlay() {
     }
@@ -42,6 +46,15 @@ public final class DungeonMythicCoinHudOverlay {
         graphics.drawString(minecraft.font, coins, textX, textY - 1, 0xFF120A1E, false);
         graphics.drawString(minecraft.font, coins, textX, textY + 1, 0xFF120A1E, false);
         graphics.drawString(minecraft.font, coins, textX, textY, 0xFFD8A3FF, false);
+
+        String timePlayed = "Time " + formatTime(currentPlayTime(minecraft));
+        int timeX = x + (width - minecraft.font.width(timePlayed)) / 2 + TIME_OFFSET_X;
+        int timeY = y + ICON_SIZE + 2;
+        graphics.drawString(minecraft.font, timePlayed, timeX - 1, timeY, 0xFF120A1E, false);
+        graphics.drawString(minecraft.font, timePlayed, timeX + 1, timeY, 0xFF120A1E, false);
+        graphics.drawString(minecraft.font, timePlayed, timeX, timeY - 1, 0xFF120A1E, false);
+        graphics.drawString(minecraft.font, timePlayed, timeX, timeY + 1, 0xFF120A1E, false);
+        graphics.drawString(minecraft.font, timePlayed, timeX, timeY, 0xFFF3E8FF, false);
     }
 
     private static String formatCompactValue(int value) {
@@ -57,5 +70,28 @@ public final class DungeonMythicCoinHudOverlay {
     private static String compact(double value) {
         String text = String.format(java.util.Locale.ROOT, value < 10.0D ? "%.1f" : "%.0f", value);
         return text.endsWith(".0") ? text.substring(0, text.length() - 2) : text;
+    }
+
+    private static String formatTime(long ticks) {
+        long totalSeconds = Math.max(0L, ticks) / 20L;
+        long hours = totalSeconds / 3600L;
+        long minutes = (totalSeconds % 3600L) / 60L;
+        long seconds = totalSeconds % 60L;
+        return hours > 0L
+                ? String.format(java.util.Locale.ROOT, "%d:%02d:%02d", hours, minutes, seconds)
+                : String.format(java.util.Locale.ROOT, "%d:%02d", minutes, seconds);
+    }
+
+    private static long currentPlayTime(Minecraft minecraft) {
+        long playTime = DungeonHudState.playTimeTicks();
+        if (minecraft.isPaused()) {
+            if (!clockPaused) {
+                pausedPlayTimeTicks = playTime;
+                clockPaused = true;
+            }
+            return pausedPlayTimeTicks;
+        }
+        clockPaused = false;
+        return playTime;
     }
 }

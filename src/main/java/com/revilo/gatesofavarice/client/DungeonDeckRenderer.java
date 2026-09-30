@@ -59,6 +59,11 @@ public final class DungeonDeckRenderer {
     }
 
     public static void renderFullDeck(GuiGraphics guiGraphics, Font font, List<CardState> deck, int centerX, int bottom, int maxWidth) {
+        renderFullDeck(guiGraphics, font, deck, centerX, bottom, maxWidth, false);
+    }
+
+    public static void renderFullDeck(GuiGraphics guiGraphics, Font font, List<CardState> deck, int centerX, int bottom,
+            int maxWidth, boolean largeCounts) {
         List<CardState> normalized = DungeonDeck.normalize(deck);
         float scale = fullDeckScale(maxWidth);
         int cardWidth = Math.round(CARD_WIDTH * scale);
@@ -70,7 +75,7 @@ public final class DungeonDeckRenderer {
         guiGraphics.drawCenteredString(font, "DECK", centerX, cardY - 11, 0xFFE36B);
         for (int index = 0; index < CARD_TYPES.length; index++) {
             int cardX = startX + index * (cardWidth + FULL_CARD_GAP);
-            renderCard(guiGraphics, font, CARD_TYPES[index], normalized.get(index), cardX, cardY, scale);
+            renderCard(guiGraphics, font, CARD_TYPES[index], normalized.get(index), cardX, cardY, scale, largeCounts);
         }
     }
 
@@ -87,6 +92,11 @@ public final class DungeonDeckRenderer {
     }
 
     public static void renderCard(GuiGraphics guiGraphics, Font font, CardType type, CardState state, int x, int y, float scale) {
+        renderCard(guiGraphics, font, type, state, x, y, scale, false);
+    }
+
+    private static void renderCard(GuiGraphics guiGraphics, Font font, CardType type, CardState state, int x, int y,
+            float scale, boolean largeCount) {
         guiGraphics.pose().pushPose();
         guiGraphics.pose().translate(x, y, 0.0F);
         guiGraphics.pose().scale(scale, scale, 1.0F);
@@ -111,7 +121,8 @@ public final class DungeonDeckRenderer {
             }
         }
 
-        drawScaledCentered(guiGraphics, font, "x" + state.count(), CARD_WIDTH / 2.0F, 83, 0.48F, 0xFFD1D1D1);
+        drawScaledCentered(guiGraphics, font, "x" + state.count(), CARD_WIDTH / 2.0F, 83,
+                largeCount ? 0.68F : 0.48F, 0xFFD1D1D1);
         int effectColor = type.negative() ? 0xFFFFB0B0 : 0xFFB8F5BE;
         drawScaledCentered(guiGraphics, font, "+" + formatPercent(state.appliedPercent()) + "% applied",
                 CARD_WIDTH / 2.0F, 91, 0.50F, effectColor);

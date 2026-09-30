@@ -23,6 +23,7 @@ public final class DungeonWaveHudOverlay {
     private static final int WAVE_TEXT_RIGHT = 139;
     private static final int WAVE_TEXT_BOTTOM = 18;
     private static final int SIDEBAR_PADDING = 8;
+    private static final float DECK_Z = 500.0F;
 
     private DungeonWaveHudOverlay() {
     }
@@ -39,13 +40,18 @@ public final class DungeonWaveHudOverlay {
         if (DungeonHudState.inRun()) {
             int screenWidth = minecraft.getWindow().getGuiScaledWidth();
             int screenHeight = minecraft.getWindow().getGuiScaledHeight();
+            guiGraphics.pose().pushPose();
+            guiGraphics.pose().translate(0.0F, 0.0F, DECK_Z);
             if (tabDown) {
                 DungeonDeckRenderer.renderFullDeck(guiGraphics, minecraft.font, DungeonHudState.deck(),
                         screenWidth / 2, screenHeight - 8, screenWidth - 24);
-                renderPartySidebar(guiGraphics, minecraft);
             } else {
                 DungeonDeckRenderer.renderCompact(guiGraphics, minecraft.font, DungeonHudState.deck(),
                         screenWidth - 8, screenHeight - 8);
+            }
+            guiGraphics.pose().popPose();
+            if (tabDown) {
+                renderPartySidebar(guiGraphics, minecraft);
             }
         }
 

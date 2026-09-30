@@ -47,7 +47,7 @@ public final class DungeonInstanceManager {
     private static final Vec3 SHOP_PLAYER_SPAWN = new Vec3(13877296.5D, 65.0D, -2688978.5D);
     private static final Vec3 SHOP_ARCHIVIST_POSITION = new Vec3(13877315.0D, 64.0D, -2688976.0D);
     private static final Vec3 SHOP_ARMORER_POSITION = new Vec3(13877277.0D, 65.0D, -2688975.0D);
-    private static final Vec3 SHOP_ENCHANTER_POSITION = new Vec3(13877295.0D, 65.0D, -2688956.0D);
+    private static final Vec3 SHOP_ENCHANTER_POSITION = new Vec3(13877295.0D, 67.0D, -2688956.0D);
     private static final Vec3 SHOP_MERCHANT_POSITION = new Vec3(13877293.0D, 65.0D, -2688975.0D);
     private static final Vec3 SHOP_TAROT_DEALER_POSITION = new Vec3(13877300.0D, 65.0D, -2688975.0D);
     private static final Vec3 SHOP_EXIT_PORTAL_POSITION = new Vec3(13877288.0D, 65.0D, -2688992.0D);

@@ -69,7 +69,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private static final int ENCHANTER_CARD_COUNT = 5;
     private static final int ENCHANTER_CARDS_PER_ROW = 5;
     private static final float ENCHANTER_CARD_SCALE = 0.38F;
-    private static final int ENCHANTER_CARD_GAP = 4;
+    private static final int ENCHANTER_CARD_GAP = 2;
     private static final int REROLL_X = 153;
     private static final int REROLL_Y = 67;
     private static final int REROLL_RENDER_SIZE = 10;
@@ -1213,23 +1213,27 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private int displayedUpgradeCardCount() {
-        return Math.min(this.isEnchanter() ? ENCHANTER_CARD_COUNT : 8, this.upgradeCards.size());
+        return Math.min(this.usesSpecialistCardLayout() ? ENCHANTER_CARD_COUNT : 8, this.upgradeCards.size());
     }
 
     private int upgradeCardsPerRow() {
-        return this.isEnchanter() ? ENCHANTER_CARDS_PER_ROW : UPGRADE_CARDS_PER_ROW;
+        return this.usesSpecialistCardLayout() ? ENCHANTER_CARDS_PER_ROW : UPGRADE_CARDS_PER_ROW;
     }
 
     private float upgradeCardScale() {
-        return this.isEnchanter() ? ENCHANTER_CARD_SCALE : UPGRADE_CARD_SCALE;
+        return this.usesSpecialistCardLayout() ? ENCHANTER_CARD_SCALE : UPGRADE_CARD_SCALE;
     }
 
     private int upgradeCardGap() {
-        return this.isEnchanter() ? ENCHANTER_CARD_GAP : UPGRADE_CARD_GAP;
+        return this.usesSpecialistCardLayout() ? ENCHANTER_CARD_GAP : UPGRADE_CARD_GAP;
     }
 
     private int upgradeCardsStartY() {
-        return this.topPos + BUY_AREA_TOP + (this.isEnchanter() ? 22 : 11);
+        return this.topPos + BUY_AREA_TOP + (this.usesSpecialistCardLayout() ? 14 : 11);
+    }
+
+    private boolean usesSpecialistCardLayout() {
+        return this.isEnchanter() || this.isArmorer();
     }
 
     private static ResourceLocation resolveCardTexture(UpgradeCard card, boolean hovered) {
