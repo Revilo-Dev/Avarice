@@ -3,6 +3,7 @@ package com.revilo.gatesofavarice.block.entity;
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
 import com.revilo.gatesofavarice.config.GatewayExpansionConfig;
 import com.revilo.gatesofavarice.dungeon.DungeonRunManager;
+import com.revilo.gatesofavarice.knowledge.KnowledgeManager;
 import com.revilo.gatesofavarice.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.NonNullList;
@@ -100,7 +101,8 @@ public class LootboxBlockEntity extends BlockEntity {
         // plays opening effects before dropping every allowed stored reward
         spawnOpenParticles(level, pos);
         for (ItemStack stack : this.loot) {
-            if (!stack.isEmpty() && (!net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).getNamespace().equals("runic")
+            if (!stack.isEmpty() && KnowledgeManager.canReceiveRunic(player, stack)
+                    && (!net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).getNamespace().equals("runic")
                     || level.random.nextDouble() <= GatewayExpansionConfig.RUNE_LOOT_CRATE_DROP_CHANCE.get())) {
                 Containers.dropItemStack(level, pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D, stack.copy());
             }

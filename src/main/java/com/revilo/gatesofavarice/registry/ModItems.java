@@ -10,6 +10,7 @@ import com.revilo.gatesofavarice.item.GatewaySwordItem;
 import com.revilo.gatesofavarice.item.GoldCoinItem;
 import com.revilo.gatesofavarice.item.HeartFragmentItem;
 import com.revilo.gatesofavarice.item.GodlyKnowledgeItem;
+import com.revilo.gatesofavarice.item.GodsTomeOfKnowledgeItem;
 import com.revilo.gatesofavarice.item.LootMaterialItem;
 import com.revilo.gatesofavarice.item.MagnetItem;
 import com.revilo.gatesofavarice.item.MythicCoinItem;
@@ -56,6 +57,8 @@ public final class ModItems {
             () -> new Item(new Item.Properties().stacksTo(16).rarity(Rarity.RARE)));
     public static final DeferredHolder<Item, GodlyKnowledgeItem> GODLY_KNOWLEDGE_BOOK = ITEMS.register("godly_knowledge_book",
             () -> new GodlyKnowledgeItem(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC)));
+    public static final DeferredHolder<Item, GodsTomeOfKnowledgeItem> GODS_TOME_OF_KNOWLEDGE = ITEMS.register("gods_tome_of_knowledge",
+            () -> new GodsTomeOfKnowledgeItem(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC)));
     public static final DeferredHolder<Item, GoldCoinItem> GOLD_COIN = ITEMS.register("gold_coin",
             () -> new GoldCoinItem(new Item.Properties().stacksTo(99).rarity(Rarity.UNCOMMON)));
     public static final DeferredHolder<Item, StabilityPearlItem> STABILITY_PEARL = ITEMS.register("stability_pearl",

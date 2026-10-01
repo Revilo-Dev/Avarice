@@ -34,6 +34,7 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.MYTHIC_COIN.get());
                         output.accept(ModItems.USELESS_KNOWLEDGE_BOOK.get());
                         output.accept(ModItems.GODLY_KNOWLEDGE_BOOK.get());
+                        output.accept(ModItems.GODS_TOME_OF_KNOWLEDGE.get());
                         output.accept(ModItems.GOLD_COIN.get());
                         output.accept(ModItems.GATEWAY_CARD.get());
                         output.accept(ModItems.COMMON_BOOSTER_PACK.get());

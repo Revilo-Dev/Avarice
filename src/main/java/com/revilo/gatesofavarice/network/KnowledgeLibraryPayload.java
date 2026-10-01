@@ -8,15 +8,16 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 
-public record KnowledgeLibraryPayload(boolean openScreen, List<String> unlocked, List<String> unread) implements CustomPacketPayload {
+public record KnowledgeLibraryPayload(boolean openScreen, List<String> unlocked, List<String> unread, List<String> collectedDays) implements CustomPacketPayload {
     public static final Type<KnowledgeLibraryPayload> TYPE = new Type<>(ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "knowledge_library"));
     public static final StreamCodec<RegistryFriendlyByteBuf, KnowledgeLibraryPayload> STREAM_CODEC = StreamCodec.of(
             (buffer, payload) -> {
                 buffer.writeBoolean(payload.openScreen);
                 writeStrings(buffer, payload.unlocked);
                 writeStrings(buffer, payload.unread);
+                writeStrings(buffer, payload.collectedDays);
             },
-            buffer -> new KnowledgeLibraryPayload(buffer.readBoolean(), readStrings(buffer), readStrings(buffer))
+            buffer -> new KnowledgeLibraryPayload(buffer.readBoolean(), readStrings(buffer), readStrings(buffer), readStrings(buffer))
     );
     private static void writeStrings(RegistryFriendlyByteBuf buffer, List<String> values) {
         buffer.writeVarInt(values.size());

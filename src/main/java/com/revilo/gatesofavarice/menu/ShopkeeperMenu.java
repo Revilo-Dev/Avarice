@@ -39,6 +39,7 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
     public static final int BAIL_BUTTON_ID = 104;
     public static final int CATEGORY_BUTTON_ID_OFFSET = 1000;
     public static final int CARD_BUTTON_ID_OFFSET = 1100;
+    public static final int TARGET_BUTTON_ID_OFFSET = 1300;
     public static final int BUY_ALL_BUTTON_ID_OFFSET = 200;
     public static final int TAROT_BUTTON_ID_OFFSET = 1200;
     public static final int SELL_SLOT_COUNT = 18;
@@ -177,8 +178,12 @@ public class ShopkeeperMenu extends AbstractContainerMenu {
             return DungeonUpgradeManager.selectShopCategory(serverPlayer, values[categoryOrdinal], this.getRemainingRerolls(), this.getRerollCost());
         }
 
-        if (id >= CARD_BUTTON_ID_OFFSET && id < CARD_BUTTON_ID_OFFSET + 8) {
+        if (id >= CARD_BUTTON_ID_OFFSET && id < CARD_BUTTON_ID_OFFSET + 10) {
             return DungeonUpgradeManager.selectShopCard(serverPlayer, id - CARD_BUTTON_ID_OFFSET);
+        }
+
+        if (id >= TARGET_BUTTON_ID_OFFSET && id < TARGET_BUTTON_ID_OFFSET + 6) {
+            return DungeonUpgradeManager.selectShopTarget(serverPlayer, id - TARGET_BUTTON_ID_OFFSET, this.getRemainingRerolls(), this.getRerollCost());
         }
 
         if (id >= BUY_ALL_BUTTON_ID_OFFSET && id < BUY_ALL_BUTTON_ID_OFFSET + GRID_SLOT_COUNT) {

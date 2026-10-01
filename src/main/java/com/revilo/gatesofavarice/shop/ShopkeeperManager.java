@@ -154,7 +154,7 @@ public final class ShopkeeperManager {
             return;
         }
         if ("archive_keeper".equals(getSpecialistRole(trader))) {
-            KnowledgeManager.openLibrary(player);
+            redeemArchiveKnowledge(player);
             return;
         }
         MenuProvider provider = new net.minecraft.world.SimpleMenuProvider(
@@ -183,6 +183,34 @@ public final class ShopkeeperManager {
         }
 
         trader.remove(Entity.RemovalReason.DISCARDED);
+    }
+
+    private static void redeemArchiveKnowledge(ServerPlayer player) {
+        for (ItemStack stack : allPlayerStacks(player)) {
+            if (stack.is(ModItems.GODS_TOME_OF_KNOWLEDGE.get())) {
+                stack.shrink(1);
+                int count = KnowledgeManager.unlockAll(player);
+                player.displayClientMessage(Component.literal("The Archive Keeper revealed " + count + " discoveries.").withStyle(ChatFormatting.LIGHT_PURPLE), false);
+                player.inventoryMenu.broadcastChanges();
+                return;
+            }
+        }
+        for (ItemStack stack : allPlayerStacks(player)) {
+            if (KnowledgeManager.getBookEntry(stack).isPresent()) {
+                KnowledgeManager.redeem(player, stack);
+                player.inventoryMenu.broadcastChanges();
+                return;
+            }
+        }
+        player.displayClientMessage(Component.literal("Bring me a collected book of knowledge.").withStyle(ChatFormatting.GRAY), true);
+    }
+
+    private static java.util.List<ItemStack> allPlayerStacks(ServerPlayer player) {
+        java.util.ArrayList<ItemStack> stacks = new java.util.ArrayList<>();
+        stacks.add(player.getMainHandItem());
+        stacks.add(player.getOffhandItem());
+        stacks.addAll(player.getInventory().items);
+        return stacks;
     }
 
     public static GatekeeperEntity spawnShopkeeper(Level level, double x, double y, double z, Player summoner) {

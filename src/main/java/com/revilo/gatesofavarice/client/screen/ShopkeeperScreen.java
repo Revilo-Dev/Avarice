@@ -26,6 +26,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -37,6 +38,7 @@ import net.revilodev.runic.stat.RuneStats;
 public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private static final ResourceLocation BUY_GUI_TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/shop/shop-gui.png");
     private static final ResourceLocation SELL_GUI_TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/shop/shop-sell-gui.png");
+    private static final ResourceLocation ENCHANTER_GUI_TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/npc/enchanter.png");
     private static final ResourceLocation REROLL_TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/shop/re-roll.png");
     private static final ResourceLocation REROLL_DISABLED_TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/shop/re-roll-disabled.png");
     private static final ResourceLocation BACK_BUTTON_TEXTURE = ResourceLocation.fromNamespaceAndPath(GatewayExpansion.MOD_ID, "textures/gui/shop/back_button.png");
@@ -66,9 +68,9 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private static final float UPGRADE_CARD_SCALE = 0.28F;
     private static final int UPGRADE_CARD_GAP = 8;
     private static final int UPGRADE_CARD_ROW_GAP = 1;
-    private static final int ENCHANTER_CARD_COUNT = 5;
-    private static final int ENCHANTER_CARDS_PER_ROW = 5;
-    private static final float ENCHANTER_CARD_SCALE = 0.38F;
+    private static final int ENCHANTER_CARD_COUNT = 10;
+    private static final int ENCHANTER_CARDS_PER_ROW = 10;
+    private static final float ENCHANTER_CARD_SCALE = 0.28F;
     private static final int ENCHANTER_CARD_GAP = 2;
     private static final int REROLL_X = 153;
     private static final int REROLL_Y = 67;
@@ -249,6 +251,12 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
 
     @Override
     protected void renderBg(GuiGraphics guiGraphics, float partialTick, int mouseX, int mouseY) {
+        if (this.activePage == Page.BUY && this.usesSpecialistCardLayout()) {
+            this.renderSpecialistBackground(guiGraphics);
+            this.renderWallet(guiGraphics);
+            this.renderUpgradePanel(guiGraphics, mouseX, mouseY);
+            return;
+        }
         guiGraphics.blit(this.activePage == Page.BUY ? BUY_GUI_TEXTURE : SELL_GUI_TEXTURE, this.leftPos, this.topPos, 0, 0, this.imageWidth, this.imageHeight, 256, 256);
         this.renderWallet(guiGraphics);
         if (this.activePage == Page.BUY) {
@@ -268,6 +276,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
 
     @Override
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        if (this.usesSpecialistCardLayout()) return;
         Component label = this.isEnchanter()
                 ? Component.literal("Enchanting").withStyle(ChatFormatting.LIGHT_PURPLE)
                 : this.isArmorer()
@@ -303,6 +312,28 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
                     }
                 }
                 if (!this.isUpgradeVendor()) return super.mouseClicked(mouseX, mouseY, button);
+                if (this.usesSpecialistCardLayout()) {
+                    int target = this.getSpecialistTargetIndex(mouseX, mouseY);
+                    if (target >= 0 && this.minecraft != null && this.minecraft.gameMode != null) {
+                        this.selectedCardIndex = -1;
+                        this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, ShopkeeperMenu.TARGET_BUTTON_ID_OFFSET + target);
+                        return true;
+                    }
+                    if (!this.categorySelection && this.isHoveringEnchantButton(mouseX, mouseY)) {
+                        this.confirmSpecialistSelection();
+                        return true;
+                    }
+                    int cardIndex = this.getUpgradeSelectionIndex(mouseX, mouseY);
+                    if (!this.categorySelection && cardIndex >= 0 && cardIndex < this.upgradeCards.size()) {
+                        UpgradeCard card = this.upgradeCards.get(cardIndex);
+                        if (!this.isBlockedByRuneSlots(card) && card.cost() <= this.menu.getWalletBalance()) {
+                            this.selectedCardIndex = cardIndex;
+                            this.playDing(1.15F);
+                        }
+                        return true;
+                    }
+                    return super.mouseClicked(mouseX, mouseY, button);
+                }
                 if (!this.categorySelection && this.isHoveringBackButton(mouseX, mouseY) && this.minecraft != null && this.minecraft.gameMode != null) {
                     this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, ShopkeeperMenu.BACK_BUTTON_ID);
                     return true;
@@ -340,6 +371,10 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private void renderUpgradePanel(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        if (this.usesSpecialistCardLayout()) {
+            this.renderSpecialistPanel(guiGraphics, mouseX, mouseY);
+            return;
+        }
         if (this.categorySelection) {
             this.renderCategoryCards(guiGraphics, mouseX, mouseY);
             guiGraphics.drawCenteredString(this.font, Component.literal(this.isArmorer() ? "Pick inscription target" : "Pick upgrade deck").withStyle(ChatFormatting.GOLD), this.leftPos + 88, this.topPos + 64, 0xFFF0B8);
@@ -351,6 +386,16 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
                 : this.upgradePreviewStack.getHoverName().copy().withStyle(ChatFormatting.GOLD);
         guiGraphics.drawCenteredString(this.font, title, this.leftPos + 88, this.topPos + 15, 0xF3D78A);
         this.renderUpgradeCards(guiGraphics, mouseX, mouseY);
+    }
+
+    @Override
+    protected void renderSlot(GuiGraphics graphics, Slot slot) {
+        if (!this.usesSpecialistCardLayout()) super.renderSlot(graphics, slot);
+    }
+
+    @Override
+    protected void slotClicked(Slot slot, int slotId, int mouseButton, ClickType type) {
+        if (!this.usesSpecialistCardLayout()) super.slotClicked(slot, slotId, mouseButton, type);
     }
 
     private boolean isUpgradeVendor() {
@@ -366,7 +411,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private int visibleCategoryCount() {
-        return this.isEnchanter() || this.isArmorer() ? 3 : UpgradeCategory.values().length;
+        return this.isEnchanter() || this.isArmorer() ? 6 : UpgradeCategory.values().length;
     }
 
     private int visibleCategoryIndex(int visibleIndex) {
@@ -461,6 +506,10 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private void renderUpgradeCards(GuiGraphics guiGraphics, int mouseX, int mouseY) {
+        if (this.usesSpecialistCardLayout()) {
+            this.renderSpecialistCards(guiGraphics, mouseX, mouseY);
+            return;
+        }
         int count = displayedUpgradeCardCount();
         int cardsPerRow = upgradeCardsPerRow();
         float cardScale = upgradeCardScale();
@@ -1104,6 +1153,21 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private int getUpgradeSelectionIndex(double mouseX, double mouseY) {
+        if (this.usesSpecialistCardLayout()) {
+            if (this.categorySelection) return -1;
+            int left = this.specialistLeft();
+            int top = this.specialistTop();
+            int count = displayedUpgradeCardCount();
+            int cardWidth = Math.round(CARD_W * ENCHANTER_CARD_SCALE);
+            int totalWidth = count * cardWidth + Math.max(0, count - 1) * ENCHANTER_CARD_GAP;
+            int startX = left + 8 + (239 - totalWidth) / 2;
+            int y = top + 27;
+            for (int index = 0; index < count; index++) {
+                int x = startX + index * (cardWidth + ENCHANTER_CARD_GAP);
+                if (this.isMouseOverScaledCard(mouseX, mouseY, x, y, ENCHANTER_CARD_SCALE)) return index;
+            }
+            return -1;
+        }
         if (this.categorySelection) {
             int count = this.visibleCategoryCount();
             int totalWidth = Math.round(count * CARD_W * CATEGORY_CARD_SCALE + Math.max(0, count - 1) * CATEGORY_CARD_GAP);
@@ -1231,6 +1295,120 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private int upgradeCardsStartY() {
         return this.topPos + BUY_AREA_TOP + (this.usesSpecialistCardLayout() ? 14 : 11);
     }
+
+    private void renderSpecialistBackground(GuiGraphics graphics) {
+        graphics.blit(ENCHANTER_GUI_TEXTURE, specialistLeft(), specialistTop(), 0, 0, 256, 176, 256, 176);
+    }
+
+    private void renderSpecialistPanel(GuiGraphics graphics, int mouseX, int mouseY) {
+        int left = specialistLeft();
+        int top = specialistTop();
+        if (this.categorySelection) {
+            graphics.drawCenteredString(this.font, "Select an item to begin enchanting", left + 128, top + 47, 0xFFE6E6E6);
+        } else {
+            Component name = this.upgradePreviewStack.isEmpty() ? Component.literal("Selected Item") : this.upgradePreviewStack.getHoverName();
+            graphics.drawCenteredString(this.font, name, left + 128, top + 7, 0xFFF3D78A);
+            renderSpecialistCards(graphics, mouseX, mouseY);
+            boolean enabled = this.canConfirmSpecialistSelection();
+            int buttonLeft = left + 94;
+            int buttonTop = top + 78;
+            graphics.blitSprite(enabled ? BUTTON_TEXTURE : BUTTON_DISABLED_TEXTURE, buttonLeft, buttonTop, 68, 20);
+            graphics.drawCenteredString(this.font, this.isArmorer() ? "Inscribe" : "Enchant", left + 128, buttonTop + 6, enabled ? 0xFFFFFFFF : 0xFF888888);
+            graphics.drawCenteredString(this.font, "Rune Slots: " + this.runeSlotsUsed + "/" + this.runeSlotsCapacity, left + 128, top + 101,
+                    this.runeSlotsCapacity > 0 && this.runeSlotsUsed >= this.runeSlotsCapacity ? 0xFFFF5555 : 0xFFC9A8FF);
+        }
+        renderSpecialistTargets(graphics, mouseX, mouseY);
+    }
+
+    private void renderSpecialistCards(GuiGraphics graphics, int mouseX, int mouseY) {
+        int count = displayedUpgradeCardCount();
+        if (count <= 0) {
+            graphics.drawCenteredString(this.font, "No unlocked options", specialistLeft() + 128, specialistTop() + 48, 0xFF999999);
+            return;
+        }
+        int cardWidth = Math.round(CARD_W * ENCHANTER_CARD_SCALE);
+        int totalWidth = count * cardWidth + Math.max(0, count - 1) * ENCHANTER_CARD_GAP;
+        int startX = specialistLeft() + 8 + (239 - totalWidth) / 2;
+        int y = specialistTop() + 27;
+        for (int index = 0; index < count; index++) {
+            UpgradeCard card = this.upgradeCards.get(index);
+            int x = startX + index * (cardWidth + ENCHANTER_CARD_GAP);
+            boolean disabled = this.isBlockedByRuneSlots(card) || card.cost() > this.menu.getWalletBalance();
+            boolean hovered = !disabled && this.isMouseOverScaledCard(mouseX, mouseY, x, y, ENCHANTER_CARD_SCALE);
+            this.drawCard(graphics, resolveCardTexture(card, hovered || index == this.selectedCardIndex), x, y, ENCHANTER_CARD_SCALE);
+            this.renderUpgradeCardContents(graphics, x, y, card, ENCHANTER_CARD_SCALE);
+            if (index == this.selectedCardIndex) {
+                graphics.renderOutline(x - 1, y - 1, cardWidth + 2, Math.round(CARD_H * ENCHANTER_CARD_SCALE) + 2, 0xFFFFFF55);
+            }
+            if (disabled) graphics.fill(x, y, x + cardWidth, y + Math.round(CARD_H * ENCHANTER_CARD_SCALE), 0x99000000);
+        }
+    }
+
+    private void renderSpecialistTargets(GuiGraphics graphics, int mouseX, int mouseY) {
+        int left = specialistLeft();
+        int top = specialistTop();
+        String[] labels = {"Main", "Secondary", "Helmet", "Chest", "Legs", "Boots"};
+        for (int index = 0; index < labels.length; index++) {
+            int x = left + 16 + index * 39;
+            int y = top + 126;
+            boolean hovered = mouseX >= x - 3 && mouseX < x + 25 && mouseY >= y - 3 && mouseY < y + 34;
+            graphics.fill(x - 3, y - 3, x + 25, y + 34, hovered ? 0x886D5A91 : 0x66333333);
+            ItemStack stack = specialistTargetStack(index);
+            if (!stack.isEmpty()) graphics.renderItem(stack, x + 3, y);
+            graphics.drawCenteredString(this.font, this.font.plainSubstrByWidth(labels[index], 32), x + 11, y + 20, 0xFFDDDDDD);
+        }
+    }
+
+    private ItemStack specialistTargetStack(int index) {
+        if (this.minecraft == null || this.minecraft.player == null) return ItemStack.EMPTY;
+        if (index == 0) return findWeaponByRole(DungeonBoundItems.PRIMARY_WEAPON_ROLE);
+        if (index == 1) return findWeaponByRole(DungeonBoundItems.SECONDARY_WEAPON_ROLE);
+        ArmorItem.Type wanted = switch (index) {
+            case 2 -> ArmorItem.Type.HELMET;
+            case 3 -> ArmorItem.Type.CHESTPLATE;
+            case 4 -> ArmorItem.Type.LEGGINGS;
+            case 5 -> ArmorItem.Type.BOOTS;
+            default -> null;
+        };
+        if (wanted == null) return ItemStack.EMPTY;
+        for (ItemStack stack : this.minecraft.player.getInventory().armor) {
+            if (stack.getItem() instanceof ArmorItem armor && armor.getType() == wanted) return stack;
+        }
+        return ItemStack.EMPTY;
+    }
+
+    private int getSpecialistTargetIndex(double mouseX, double mouseY) {
+        int left = specialistLeft();
+        int top = specialistTop();
+        for (int index = 0; index < 6; index++) {
+            int x = left + 13 + index * 39;
+            int y = top + 123;
+            if (mouseX >= x && mouseX < x + 28 && mouseY >= y && mouseY < y + 37 && !specialistTargetStack(index).isEmpty()) return index;
+        }
+        return -1;
+    }
+
+    private boolean isHoveringEnchantButton(double mouseX, double mouseY) {
+        return mouseX >= specialistLeft() + 94 && mouseX < specialistLeft() + 162
+                && mouseY >= specialistTop() + 78 && mouseY < specialistTop() + 98;
+    }
+
+    private boolean canConfirmSpecialistSelection() {
+        if (this.categorySelection || this.selectedCardIndex < 0 || this.selectedCardIndex >= this.upgradeCards.size()) return false;
+        UpgradeCard card = this.upgradeCards.get(this.selectedCardIndex);
+        return !this.isBlockedByRuneSlots(card) && card.cost() <= this.menu.getWalletBalance();
+    }
+
+    private void confirmSpecialistSelection() {
+        if (!canConfirmSpecialistSelection() || this.minecraft == null || this.minecraft.gameMode == null) return;
+        UpgradeCard card = this.upgradeCards.get(this.selectedCardIndex);
+        this.createBuyCoinFlights(card.cost(), 1);
+        this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, ShopkeeperMenu.CARD_BUTTON_ID_OFFSET + this.selectedCardIndex);
+        this.selectedCardIndex = -1;
+    }
+
+    private int specialistLeft() { return (this.width - 256) / 2; }
+    private int specialistTop() { return (this.height - 176) / 2; }
 
     private boolean usesSpecialistCardLayout() {
         return this.isEnchanter() || this.isArmorer();

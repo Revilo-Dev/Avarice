@@ -13,6 +13,7 @@ import com.revilo.gatesofavarice.dungeon.loadout.RunicLoadoutService;
 import com.revilo.gatesofavarice.dungeon.loadout.RunicUpgradeService;
 import com.revilo.gatesofavarice.item.GatewayCardItem;
 import com.revilo.gatesofavarice.item.MagnetItem;
+import com.revilo.gatesofavarice.knowledge.KnowledgeManager;
 import com.revilo.gatesofavarice.integration.CuriosCompat;
 import com.revilo.gatesofavarice.integration.ModCompat;
 import com.revilo.gatesofavarice.network.OpenUpgradeCategoryPayload;
@@ -40,11 +41,13 @@ import net.revilodev.runic.stat.RuneStatType;
 import net.revilodev.runic.stat.RuneStats;
 import net.revilodev.runic.gear.RunicItemData;
 import net.revilodev.runic.synergy.SynergyRegistry;
+import net.revilodev.runic.command.RunicCommandHelper;
 
 public final class DungeonUpgradeManager {
     private static final Map<UUID, UpgradeSession> SESSIONS = new HashMap<>();
     private static final Map<UUID, String> SHOP_MODES = new HashMap<>();
-    private static final int ENCHANTER_SHOP_CARD_COUNT = 5;
+    private static final int ENCHANTER_SHOP_CARD_COUNT = 10;
+    private static final List<String> INSCRIPTION_IDS = List.of("repair", "expansion", "nullification", "upgrade", "reroll", "cursed", "wild", "extraction");
 
     private DungeonUpgradeManager() {}
 
@@ -124,12 +127,51 @@ public final class DungeonUpgradeManager {
             reject(player, "No rune slots available.");
             return false;
         }
-        if (!trySpendForCard(player, session, card)) {
+        if (card.cost() > com.revilo.gatesofavarice.currency.MythicCoinWallet.get(player)) {
             reject(player, "You do not have enough Mythic Coins.");
             return false;
         }
-        applySelectedCard(player, session, card, false);
+        if (isInscriptionCard(card)) {
+            String inscriptionId = card.changeLabel().substring("inscription:".length());
+            if (!KnowledgeManager.isInscriptionUnlocked(player, inscriptionId)) {
+                reject(player, "You havent learned this inscription.");
+                return false;
+            }
+            if (!RunicCommandHelper.inscribe(target, inscriptionId)) {
+                reject(player, "That inscription cannot be applied to this item.");
+                return false;
+            }
+            com.revilo.gatesofavarice.currency.MythicCoinWallet.spend(player, card.cost());
+            RunicLoadoutService.syncRunicSlots(target);
+            player.inventoryMenu.broadcastChanges();
+            player.containerMenu.broadcastChanges();
+        } else {
+            if (!trySpendForCard(player, session, card)) {
+                reject(player, "You do not have enough Mythic Coins.");
+                return false;
+            }
+            applySelectedCard(player, session, card, false);
+        }
         removePurchasedShopCard(player, session, card, session.activeCategory);
+        return true;
+    }
+
+    public static boolean selectShopTarget(ServerPlayer player, int targetIndex, int rerollsLeft, int rerollCost) {
+        UpgradeSession session = SESSIONS.get(player.getUUID());
+        if (session == null && !openShopUpgradeScreen(player)) return false;
+        session = SESSIONS.get(player.getUUID());
+        if (session == null || targetIndex < 0 || targetIndex > 5) return false;
+        UpgradeCategory category = targetIndex == 0 ? UpgradeCategory.PRIMARY_WEAPON
+                : targetIndex == 1 ? UpgradeCategory.SECONDARY_WEAPON : UpgradeCategory.ARMOR;
+        session.activeArmorPiece = switch (targetIndex) {
+            case 2 -> "helmet";
+            case 3 -> "chestplate";
+            case 4 -> "leggings";
+            case 5 -> "boots";
+            default -> "";
+        };
+        session.cardsByCategory.remove(category);
+        syncCategoryCards(player, session, category, rerollsLeft, rerollCost);
         return true;
     }
 
@@ -279,7 +321,7 @@ public final class DungeonUpgradeManager {
         List<UpgradeCard> cards = session.cardsByCategory.get(category);
         boolean specialistShop = session.waveOwnerId == null
                 && isSpecialistShop(SHOP_MODES.getOrDefault(player.getUUID(), "enchanter"));
-        if (cards == null || (specialistShop && cards.size() != ENCHANTER_SHOP_CARD_COUNT)) {
+        if (cards == null) {
             int cardCount = specialistShop
                     ? ENCHANTER_SHOP_CARD_COUNT
                     : RunicUpgradeService.CARD_COUNT;
@@ -372,6 +414,9 @@ public final class DungeonUpgradeManager {
         if (session.waveOwnerId == null && "enchanter".equals(SHOP_MODES.getOrDefault(player.getUUID(), "enchanter"))) {
             return generateEnchanterShopCards(player, session, category, target, waveNumber, count);
         }
+        if (session.waveOwnerId == null && "armorer".equals(SHOP_MODES.getOrDefault(player.getUUID(), "enchanter"))) {
+            return generateInscriptionCards(player, waveNumber, count);
+        }
         boolean includeSynergyCard = session.waveOwnerId != null && DungeonRunManager.isSynergyCardWave(session.waveOwnerId);
         List<UpgradeCard> generated = pricedCards(RunicUpgradeService.generateUpgradeCards(player, target, session.instance, session.definition, category, waveNumber, session.cardGenerationNonce, includeSynergyCard), waveNumber);
         if (session.waveOwnerId == null) {
@@ -410,13 +455,61 @@ public final class DungeonUpgradeManager {
 
     private static List<UpgradeCard> generateEnchanterShopCards(ServerPlayer player, UpgradeSession session,
             UpgradeCategory category, ItemStack target, int waveNumber, int count) {
-        List<UpgradeCard> generated = pricedCards(RunicUpgradeService.generateUpgradeCards(player, target,
-                session.instance, session.definition, category, waveNumber,
-                session.cardGenerationNonce, false), waveNumber);
-        if (generated.size() <= count) {
-            return generated;
+        java.util.LinkedHashMap<String, UpgradeCard> unlocked = new java.util.LinkedHashMap<>();
+        for (int attempt = 0; attempt < 6 && unlocked.size() < count; attempt++) {
+            List<UpgradeCard> generated = pricedCards(RunicUpgradeService.generateUpgradeCards(player, target,
+                    session.instance, session.definition, category, waveNumber,
+                    session.cardGenerationNonce + attempt, false), waveNumber);
+            for (UpgradeCard card : generated) {
+                if (isCardKnowledgeUnlocked(player, card)) {
+                    unlocked.putIfAbsent(card.type().name() + "|" + card.changeLabel(), card);
+                }
+                if (unlocked.size() >= count) break;
+            }
         }
-        return List.copyOf(generated.subList(0, count));
+        return List.copyOf(unlocked.values());
+    }
+
+    private static List<UpgradeCard> generateInscriptionCards(ServerPlayer player, int waveNumber, int count) {
+        java.util.ArrayList<UpgradeCard> cards = new java.util.ArrayList<>();
+        for (String id : INSCRIPTION_IDS) {
+            if (!KnowledgeManager.isInscriptionUnlocked(player, id)) continue;
+            String title = titleCase(id) + " Inscription";
+            cards.add(new UpgradeCard("inscription_" + id, UpgradeCardType.ADD_IMPLICIT, UpgradeCategory.ARMOR,
+                    "Runic Inscription", id, "inscription:" + id, "-", title, 1, 260 + Math.max(0, waveNumber - 1) * 35));
+            if (cards.size() >= count) break;
+        }
+        return List.copyOf(cards);
+    }
+
+    private static boolean isCardKnowledgeUnlocked(ServerPlayer player, UpgradeCard card) {
+        if (card.type() == UpgradeCardType.ADD_OR_UPGRADE_EFFECT) {
+            String value = card.changeLabel().startsWith("effect:") ? card.changeLabel() : switch (card.changeLabel()) {
+                case "Thorns" -> "effect:minecraft:thorns";
+                case "Power" -> "effect:minecraft:power";
+                case "Punch" -> "effect:minecraft:punch";
+                case "Flame" -> "effect:minecraft:flame";
+                default -> "";
+            };
+            return KnowledgeManager.isUpgradeUnlocked(player, value);
+        }
+        RuneStatType type = resolveCardStatType(card);
+        return type == null || KnowledgeManager.isUpgradeUnlocked(player, type.id());
+    }
+
+    private static boolean isInscriptionCard(UpgradeCard card) {
+        return card.changeLabel().startsWith("inscription:");
+    }
+
+    private static String titleCase(String value) {
+        String[] words = value.replace('_', ' ').split(" ");
+        StringBuilder result = new StringBuilder();
+        for (String word : words) {
+            if (word.isBlank()) continue;
+            if (!result.isEmpty()) result.append(' ');
+            result.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+        }
+        return result.toString();
     }
 
     private static boolean isRunicInscriptionCard(UpgradeCardType type) {

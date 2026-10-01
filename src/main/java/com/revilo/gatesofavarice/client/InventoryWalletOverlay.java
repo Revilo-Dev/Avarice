@@ -99,9 +99,7 @@ public final class InventoryWalletOverlay {
 
     private static void renderKnowledgeButton(GuiGraphics graphics, WalletLayout layout, boolean hovered) {
         int x = knowledgeButtonX(layout);
-        int y = layout.iconY();
-        graphics.fill(x - 1, y - 1, x + ICON_SIZE + 1, y + ICON_SIZE + 1, hovered ? 0xFFEBD8A8 : 0xFF786A52);
-        graphics.fill(x, y, x + ICON_SIZE, y + ICON_SIZE, hovered ? 0xFFBBA66F : 0xFFDBC88C);
+        int y = knowledgeButtonY(layout);
         graphics.blit(KnowledgeLibraryClientState.hasUnread() ? KNOWLEDGE_BUTTON_TOAST : KNOWLEDGE_BUTTON, x, y, 0, 0, ICON_SIZE, ICON_SIZE, ICON_SIZE, ICON_SIZE);
         if (KnowledgeLibraryClientState.hasUnread()) {
             graphics.blit(KNOWLEDGE_TOAST, x + 11, y - 2, 0, 0, 4, 11, 4, 11);
@@ -110,12 +108,16 @@ public final class InventoryWalletOverlay {
 
     private static boolean isKnowledgeButtonHovered(WalletLayout layout, double mouseX, double mouseY) {
         int x = knowledgeButtonX(layout);
-        int y = layout.iconY();
-        return mouseX >= x - 1 && mouseX <= x + ICON_SIZE + 1 && mouseY >= y - 1 && mouseY <= y + ICON_SIZE + 1;
+        int y = knowledgeButtonY(layout);
+        return mouseX >= x && mouseX <= x + ICON_SIZE && mouseY >= y && mouseY <= y + ICON_SIZE;
     }
 
     private static int knowledgeButtonX(WalletLayout layout) {
-        return layout.iconX() - ICON_SIZE - 4;
+        return layout.inventoryLeft() + 77;
+    }
+
+    private static int knowledgeButtonY(WalletLayout layout) {
+        return layout.inventoryTop() + 42;
     }
 
     private static void renderWallet(GuiGraphics guiGraphics, Minecraft minecraft, WalletLayout layout, boolean hovered, boolean inDungeon) {
@@ -139,7 +141,7 @@ public final class InventoryWalletOverlay {
         guiGraphics.pose().popPose();
     }
 
-    private record WalletLayout(String text, float textScale, int iconX, int iconY, float textX, float textY, int hoverLeft, int hoverTop, int hoverRight, int hoverBottom) {
+    private record WalletLayout(String text, float textScale, int iconX, int iconY, float textX, float textY, int hoverLeft, int hoverTop, int hoverRight, int hoverBottom, int inventoryLeft, int inventoryTop) {
 
         private static WalletLayout create(Minecraft minecraft, AbstractContainerScreen<?> screen, boolean inDungeon) {
             String text = formatCompactValue(inDungeon ? MythicCoinWallet.get(minecraft.player) : GoldCoinWallet.get(minecraft.player));
@@ -160,7 +162,7 @@ public final class InventoryWalletOverlay {
             int hoverTop = Mth.floor(centerY - 10.0F);
             int hoverRight = Mth.ceil(groupLeft + groupWidth) + 2;
             int hoverBottom = Mth.ceil(centerY + 8.0F);
-            return new WalletLayout(text, textScale, iconX, iconY, textX, textY, hoverLeft, hoverTop, hoverRight, hoverBottom);
+            return new WalletLayout(text, textScale, iconX, iconY, textX, textY, hoverLeft, hoverTop, hoverRight, hoverBottom, screen.getGuiLeft(), screen.getGuiTop());
         }
 
         private boolean isMouseOver(double mouseX, double mouseY) {
