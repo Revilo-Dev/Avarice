@@ -69,8 +69,8 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private static final int UPGRADE_CARD_GAP = 8;
     private static final int UPGRADE_CARD_ROW_GAP = 1;
     private static final int ENCHANTER_CARD_COUNT = 10;
-    private static final int ENCHANTER_CARDS_PER_ROW = 10;
-    private static final float ENCHANTER_CARD_SCALE = 0.28F;
+    private static final int ENCHANTER_CARDS_PER_ROW = 5;
+    private static final float ENCHANTER_CARD_SCALE = 0.56F;
     private static final int ENCHANTER_CARD_GAP = 2;
     private static final int REROLL_X = 153;
     private static final int REROLL_Y = 67;
@@ -137,6 +137,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     private float coinTargetY;
     private int limitShakeIndex = -1;
     private int limitShakeTicks = 0;
+    private boolean merchantRareCategory = false;
 
     public ShopkeeperScreen(ShopkeeperMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
@@ -420,10 +421,12 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
 
     private void renderMerchantPanel(GuiGraphics graphics, int mouseX, int mouseY) {
         List<com.revilo.gatesofavarice.shop.ShopOfferDefinition> offers = this.menu.getOffers();
-        graphics.drawCenteredString(this.font, "Rare Dungeon Goods", this.leftPos + 88, this.topPos + 5, 0xFFE2B85C);
-        for (int index = 0; index < Math.min(ShopkeeperMenu.GRID_SLOT_COUNT, offers.size()); index++) {
-            int x = this.leftPos + 14 + (index % 5) * 31;
-            int y = this.topPos + 18 + (index / 5) * 27;
+        List<Integer> visible = this.visibleMerchantOfferIndexes();
+        graphics.drawCenteredString(this.font, this.merchantRareCategory ? "Rare Goods" : "Common Supplies", this.leftPos + 88, this.topPos + 5, 0xFFE2B85C);
+        for (int position = 0; position < visible.size(); position++) {
+            int index = visible.get(position);
+            int x = this.leftPos + 14 + (position % 5) * 31;
+            int y = this.topPos + 18 + (position / 5) * 27;
             int color = this.menu.canAfford(index) ? 0x884C3827 : 0x88602020;
             graphics.fill(x - 3, y - 3, x + 21, y + 23, color);
             graphics.renderItem(offers.get(index).previewStack(), x, y);
@@ -445,12 +448,25 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private int getMerchantOfferIndex(double mouseX, double mouseY) {
-        for (int index = 0; index < Math.min(ShopkeeperMenu.GRID_SLOT_COUNT, this.menu.getOffers().size()); index++) {
-            int x = this.leftPos + 11 + (index % 5) * 31;
-            int y = this.topPos + 15 + (index / 5) * 27;
+        List<Integer> visible = this.visibleMerchantOfferIndexes();
+        for (int position = 0; position < visible.size(); position++) {
+            int index = visible.get(position);
+            int x = this.leftPos + 11 + (position % 5) * 31;
+            int y = this.topPos + 15 + (position / 5) * 27;
             if (mouseX >= x && mouseX < x + 24 && mouseY >= y && mouseY < y + 26) return index;
         }
         return -1;
+    }
+
+    private List<Integer> visibleMerchantOfferIndexes() {
+        ArrayList<Integer> indexes = new ArrayList<>();
+        List<com.revilo.gatesofavarice.shop.ShopOfferDefinition> offers = this.menu.getOffers();
+        for (int index = 0; index < Math.min(ShopkeeperMenu.GRID_SLOT_COUNT, offers.size()); index++) {
+            boolean rare = offers.get(index).previewStack().getRarity() != net.minecraft.world.item.Rarity.COMMON
+                    || offers.get(index).minLevel() >= 20 || offers.get(index).price() >= 1000;
+            if (rare == this.merchantRareCategory) indexes.add(index);
+        }
+        return indexes;
     }
 
     private int getTarotPurchaseIndex(double mouseX, double mouseY) {
@@ -622,6 +638,16 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
                 this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, toSend);
             }
         }
+        if (this.animationState == AnimationState.ENCHANTING && this.animationTick >= 24) {
+            if (this.pendingButtonId != Integer.MIN_VALUE && this.minecraft != null && this.minecraft.gameMode != null) {
+                int toSend = this.pendingButtonId;
+                this.pendingButtonId = Integer.MIN_VALUE;
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, toSend);
+            }
+            this.animationState = AnimationState.DRAWING;
+            this.animationTick = 0;
+            this.selectedCardIndex = -1;
+        }
     }
 
     private void startDrawAnimation() {
@@ -761,7 +787,12 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private void renderTabs(GuiGraphics guiGraphics) {
-        if (!this.isEnchanter()) {
+        if (this.menu.getShopRoleId() == 4) {
+            this.renderMerchantCategoryTab(guiGraphics, false, TAB_BUY_Y, Component.literal("Common"));
+            this.renderMerchantCategoryTab(guiGraphics, true, TAB_SELL_Y, Component.literal("Rare"));
+            return;
+        }
+        if (!this.usesSpecialistCardLayout()) {
             this.renderTab(guiGraphics, Page.BUY, TAB_BUY_Y, Component.translatable("screen.gatesofavarice.shopkeeper.tab_buy"));
         }
         if (this.hasSellTab()) {
@@ -899,6 +930,18 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         boolean show = this.menu.canBailFromDungeon();
         this.bailButton.visible = show;
         this.bailButton.active = show;
+    }
+
+    private void renderMerchantCategoryTab(GuiGraphics guiGraphics, boolean rare, int tabY, Component label) {
+        int x = this.leftPos + TAB_X;
+        int y = this.topPos + tabY;
+        boolean selected = this.merchantRareCategory == rare;
+        guiGraphics.blit(selected ? TAB_SELECTED_TEXTURE : TAB_TEXTURE, x, y, 0, 0, TAB_WIDTH, TAB_HEIGHT, TAB_WIDTH, TAB_HEIGHT);
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate(x + 5, y + 9, 0.0F);
+        guiGraphics.pose().scale(0.62F, 0.62F, 1.0F);
+        guiGraphics.drawString(this.font, label, 0, 0, selected ? 0xFFE2B85C : 0xFFBBBBBB, false);
+        guiGraphics.pose().popPose();
     }
 
     private boolean isBlockedByRuneSlots(UpgradeCard card) {
@@ -1159,12 +1202,15 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             int top = this.specialistTop();
             int count = displayedUpgradeCardCount();
             int cardWidth = Math.round(CARD_W * ENCHANTER_CARD_SCALE);
-            int totalWidth = count * cardWidth + Math.max(0, count - 1) * ENCHANTER_CARD_GAP;
+            int columns = Math.min(ENCHANTER_CARDS_PER_ROW, count);
+            int totalWidth = columns * cardWidth + Math.max(0, columns - 1) * ENCHANTER_CARD_GAP;
             int startX = left + 8 + (239 - totalWidth) / 2;
-            int y = top + 27;
+            int rowHeight = Math.round(CARD_H * ENCHANTER_CARD_SCALE) + 4;
+            int y = top + 20;
             for (int index = 0; index < count; index++) {
-                int x = startX + index * (cardWidth + ENCHANTER_CARD_GAP);
-                if (this.isMouseOverScaledCard(mouseX, mouseY, x, y, ENCHANTER_CARD_SCALE)) return index;
+                int x = startX + index % ENCHANTER_CARDS_PER_ROW * (cardWidth + ENCHANTER_CARD_GAP);
+                int cardY = y + index / ENCHANTER_CARDS_PER_ROW * rowHeight;
+                if (this.isMouseOverScaledCard(mouseX, mouseY, x, cardY, ENCHANTER_CARD_SCALE)) return index;
             }
             return -1;
         }
@@ -1235,7 +1281,18 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private boolean clickTab(double mouseX, double mouseY) {
-        if (!this.isEnchanter() && this.isHoveringTab(mouseX, mouseY, TAB_BUY_Y)) {
+        if (this.menu.getShopRoleId() == 4) {
+            if (this.isHoveringTab(mouseX, mouseY, TAB_BUY_Y)) {
+                this.merchantRareCategory = false;
+                return true;
+            }
+            if (this.isHoveringTab(mouseX, mouseY, TAB_SELL_Y)) {
+                this.merchantRareCategory = true;
+                return true;
+            }
+            return false;
+        }
+        if (!this.usesSpecialistCardLayout() && this.isHoveringTab(mouseX, mouseY, TAB_BUY_Y)) {
             this.setActivePage(Page.BUY);
             return true;
         }
@@ -1273,7 +1330,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
     }
 
     private boolean hasSellTab() {
-        return !this.isEnchanter() && !this.isArmorer();
+        return false;
     }
 
     private int displayedUpgradeCardCount() {
@@ -1311,11 +1368,12 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             renderSpecialistCards(graphics, mouseX, mouseY);
             boolean enabled = this.canConfirmSpecialistSelection();
             int buttonLeft = left + 94;
-            int buttonTop = top + 78;
+            int buttonTop = top + 145;
             graphics.blitSprite(enabled ? BUTTON_TEXTURE : BUTTON_DISABLED_TEXTURE, buttonLeft, buttonTop, 68, 20);
             graphics.drawCenteredString(this.font, this.isArmorer() ? "Inscribe" : "Enchant", left + 128, buttonTop + 6, enabled ? 0xFFFFFFFF : 0xFF888888);
-            graphics.drawCenteredString(this.font, "Rune Slots: " + this.runeSlotsUsed + "/" + this.runeSlotsCapacity, left + 128, top + 101,
+            graphics.drawCenteredString(this.font, "Rune Slots: " + this.runeSlotsUsed + "/" + this.runeSlotsCapacity, left + 128, top + 168,
                     this.runeSlotsCapacity > 0 && this.runeSlotsUsed >= this.runeSlotsCapacity ? 0xFFFF5555 : 0xFFC9A8FF);
+            if (this.animationState == AnimationState.ENCHANTING) renderEnchantingAnimation(graphics, left + 128, top + 112);
         }
         renderSpecialistTargets(graphics, mouseX, mouseY);
     }
@@ -1327,20 +1385,25 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
             return;
         }
         int cardWidth = Math.round(CARD_W * ENCHANTER_CARD_SCALE);
-        int totalWidth = count * cardWidth + Math.max(0, count - 1) * ENCHANTER_CARD_GAP;
+        int columns = Math.min(ENCHANTER_CARDS_PER_ROW, count);
+        int totalWidth = columns * cardWidth + Math.max(0, columns - 1) * ENCHANTER_CARD_GAP;
         int startX = specialistLeft() + 8 + (239 - totalWidth) / 2;
-        int y = specialistTop() + 27;
+        int rowHeight = Math.round(CARD_H * ENCHANTER_CARD_SCALE) + 4;
+        int y = specialistTop() + 20;
         for (int index = 0; index < count; index++) {
             UpgradeCard card = this.upgradeCards.get(index);
-            int x = startX + index * (cardWidth + ENCHANTER_CARD_GAP);
+            int row = index / ENCHANTER_CARDS_PER_ROW;
+            int column = index % ENCHANTER_CARDS_PER_ROW;
+            int x = startX + column * (cardWidth + ENCHANTER_CARD_GAP);
+            int cardY = y + row * rowHeight;
             boolean disabled = this.isBlockedByRuneSlots(card) || card.cost() > this.menu.getWalletBalance();
-            boolean hovered = !disabled && this.isMouseOverScaledCard(mouseX, mouseY, x, y, ENCHANTER_CARD_SCALE);
-            this.drawCard(graphics, resolveCardTexture(card, hovered || index == this.selectedCardIndex), x, y, ENCHANTER_CARD_SCALE);
-            this.renderUpgradeCardContents(graphics, x, y, card, ENCHANTER_CARD_SCALE);
+            boolean hovered = !disabled && this.isMouseOverScaledCard(mouseX, mouseY, x, cardY, ENCHANTER_CARD_SCALE);
+            this.drawCard(graphics, resolveCardTexture(card, hovered || index == this.selectedCardIndex), x, cardY, ENCHANTER_CARD_SCALE);
+            this.renderUpgradeCardContents(graphics, x, cardY, card, ENCHANTER_CARD_SCALE);
             if (index == this.selectedCardIndex) {
-                graphics.renderOutline(x - 1, y - 1, cardWidth + 2, Math.round(CARD_H * ENCHANTER_CARD_SCALE) + 2, 0xFFFFFF55);
+                graphics.renderOutline(x - 1, cardY - 1, cardWidth + 2, Math.round(CARD_H * ENCHANTER_CARD_SCALE) + 2, 0xFFFFFF55);
             }
-            if (disabled) graphics.fill(x, y, x + cardWidth, y + Math.round(CARD_H * ENCHANTER_CARD_SCALE), 0x99000000);
+            if (disabled) graphics.fill(x, cardY, x + cardWidth, cardY + Math.round(CARD_H * ENCHANTER_CARD_SCALE), 0x99000000);
         }
     }
 
@@ -1350,9 +1413,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         String[] labels = {"Main", "Secondary", "Helmet", "Chest", "Legs", "Boots"};
         for (int index = 0; index < labels.length; index++) {
             int x = left + 16 + index * 39;
-            int y = top + 126;
-            boolean hovered = mouseX >= x - 3 && mouseX < x + 25 && mouseY >= y - 3 && mouseY < y + 34;
-            graphics.fill(x - 3, y - 3, x + 25, y + 34, hovered ? 0x886D5A91 : 0x66333333);
+            int y = top + 190;
             ItemStack stack = specialistTargetStack(index);
             if (!stack.isEmpty()) graphics.renderItem(stack, x + 3, y);
             graphics.drawCenteredString(this.font, this.font.plainSubstrByWidth(labels[index], 32), x + 11, y + 20, 0xFFDDDDDD);
@@ -1382,7 +1443,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         int top = specialistTop();
         for (int index = 0; index < 6; index++) {
             int x = left + 13 + index * 39;
-            int y = top + 123;
+            int y = top + 187;
             if (mouseX >= x && mouseX < x + 28 && mouseY >= y && mouseY < y + 37 && !specialistTargetStack(index).isEmpty()) return index;
         }
         return -1;
@@ -1390,7 +1451,7 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
 
     private boolean isHoveringEnchantButton(double mouseX, double mouseY) {
         return mouseX >= specialistLeft() + 94 && mouseX < specialistLeft() + 162
-                && mouseY >= specialistTop() + 78 && mouseY < specialistTop() + 98;
+                && mouseY >= specialistTop() + 145 && mouseY < specialistTop() + 165;
     }
 
     private boolean canConfirmSpecialistSelection() {
@@ -1403,12 +1464,27 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         if (!canConfirmSpecialistSelection() || this.minecraft == null || this.minecraft.gameMode == null) return;
         UpgradeCard card = this.upgradeCards.get(this.selectedCardIndex);
         this.createBuyCoinFlights(card.cost(), 1);
-        this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, ShopkeeperMenu.CARD_BUTTON_ID_OFFSET + this.selectedCardIndex);
-        this.selectedCardIndex = -1;
+        this.pendingButtonId = ShopkeeperMenu.CARD_BUTTON_ID_OFFSET + this.selectedCardIndex;
+        this.animationState = AnimationState.ENCHANTING;
+        this.animationTick = 0;
+        this.minecraft.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.ENCHANTMENT_TABLE_USE, 1.0F));
+    }
+
+    private void renderEnchantingAnimation(GuiGraphics graphics, int centerX, int centerY) {
+        float rotation = this.animationTick * 0.42F;
+        int color = this.isArmorer() ? 0xFFFF7A55 : 0xFFC86BFF;
+        for (int index = 0; index < 12; index++) {
+            double angle = rotation + index * Math.PI * 2.0D / 12.0D;
+            int radius = 18 + index % 3 * 4;
+            int x = centerX + Mth.floor(Math.cos(angle) * radius);
+            int y = centerY + Mth.floor(Math.sin(angle) * radius * 0.45D);
+            graphics.fill(x - 1, y - 1, x + 2, y + 2, color);
+        }
+        graphics.drawCenteredString(this.font, this.isArmorer() ? "INSCRIBING" : "ENCHANTING", centerX, centerY - 4, 0xFFFFFFFF);
     }
 
     private int specialistLeft() { return (this.width - 256) / 2; }
-    private int specialistTop() { return (this.height - 176) / 2; }
+    private int specialistTop() { return (this.height - 230) / 2; }
 
     private boolean usesSpecialistCardLayout() {
         return this.isEnchanter() || this.isArmorer();
@@ -1634,13 +1710,16 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         String walletText = formatCompactValue(this.menu.getWalletBalance());
         int textWidth = Math.round(this.font.width(walletText) * 0.75F);
         int textX = this.leftPos + this.imageWidth - 8 - textWidth;
-        int iconX = textX - 5;
-        int iconY = this.topPos + 4;
-        int textY = this.topPos + 5;
+        int specialistOffsetX = this.usesSpecialistCardLayout() ? 40 : 0;
+        int specialistOffsetY = this.usesSpecialistCardLayout() ? -4 : 0;
+        int iconX = textX - 5 + specialistOffsetX;
+        int iconY = this.topPos + 4 + specialistOffsetY;
+        textX += specialistOffsetX;
+        int textY = this.topPos + 5 + specialistOffsetY;
         int hoverLeft = iconX - 2;
         int hoverRight = textX + textWidth + 2;
-        int hoverTop = this.topPos + 2;
-        int hoverBottom = this.topPos + 15;
+        int hoverTop = this.topPos + 2 + specialistOffsetY;
+        int hoverBottom = this.topPos + 15 + specialistOffsetY;
         return new WalletLayout(walletText, textX + 3, textY, iconX, iconY, hoverLeft, hoverTop, hoverRight, hoverBottom);
     }
 
@@ -1693,7 +1772,8 @@ public class ShopkeeperScreen extends AbstractContainerScreen<ShopkeeperMenu> {
         DRAWING,
         IDLE,
         REROLLING,
-        SELECTING
+        SELECTING,
+        ENCHANTING
     }
 
     private static final class CoinFlight {

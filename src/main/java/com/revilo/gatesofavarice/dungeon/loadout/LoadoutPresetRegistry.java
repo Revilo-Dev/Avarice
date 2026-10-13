@@ -28,19 +28,19 @@ public final class LoadoutPresetRegistry {
 
     private static List<LoadoutDefinition> build() {
         ArrayList<LoadoutDefinition> out = new ArrayList<>();
-        out.add(preset("assassin", "Assassin", LoadoutTheme.ASSASSIN, "dagger", "dagger", ModItems.DUNGEON_MAGNET.get(), armor("shadow_set", "Assassin Set", 1.0F, 3.0F, 0.00F, 0.02F, 0.00F, 0.02F),
+        out.add(preset("assassin", "Assassin", LoadoutTheme.ASSASSIN, "dagger", "dagger", optionalItem("arsenal:poison_bomb", ModItems.DUNGEON_MAGNET.get()), armor("shadow_set", "Assassin Set", 1.0F, 3.0F, 0.00F, 0.02F, 0.00F, 0.02F),
                 List.of(stat("movement_speed", 0.06F, 0.12F), stat("attack_speed", 0.03F, 0.07F), stat("aura:ability_power", 0.10F, 0.20F), stat("aura:ability_force_rampage_bonus", 1.0F, 1.0F)),
                 List.of(stat("attack_speed", 0.01F, 0.05F), stat("bleeding_chance", 0.01F, 0.03F), stat("poison_chance", 0.01F, 0.03F), stat("leeching_chance", 0.01F, 0.02F)),
                 List.of(),
                 List.of(effect("farmersdelight:backstabbing", 1, 1)),
                 List.of(supply(Items.GOLDEN_APPLE, 2, 2), supply(Items.COOKED_PORKCHOP, 16, 16))));
-        out.add(preset("knight", "Knight", LoadoutTheme.KNIGHT, "longsword", "crossbow", Items.SHIELD, armor("steel_knight_set", "Knight Set", 9.0F, 13.0F, 0.03F, 0.08F, 0.03F, 0.08F),
+        out.add(preset("knight", "Knight", LoadoutTheme.KNIGHT, "longsword", "dual_crossbow", Items.SHIELD, armor("steel_knight_set", "Knight Set", 9.0F, 13.0F, 0.03F, 0.08F, 0.03F, 0.08F),
                 List.of(stat("resistance", 0.05F, 0.09F), stat("movement_speed", 0.04F, 0.09F), stat("health", 2.0F, 4.0F), stat("aura:ability_power", 0.10F, 0.20F), stat("aura:skill_strength_bonus", 2.0F, 2.0F)),
                 List.of(stat("resistance", 0.02F, 0.08F), stat("health", 1.0F, 4.0F), stat("attack_damage", 1.0F, 3.0F), stat("attack_range", 0.2F, 0.7F), stat("toughness", 1.0F, 3.0F)),
                 List.of(),
                 List.of(effect("expanded_combat:blocking", 1, 1)),
                 List.of(supply(Items.COOKED_BEEF, 16, 16), supply(Items.GOLDEN_CARROT, 8, 8), supply(Items.ARROW, 32, 32))));
-        out.add(preset("berserker", "Berserker", LoadoutTheme.BERSERKER, "axe", "machete", ModItems.DUNGEON_MAGNET.get(), armor("rage_set", "Berserker Set", 7.0F, 10.0F, 0.02F, 0.06F, 0.00F, 0.03F),
+        out.add(preset("berserker", "Berserker", LoadoutTheme.BERSERKER, "axe", "machete", optionalItem("arsenal:golden_bomb", ModItems.DUNGEON_MAGNET.get()), armor("rage_set", "Berserker Set", 7.0F, 10.0F, 0.02F, 0.06F, 0.00F, 0.03F),
                 List.of(stat("resistance", 0.03F, 0.07F), stat("movement_speed", 0.02F, 0.06F), stat("health", 2.0F, 2.0F), stat("aura:ability_power", 0.10F, 0.20F), stat("aura:ability_force_rampage_bonus", 1.0F, 1.0F), stat("aura:skill_strength_bonus", 1.0F, 1.0F)),
                 List.of(stat("attack_damage", 1.0F, 4.0F), stat("attack_speed", 0.01F, 0.05F), stat("health", 2.0F, 5.0F), stat("bleeding_chance", 0.01F, 0.03F), stat("leeching_chance", 0.01F, 0.02F)),
                 List.of(effect("minecraft:thorns", 1, 1)),
@@ -70,7 +70,7 @@ public final class LoadoutPresetRegistry {
                 List.of(),
                 List.of(effect("minecraft:flame", 1, 1), effect("minecraft:punch", 1, 2)),
                 List.of(supply(ModItems.ARCANE_APPLE.get(), 1, 1), supply(Items.COOKED_CHICKEN, 16, 16), supply(Items.SWEET_BERRIES, 32, 32))));
-        out.add(preset("marksman", "Marksman", LoadoutTheme.MARKSMAN, "crossbow", "longsword", Items.SHIELD, armor("sharpshooter_set", "Marksman Set", 7.0F, 10.0F, 0.01F, 0.05F, 0.01F, 0.05F),
+        out.add(preset("marksman", "Marksman", LoadoutTheme.MARKSMAN, "heavy_crossbow", "longsword", Items.SHIELD, armor("sharpshooter_set", "Marksman Set", 7.0F, 10.0F, 0.01F, 0.05F, 0.01F, 0.05F),
                 List.of(stat("resistance", 0.03F, 0.07F), stat("movement_speed", 0.05F, 0.10F), stat("health", 1.0F, 2.0F), stat("aura:ability_power", 0.25F, 0.45F), stat("aura:skill_power_bonus", 1.0F, 1.0F), stat("aura:skill_resistance_bonus", 1.0F, 1.0F)),
                 List.of(stat("draw_speed", 0.02F, 0.08F), stat("projectile_resistance", 0.01F, 0.06F), stat("attack_damage", 1.0F, 3.0F), stat("bonus_chance", 0.01F, 0.03F), stat("attack_range", 0.2F, 0.8F)),
                 List.of(),
@@ -88,7 +88,7 @@ public final class LoadoutPresetRegistry {
                 List.of(),
                 List.of(effect("aether:renewal", 1, 1), effect("simplyswords:catalysis", 1, 1), effect("deeperdarker:catalysis", 1, 1)),
                 List.of(supply(ModItems.ARCANE_APPLE.get(), 4, 4), supply(Items.GOLDEN_CARROT, 16, 16))));
-        out.add(preset("warlord", "Warlord", LoadoutTheme.WARLORD, "hammer", "crossbow", Items.SHIELD, armor("tyrant_set", "Warlord Set", 12.0F, 16.0F, 0.08F, 0.14F, 0.06F, 0.12F),
+        out.add(preset("warlord", "Warlord", LoadoutTheme.WARLORD, "hammer", "scatter_crossbow", optionalItem("arsenal:bomb", Items.SHIELD), armor("tyrant_set", "Warlord Set", 12.0F, 16.0F, 0.08F, 0.14F, 0.06F, 0.12F),
                 List.of(stat("resistance", 0.08F, 0.14F), stat("health", 4.0F, 7.0F), stat("movement_speed", 0.04F, 0.08F), stat("aura:ability_power", 0.25F, 0.45F), stat("aura:ability_fire_bonus", 1.0F, 1.0F), stat("aura:skill_strength_bonus", 1.0F, 1.0F)),
                 List.of(stat("resistance", 0.05F, 0.12F), stat("toughness", 2.0F, 5.0F), stat("health", 3.0F, 7.0F), stat("knockback_resistance", 0.04F, 0.12F), stat("stun_chance", 0.01F, 0.03F), stat("attack_damage", 1.0F, 4.0F)),
                 List.of(effect("minecraft:thorns", 1, 1)),
@@ -144,5 +144,12 @@ public final class LoadoutPresetRegistry {
 
     private static FoodSupplySpec supply(net.minecraft.world.item.Item item, int min, int max) {
         return new FoodSupplySpec(item, min, max);
+    }
+
+    private static net.minecraft.world.item.Item optionalItem(String id, net.minecraft.world.item.Item fallback) {
+        ResourceLocation key = ResourceLocation.tryParse(id);
+        return key != null && net.minecraft.core.registries.BuiltInRegistries.ITEM.containsKey(key)
+                ? net.minecraft.core.registries.BuiltInRegistries.ITEM.get(key)
+                : fallback;
     }
 }

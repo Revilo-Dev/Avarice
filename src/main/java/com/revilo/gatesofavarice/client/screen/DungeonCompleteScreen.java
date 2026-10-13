@@ -191,6 +191,16 @@ public class DungeonCompleteScreen extends Screen {
     }
 
     @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (!this.payload.survived() && this.revealedStatCount < this.statLines.size()) {
+            this.revealedStatCount = this.statLines.size();
+            this.activeStatTick = 0;
+            return true;
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
     public boolean isPauseScreen() {
         return false;
     }

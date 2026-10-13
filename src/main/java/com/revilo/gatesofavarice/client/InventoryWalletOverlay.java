@@ -117,7 +117,7 @@ public final class InventoryWalletOverlay {
     }
 
     private static int knowledgeButtonY(WalletLayout layout) {
-        return layout.inventoryTop() + 42;
+        return layout.inventoryTop() + 12;
     }
 
     private static void renderWallet(GuiGraphics guiGraphics, Minecraft minecraft, WalletLayout layout, boolean hovered, boolean inDungeon) {

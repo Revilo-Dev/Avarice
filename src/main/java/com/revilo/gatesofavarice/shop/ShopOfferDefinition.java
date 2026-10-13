@@ -228,6 +228,12 @@ public record ShopOfferDefinition(
 
     private static void appendOptionalModdedOffers(List<ShopOfferDefinition> offers) {
         addOptionalRegistryOffer(offers, "minecraft:totem_of_undying", 10000, 30, MAX_PLAYER_LEVEL, 1, 1, -5, 5, "A totem that prevents death once.");
+        addOptionalRegistryOffer(offers, "sophisticatedbackpacks:backpack", 1200, 20, MAX_PLAYER_LEVEL, 1, 1, 0, 0, "A portable storage backpack.");
+        addOptionalRegistryOffer(offers, "sophisticatedbackpacks:copper_backpack", 1800, 25, MAX_PLAYER_LEVEL, 1, 1, 0, 0, "An upgraded portable storage backpack.");
+        addOptionalRegistryOffer(offers, "sophisticatedbackpacks:iron_backpack", 2600, 35, MAX_PLAYER_LEVEL, 1, 1, 0, 0, "An upgraded portable storage backpack.");
+        addOptionalRegistryOffer(offers, "sophisticatedbackpacks:gold_backpack", 3800, 45, MAX_PLAYER_LEVEL, 1, 1, 0, 0, "An upgraded portable storage backpack.");
+        addOptionalRegistryOffer(offers, "sophisticatedbackpacks:diamond_backpack", 5600, 60, MAX_PLAYER_LEVEL, 1, 1, 0, 0, "An upgraded portable storage backpack.");
+        addOptionalRegistryOffer(offers, "sophisticatedbackpacks:netherite_backpack", 8000, 75, MAX_PLAYER_LEVEL, 1, 1, 0, 0, "The strongest portable storage backpack.");
     }
 
     private static void addDungeonRunGearOffers(List<ShopOfferDefinition> offers) {

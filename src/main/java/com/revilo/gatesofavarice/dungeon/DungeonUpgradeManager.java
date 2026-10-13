@@ -393,9 +393,16 @@ public final class DungeonUpgradeManager {
         // Refill the purchased card immediately.  Shop cards are now limited only by
         // wallet balance and available rune capacity, rather than a fixed selection cap.
         session.cardGenerationNonce++;
-        List<UpgradeCard> replacement = generateShopCards(player, session, category, target, getSessionWaveNumber(session), 1);
+        boolean enchanterShop = session.waveOwnerId == null
+                && "enchanter".equals(SHOP_MODES.getOrDefault(player.getUUID(), "enchanter"));
+        int replacementCount = enchanterShop ? ENCHANTER_SHOP_CARD_COUNT : 1;
+        List<UpgradeCard> replacement = generateShopCards(player, session, category, target,
+                getSessionWaveNumber(session), replacementCount);
+        java.util.Set<String> remainingKeys = remaining.stream()
+                .map(DungeonUpgradeManager::cardOfferKey)
+                .collect(java.util.stream.Collectors.toSet());
         for (UpgradeCard candidate : replacement) {
-            if (canApplyCardToTarget(player, target, candidate)) {
+            if (canApplyCardToTarget(player, target, candidate) && remainingKeys.add(cardOfferKey(candidate))) {
                 remaining.add(candidate);
                 break;
             }
@@ -456,18 +463,37 @@ public final class DungeonUpgradeManager {
     private static List<UpgradeCard> generateEnchanterShopCards(ServerPlayer player, UpgradeSession session,
             UpgradeCategory category, ItemStack target, int waveNumber, int count) {
         java.util.LinkedHashMap<String, UpgradeCard> unlocked = new java.util.LinkedHashMap<>();
+        for (UpgradeCard card : pricedCards(RunicUpgradeService.generateExistingEffectUpgradeCards(target, category), waveNumber)) {
+            unlocked.putIfAbsent(cardOfferKey(card), card);
+        }
         for (int attempt = 0; attempt < 6 && unlocked.size() < count; attempt++) {
             List<UpgradeCard> generated = pricedCards(RunicUpgradeService.generateUpgradeCards(player, target,
                     session.instance, session.definition, category, waveNumber,
                     session.cardGenerationNonce + attempt, false), waveNumber);
             for (UpgradeCard card : generated) {
                 if (isCardKnowledgeUnlocked(player, card)) {
-                    unlocked.putIfAbsent(card.type().name() + "|" + card.changeLabel(), card);
+                    unlocked.putIfAbsent(cardOfferKey(card), card);
                 }
                 if (unlocked.size() >= count) break;
             }
         }
-        return List.copyOf(unlocked.values());
+        return List.copyOf(unlocked.values().stream().limit(count).toList());
+    }
+
+    private static String cardOfferKey(UpgradeCard card) {
+        if (card.type() == UpgradeCardType.ADD_OR_UPGRADE_EFFECT) {
+            String effectId = switch (card.changeLabel()) {
+                case "Thorns" -> "minecraft:thorns";
+                case "Power" -> "minecraft:power";
+                case "Punch" -> "minecraft:punch";
+                case "Flame" -> "minecraft:flame";
+                default -> card.changeLabel().startsWith("effect:")
+                        ? card.changeLabel().substring("effect:".length())
+                        : card.changeLabel();
+            };
+            return card.type().name() + "|" + effectId;
+        }
+        return card.type().name() + "|" + card.changeLabel();
     }
 
     private static List<UpgradeCard> generateInscriptionCards(ServerPlayer player, int waveNumber, int count) {

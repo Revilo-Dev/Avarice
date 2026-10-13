@@ -222,6 +222,35 @@ public final class RunicUpgradeService {
         return List.copyOf(cards);
     }
 
+    public static List<UpgradeCard> generateExistingEffectUpgradeCards(ItemStack target, UpgradeCategory category) {
+        if (target.isEmpty()) {
+            return List.of();
+        }
+        String targetLabel = target.getHoverName().getString();
+        ItemEnchantments enchantments = target.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY);
+        ArrayList<UpgradeCard> cards = new ArrayList<>();
+        for (Holder<Enchantment> effect : enchantments.keySet()) {
+            int currentLevel = enchantments.getLevel(effect);
+            int nextLevel = RuneItem.clampEffectLevel(effect, currentLevel + 1);
+            if (!RuneItem.isEffectEnchantment(effect) || nextLevel <= currentLevel) {
+                continue;
+            }
+            effect.unwrapKey().ifPresent(key -> cards.add(new UpgradeCard(
+                    UUID.randomUUID().toString(),
+                    UpgradeCardType.ADD_OR_UPGRADE_EFFECT,
+                    category,
+                    "Effect Card",
+                    targetLabel,
+                    "effect:" + key.location(),
+                    "Lv " + currentLevel,
+                    "Lv " + nextLevel,
+                    1,
+                    0
+            )));
+        }
+        return List.copyOf(cards);
+    }
+
     private static UpgradeCard generateSynergyCard(ItemStack target, UpgradeCategory category, RandomSource random) {
         if (target.isEmpty()) {
             return null;
@@ -364,7 +393,7 @@ public final class RunicUpgradeService {
     private static boolean canOfferCardSpec(CardSpec spec, RuneStats current, ItemStack target) {
         if (spec.effectId() != null) {
             int currentLevel = currentEffectLevel(target, spec.effectId());
-            if (currentLevel >= maxOfferedEffectLevel(spec.effectId())) {
+            if (currentLevel >= maxOfferedEffectLevel(target, spec.effectId())) {
                 return false;
             }
             return target.isEmpty() || RunicLoadoutService.runeSlotsRemaining(target) > 0 || currentLevel > 0;
@@ -383,7 +412,7 @@ public final class RunicUpgradeService {
         if (spec.effectId() != null) {
             int currentLevel = currentEffectLevel(target, spec.effectId());
             boolean alreadyHasEffect = currentLevel > 0;
-            int nextLevel = alreadyHasEffect ? Math.min(maxOfferedEffectLevel(spec.effectId()), currentLevel + 1) : spec.effectLevel();
+            int nextLevel = alreadyHasEffect ? Math.min(maxOfferedEffectLevel(target, spec.effectId()), currentLevel + 1) : spec.effectLevel();
             String currentValue = alreadyHasEffect ? "Lv " + currentLevel : "-";
             return new UpgradeCard(
                     UUID.randomUUID().toString(),
@@ -457,7 +486,16 @@ public final class RunicUpgradeService {
         return 0;
     }
 
-    private static int maxOfferedEffectLevel(String effectId) {
+    private static int maxOfferedEffectLevel(ItemStack target, String effectId) {
+        ResourceLocation id = ResourceLocation.tryParse(effectId);
+        if (id != null && !target.isEmpty()) {
+            ItemEnchantments enchantments = target.getOrDefault(DataComponents.ENCHANTMENTS, ItemEnchantments.EMPTY);
+            for (Holder<Enchantment> holder : enchantments.keySet()) {
+                if (holder.unwrapKey().map(key -> key.location().equals(id)).orElse(false)) {
+                    return RuneItem.clampEffectLevel(holder, Integer.MAX_VALUE);
+                }
+            }
+        }
         return switch (effectId) {
             case "minecraft:power", "minecraft:punch" -> 2;
             default -> 1;

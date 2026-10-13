@@ -5,6 +5,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import com.revilo.gatesofavarice.GatewayExpansion;
 import com.revilo.gatesofavarice.entity.GatewayCrystalEntity;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
@@ -33,8 +34,8 @@ public final class GatewayCrystalRenderer extends EntityRenderer<GatewayCrystalE
     @Override
     public void render(GatewayCrystalEntity entity, float entityYaw, float partialTick, PoseStack poseStack, MultiBufferSource buffer, int packedLight) {
         poseStack.pushPose();
-        poseStack.mulPose(this.entityRenderDispatcher.cameraOrientation());
-        poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
+        float cameraYaw = Minecraft.getInstance().gameRenderer.getMainCamera().getYRot();
+        poseStack.mulPose(Axis.YP.rotationDegrees(180.0F - cameraYaw));
 
         float portalScale = (entity.isReturnPortal() || entity.isAdvancePortal()) ? DUNGEON_WARP_PORTAL_SCALE : 1.0F;
         float height = entity.getBbHeight() * portalScale;

@@ -1,6 +1,7 @@
 package com.revilo.gatesofavarice.client.screen;
 
 import com.revilo.gatesofavarice.client.DungeonDeckRenderer;
+import com.revilo.gatesofavarice.currency.MythicCoinWallet;
 import com.revilo.gatesofavarice.dungeon.DungeonDeck;
 import com.revilo.gatesofavarice.dungeon.DungeonDeck.CardState;
 import com.revilo.gatesofavarice.dungeon.DungeonDeck.CardType;
@@ -161,7 +162,7 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
                 ? DungeonDeck.withPulls(this.menu.deck(), selectedOption.pulledCardCounts())
                 : this.menu.deck();
         DungeonDeckRenderer.renderFullDeck(guiGraphics, this.font, displayedDeck,
-                this.width / 2, this.height - 8, Math.max(120, this.width - 24), true);
+                this.width / 2, this.height - 8, boosterDeckWidth(), true);
 
         if (showingPull) {
             renderPulledCards(guiGraphics, selectedOption);
@@ -187,6 +188,9 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
                 boolean hovered = this.animationState == AnimationState.IDLE && button.isHoveredOrFocused();
                 drawBoosterPack(guiGraphics, hovered ? BOOSTER_BACKGROUND_HOVERED : BOOSTER_BACKGROUND,
                         foreground, button.getX(), button.getY(), scale);
+                if (!canAffordBooster(index)) {
+                    drawUnavailableBoosterOverlay(guiGraphics, button.getX(), button.getY(), scale);
+                }
             }
         }
         renderBoosterParticles(guiGraphics, partialTick);
@@ -246,6 +250,11 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
         });
     }
 
+    private void drawUnavailableBoosterOverlay(GuiGraphics guiGraphics, int x, int y, float scale) {
+        withBoosterTransform(guiGraphics, x, y, scale,
+                () -> guiGraphics.fill(0, 0, CARD_W, BOOSTER_H, 0xAA666666));
+    }
+
     private void withBoosterTransform(GuiGraphics guiGraphics, int x, int y, float scale, Runnable draw) {
         float scaledWidth = CARD_W * scale;
         float scaledHeight = BOOSTER_H * scale;
@@ -269,7 +278,20 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
     }
 
     private int boosterDeckTop() {
-        return this.height - 8 - DungeonDeckRenderer.fullDeckHeight(Math.max(120, this.width - 24));
+        return this.height - 8 - DungeonDeckRenderer.fullDeckHeight(boosterDeckWidth());
+    }
+
+    private int boosterDeckWidth() {
+        return Math.max(120, Math.min(420, Math.round((this.width - 24) * 0.50F)));
+    }
+
+    private boolean canAffordBooster(int optionIndex) {
+        if (this.menu.stage() != DungeonWaveMenu.STAGE_BOOSTER
+                || optionIndex < 0 || optionIndex >= this.menu.options().size()) {
+            return true;
+        }
+        return this.minecraft != null && this.minecraft.player != null
+                && MythicCoinWallet.get(this.minecraft.player) >= this.menu.options().get(optionIndex).cost();
     }
 
     private int boosterSelectionY() {
@@ -291,6 +313,8 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
             drawScaledCentered(guiGraphics, option.title().getString(), centerX, labelY, 0.72F, 0xFFF3D78A);
             String totalCards = option.details().getString().split("\\n", 2)[0];
             drawScaledCentered(guiGraphics, totalCards, centerX, labelY + 8, 0.58F, 0xFFD0D0D0);
+            drawScaledCentered(guiGraphics, option.cost() == 0 ? "FREE" : option.cost() + " coins", centerX, labelY + 16, 0.58F,
+                    option.cost() == 0 ? 0xFF78E08F : canAffordBooster(index) ? 0xFFE6B85C : 0xFF777777);
         }
     }
 
@@ -309,8 +333,12 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
     protected void renderLabels(GuiGraphics guiGraphics, int mouseX, int mouseY) {
         String stageTitle = this.menu.stage() == DungeonWaveMenu.STAGE_BOOSTER
                 ? "Select booster pack"
+                : this.menu.stage() == DungeonWaveMenu.STAGE_DIFFICULTY
+                ? "Select Difficulty"
                 : (this.menu.stage() == DungeonWaveMenu.STAGE_LOADOUT ? "Loadout Selection" : "Upgrade Selection");
         String heading = this.menu.stage() == DungeonWaveMenu.STAGE_BOOSTER
+                ? stageTitle
+                : this.menu.stage() == DungeonWaveMenu.STAGE_DIFFICULTY
                 ? stageTitle
                 : "Floor " + this.menu.waveNumber() + " - " + stageTitle;
         guiGraphics.drawCenteredString(this.font, Component.literal(heading).withStyle(ChatFormatting.BOLD), this.imageWidth / 2, 2, 0xFFE36B);
@@ -320,10 +348,12 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
             return;
         }
         if (this.menu.ownerCanSelect()) {
-            String promptKey = this.menu.stage() == DungeonWaveMenu.STAGE_LOADOUT
+            Component prompt = this.menu.stage() == DungeonWaveMenu.STAGE_DIFFICULTY
+                    ? Component.literal("Difficulty applies for the entire run")
+                    : Component.translatable(this.menu.stage() == DungeonWaveMenu.STAGE_LOADOUT
                     ? "screen.gatesofavarice.dungeon_wave.select_loadout_prompt"
-                    : "screen.gatesofavarice.dungeon_wave.select_upgrade_prompt";
-            guiGraphics.drawCenteredString(this.font, Component.translatable(promptKey), this.imageWidth / 2, 218, 0x6C6C6C);
+                    : "screen.gatesofavarice.dungeon_wave.select_upgrade_prompt");
+            guiGraphics.drawCenteredString(this.font, prompt, this.imageWidth / 2, 218, 0x6C6C6C);
         } else {
             guiGraphics.drawCenteredString(this.font, Component.translatable("screen.gatesofavarice.dungeon_wave.waiting_owner"), this.imageWidth / 2, 218, 0x6C6C6C);
         }
@@ -456,6 +486,8 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
                         for (String detail : option.details().getString().split("\\n")) {
                             lines.add(Component.literal(detail).withStyle(ChatFormatting.GRAY));
                         }
+                        lines.add(Component.literal(option.cost() == 0 ? "Cost: Free" : "Cost: " + option.cost() + " Mythic Coins")
+                                .withStyle(option.cost() == 0 ? ChatFormatting.GREEN : ChatFormatting.LIGHT_PURPLE));
                         guiGraphics.renderTooltip(this.font, lines, java.util.Optional.empty(), x, y);
                         return;
                     }
@@ -486,6 +518,20 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
             for (int i = 0; i < this.optionButtons.size() && i < this.menu.options().size(); i++) {
                 DungeonWaveMenu.WaveOptionView option = this.menu.options().get(i);
                 Button button = this.optionButtons.get(i);
+                boolean cardHover = x >= button.getX() && x < button.getX() + CARD_W
+                        && y >= button.getY() && y < button.getY() + CARD_H;
+                if (cardHover && !option.displayStack().isEmpty()) {
+                    long seconds = option.loadoutPlayTimeTicks() / 20L;
+                    long nextXp = com.revilo.gatesofavarice.dungeon.loadout.LoadoutProgression.xpForNextLevel(option.loadoutLevel());
+                    List<Component> stats = List.of(
+                            Component.literal("Loadout Level " + option.loadoutLevel()).withStyle(ChatFormatting.GOLD),
+                            Component.literal("XP: " + option.loadoutXp() + " / " + nextXp).withStyle(ChatFormatting.AQUA),
+                            Component.literal("Plays: " + option.loadoutPlays()).withStyle(ChatFormatting.GRAY),
+                            Component.literal("Kills: " + option.loadoutKills()).withStyle(ChatFormatting.GRAY),
+                            Component.literal("Play Time: " + formatPlayTime(seconds)).withStyle(ChatFormatting.GRAY));
+                    guiGraphics.renderComponentTooltip(this.font, stats, button.getX(), button.getY() + CARD_H + 4);
+                    return;
+                }
                 boolean lowerHover = x >= button.getX() && x < button.getX() + CARD_W
                         && y >= button.getY() + CARD_H / 2 && y < button.getY() + CARD_H;
                 if (!lowerHover) continue;
@@ -518,7 +564,7 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
     }
 
     private void selectOption(int optionIndex) {
-        if (this.animationState != AnimationState.IDLE) {
+        if (this.animationState != AnimationState.IDLE || !canAffordBooster(optionIndex)) {
             return;
         }
         this.selectedCard = optionIndex;
@@ -641,8 +687,8 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
         String label = switch (difficulty) {
             case 1 -> "Easy";
             case 2 -> "Normal";
-            case 3 -> "Medium";
-            case 4 -> "Hard";
+            case 3 -> "Hard";
+            case 4 -> "Challenging";
             default -> "Extreme";
         };
         return Component.literal(label);
@@ -772,6 +818,10 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
         }
     }
 
+    private static String formatPlayTime(long seconds) {
+        return String.format(Locale.ROOT, "%d:%02d:%02d", seconds / 3600L, seconds / 60L % 60L, seconds % 60L);
+    }
+
     private void tickBoosterAnimations() {
         this.animationTick++;
         tickBoosterParticles();
@@ -829,7 +879,8 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
             } else {
                 this.hoverScales.set(index, targetScale);
             }
-            button.active = this.animationState == AnimationState.IDLE && this.menu.ownerCanSelect();
+            button.active = this.animationState == AnimationState.IDLE && this.menu.ownerCanSelect()
+                    && canAffordBooster(index);
         }
 
         this.rerollButton.active = false;

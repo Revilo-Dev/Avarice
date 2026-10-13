@@ -3,6 +3,7 @@ package com.revilo.gatesofavarice.dungeon;
 import com.revilo.gatesofavarice.GatewayExpansion;
 import com.revilo.gatesofavarice.block.entity.PoiLootboxBlockEntity;
 import com.revilo.gatesofavarice.registry.ModBlocks;
+import com.revilo.gatesofavarice.registry.ModAttachments;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -45,9 +46,9 @@ public final class DungeonInstanceManager {
     private static final Vec3 PLAYER_SPAWN_OFFSET = new Vec3(29.0D, 2.0D, 0.0D);
     private static final BlockPos SHOP_STRUCTURE_ORIGIN = new BlockPos(13877272, 64, -2688999);
     private static final Vec3 SHOP_PLAYER_SPAWN = new Vec3(13877296.5D, 65.0D, -2688978.5D);
-    private static final Vec3 SHOP_ARCHIVIST_POSITION = new Vec3(13877315.0D, 64.0D, -2688976.0D);
+    private static final Vec3 SHOP_ARCHIVIST_POSITION = new Vec3(13877295.0D, 69.0D, -2688956.0D);
     private static final Vec3 SHOP_ARMORER_POSITION = new Vec3(13877277.0D, 65.0D, -2688975.0D);
-    private static final Vec3 SHOP_ENCHANTER_POSITION = new Vec3(13877295.0D, 67.0D, -2688956.0D);
+    private static final Vec3 SHOP_ENCHANTER_POSITION = new Vec3(13877315.0D, 62.0D, -2688976.0D);
     private static final Vec3 SHOP_MERCHANT_POSITION = new Vec3(13877293.0D, 65.0D, -2688975.0D);
     private static final Vec3 SHOP_TAROT_DEALER_POSITION = new Vec3(13877300.0D, 65.0D, -2688975.0D);
     private static final Vec3 SHOP_EXIT_PORTAL_POSITION = new Vec3(13877288.0D, 65.0D, -2688992.0D);
@@ -121,7 +122,12 @@ public final class DungeonInstanceManager {
             return false;
         }
 
-        ensureInstance(dungeonLevel, SHOP_STRUCTURE_ORIGIN, InstanceLayout.SHOP);
+        if (!player.getData(ModAttachments.ARCHIVE_LOADED)) {
+            ensureInstance(dungeonLevel, SHOP_STRUCTURE_ORIGIN, InstanceLayout.SHOP);
+            player.setData(ModAttachments.ARCHIVE_LOADED, true);
+        } else {
+            activateShopInstance();
+        }
         clearDungeonItems(dungeonLevel, SHOP_STRUCTURE_ORIGIN);
 
         Vec3 spawnPos = SHOP_PLAYER_SPAWN;
@@ -216,8 +222,12 @@ public final class DungeonInstanceManager {
 
     public static void keepShopAlive(ServerLevel dungeonLevel) {
         if (dungeonLevel == null) return;
-        ensureInstance(dungeonLevel, SHOP_STRUCTURE_ORIGIN, InstanceLayout.SHOP);
-        ACTIVE_DUNGEONS.put(SHOP_STRUCTURE_ORIGIN, Long.MAX_VALUE);
+        activateShopInstance();
+    }
+
+    private static void activateShopInstance() {
+        ACTIVE_DUNGEONS.put(SHOP_STRUCTURE_ORIGIN.immutable(), Long.MAX_VALUE);
+        INSTANCE_LAYOUTS.put(SHOP_STRUCTURE_ORIGIN.immutable(), InstanceLayout.SHOP);
     }
 
     /** Rebuilds the combat room so every floor starts with a fresh structure and POIs. */

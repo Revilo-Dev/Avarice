@@ -18,6 +18,7 @@ public class DungeonWaveMenu extends AbstractContainerMenu {
     public static final int STAGE_BOOSTER = 0;
     public static final int STAGE_UPGRADE = 1;
     public static final int STAGE_LOADOUT = 2;
+    public static final int STAGE_DIFFICULTY = 3;
     public static final int OPTION_COUNT = 4;
     public static final int BAIL_BUTTON_ID = 100;
     public static final int REROLL_BUTTON_ID = 101;
@@ -124,6 +125,12 @@ public class DungeonWaveMenu extends AbstractContainerMenu {
                     data.readInt(),
                     data.readInt(),
                     data.readInt(),
+                    data.readInt(),
+                    data.readInt(),
+                    data.readLong(),
+                    data.readInt(),
+                    data.readInt(),
+                    data.readLong(),
                     readCardCounts(data)
             ));
         }
@@ -156,6 +163,12 @@ public class DungeonWaveMenu extends AbstractContainerMenu {
             buffer.writeInt(option.damageRating());
             buffer.writeInt(option.defenceRating());
             buffer.writeInt(option.attackSpeedRating());
+            buffer.writeInt(option.cost());
+            buffer.writeInt(option.loadoutLevel());
+            buffer.writeLong(option.loadoutXp());
+            buffer.writeInt(option.loadoutPlays());
+            buffer.writeInt(option.loadoutKills());
+            buffer.writeLong(option.loadoutPlayTimeTicks());
             writeCardCounts(buffer, option.pulledCardCounts());
         }
         writeDeck(buffer, deck);
@@ -249,6 +262,12 @@ public class DungeonWaveMenu extends AbstractContainerMenu {
             int damageRating,
             int defenceRating,
             int attackSpeedRating,
+            int cost,
+            int loadoutLevel,
+            long loadoutXp,
+            int loadoutPlays,
+            int loadoutKills,
+            long loadoutPlayTimeTicks,
             List<Integer> pulledCardCounts
     ) {
         public WaveOptionView {

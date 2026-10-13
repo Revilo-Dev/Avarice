@@ -56,6 +56,11 @@ public final class ModAttachments {
                     .copyOnDeath()
                     .sync(ByteBufCodecs.VAR_INT)
                     .build());
+    public static final DeferredHolder<AttachmentType<?>, AttachmentType<Boolean>> ARCHIVE_LOADED =
+            ATTACHMENTS.register("archive_loaded", () -> AttachmentType.builder(() -> false)
+                    .serialize(Codec.BOOL)
+                    .copyOnDeath()
+                    .build());
 
     private ModAttachments() {
     }

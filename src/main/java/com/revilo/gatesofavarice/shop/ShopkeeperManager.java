@@ -52,6 +52,7 @@ public final class ShopkeeperManager {
     private static final String STOCK_KEY = "gatesofavarice.stock";
     private static final String PRICE_KEY = "gatesofavarice.price";
     private static final String REROLL_COUNT_KEY = "gatesofavarice.reroll_count";
+    private static final String CATEGORIZED_MERCHANT_KEY = "gatesofavarice.categorized_merchant";
     private static final int MAX_REROLLS = 3;
     private static final int BASE_REROLL_COST = 1000;
     private static final double COIN_ATTRACTION_RANGE = 14.0D;
@@ -250,6 +251,9 @@ public final class ShopkeeperManager {
             existing.setCustomName(name);
             existing.setCustomNameVisible(true);
             positionKeeper(existing, position);
+            if ("merchant".equals(role) && !existing.getPersistentData().getBoolean(CATEGORIZED_MERCHANT_KEY)) {
+                rollCategorizedMerchantOffers(existing, level.random, getPlayerLevel(summoner));
+            }
             for (GatekeeperEntity duplicate : matches) if (duplicate != existing) duplicate.discard();
             return;
         }
@@ -257,6 +261,7 @@ public final class ShopkeeperManager {
         if (trader == null) return;
         trader.getPersistentData().putString(SHOP_SPECIALIST_ROLE_KEY, role);
         trader.setCustomName(name);
+        if ("merchant".equals(role)) rollCategorizedMerchantOffers(trader, level.random, getPlayerLevel(summoner));
         positionKeeper(trader, position);
     }
 
@@ -359,7 +364,11 @@ public final class ShopkeeperManager {
             return false;
         }
 
-        rollVisibleOffers(trader, player.getRandom(), getPlayerLevel(player));
+        if ("merchant".equals(getSpecialistRole(trader))) {
+            rollCategorizedMerchantOffers(trader, player.getRandom(), getPlayerLevel(player));
+        } else {
+            rollVisibleOffers(trader, player.getRandom(), getPlayerLevel(player));
+        }
         CompoundTag tag = trader.getPersistentData();
         tag.putInt(REROLL_COUNT_KEY, rerollCount + 1);
         return true;
@@ -399,6 +408,34 @@ public final class ShopkeeperManager {
         trader.getPersistentData().putIntArray(TEMP_TRADE_KEY, picks);
         trader.getPersistentData().putIntArray(STOCK_KEY, rollStocks(offers, random));
         trader.getPersistentData().putIntArray(PRICE_KEY, rollPrices(offers, random));
+    }
+
+    private static void rollCategorizedMerchantOffers(GatekeeperEntity trader, RandomSource random, int playerLevel) {
+        List<ShopOfferDefinition> allOffers = ShopOfferDefinition.allOffers();
+        ArrayList<Integer> common = new ArrayList<>();
+        ArrayList<Integer> rare = new ArrayList<>();
+        for (int index = 0; index < allOffers.size(); index++) {
+            ShopOfferDefinition offer = allOffers.get(index);
+            if (offer.minLevel() > playerLevel || playerLevel > offer.maxLevel()) continue;
+            boolean rareOffer = offer.previewStack().getRarity() != net.minecraft.world.item.Rarity.COMMON
+                    || offer.minLevel() >= 20 || offer.price() >= 1000;
+            (rareOffer ? rare : common).add(index);
+        }
+        java.util.Collections.shuffle(common, new java.util.Random(random.nextLong()));
+        java.util.Collections.shuffle(rare, new java.util.Random(random.nextLong()));
+        int[] picks = new int[Math.min(ShopkeeperMenu.GRID_SLOT_COUNT, common.size() + rare.size())];
+        int cursor = 0;
+        int commonInitial = Math.min(5, common.size());
+        int rareInitial = Math.min(5, rare.size());
+        for (int index = 0; index < commonInitial && cursor < picks.length; index++) picks[cursor++] = common.get(index);
+        for (int index = 0; index < rareInitial && cursor < picks.length; index++) picks[cursor++] = rare.get(index);
+        for (int index = commonInitial; index < common.size() && cursor < picks.length; index++) picks[cursor++] = common.get(index);
+        for (int index = rareInitial; index < rare.size() && cursor < picks.length; index++) picks[cursor++] = rare.get(index);
+        List<ShopOfferDefinition> offers = buildOffers(picks);
+        trader.getPersistentData().putIntArray(TEMP_TRADE_KEY, picks);
+        trader.getPersistentData().putIntArray(STOCK_KEY, rollStocks(offers, random));
+        trader.getPersistentData().putIntArray(PRICE_KEY, rollPrices(offers, random));
+        trader.getPersistentData().putBoolean(CATEGORIZED_MERCHANT_KEY, true);
     }
 
     private static int[] rollStocks(java.util.List<ShopOfferDefinition> offers, RandomSource random) {

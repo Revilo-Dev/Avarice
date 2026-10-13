@@ -36,16 +36,18 @@ public final class DungeonDeckRenderer {
 
     public static void renderCompact(GuiGraphics guiGraphics, Font font, List<CardState> deck, int right, int bottom) {
         List<CardState> normalized = DungeonDeck.normalize(deck);
+        List<Integer> visible = visibleIndexes(normalized, DungeonDeck.NEGATIVE_CARD_COUNT);
+        if (visible.isEmpty()) return;
         int cardWidth = Math.round(CARD_WIDTH * COMPACT_SCALE);
         int cardHeight = Math.round(CARD_HEIGHT * COMPACT_SCALE);
-        int totalWidth = DungeonDeck.NEGATIVE_CARD_COUNT * cardWidth
-                + (DungeonDeck.NEGATIVE_CARD_COUNT - 1) * COMPACT_CARD_GAP;
+        int totalWidth = visible.size() * cardWidth + (visible.size() - 1) * COMPACT_CARD_GAP;
         int startX = right - totalWidth;
         int cardY = bottom - cardHeight;
 
         guiGraphics.drawString(font, "DECK", startX + (totalWidth - font.width("DECK")) / 2, cardY - 10, 0xFFE36B, true);
-        for (int index = 0; index < DungeonDeck.NEGATIVE_CARD_COUNT; index++) {
-            int cardX = startX + index * (cardWidth + COMPACT_CARD_GAP);
+        for (int position = 0; position < visible.size(); position++) {
+            int index = visible.get(position);
+            int cardX = startX + position * (cardWidth + COMPACT_CARD_GAP);
             renderCardArt(guiGraphics, CARD_TYPES[index], cardX, cardY, COMPACT_SCALE);
             String count = "x" + normalized.get(index).count();
             guiGraphics.drawString(
@@ -65,16 +67,19 @@ public final class DungeonDeckRenderer {
     public static void renderFullDeck(GuiGraphics guiGraphics, Font font, List<CardState> deck, int centerX, int bottom,
             int maxWidth, boolean largeCounts) {
         List<CardState> normalized = DungeonDeck.normalize(deck);
-        float scale = fullDeckScale(maxWidth);
+        List<Integer> visible = visibleIndexes(normalized, CARD_TYPES.length);
+        if (visible.isEmpty()) return;
+        float scale = fullDeckScale(maxWidth, visible.size());
         int cardWidth = Math.round(CARD_WIDTH * scale);
         int cardHeight = Math.round(CARD_HEIGHT * scale);
-        int totalWidth = CARD_TYPES.length * cardWidth + (CARD_TYPES.length - 1) * FULL_CARD_GAP;
+        int totalWidth = visible.size() * cardWidth + (visible.size() - 1) * FULL_CARD_GAP;
         int startX = centerX - totalWidth / 2;
         int cardY = bottom - cardHeight;
 
         guiGraphics.drawCenteredString(font, "DECK", centerX, cardY - 11, 0xFFE36B);
-        for (int index = 0; index < CARD_TYPES.length; index++) {
-            int cardX = startX + index * (cardWidth + FULL_CARD_GAP);
+        for (int position = 0; position < visible.size(); position++) {
+            int index = visible.get(position);
+            int cardX = startX + position * (cardWidth + FULL_CARD_GAP);
             renderCard(guiGraphics, font, CARD_TYPES[index], normalized.get(index), cardX, cardY, scale, largeCounts);
         }
     }
@@ -142,9 +147,22 @@ public final class DungeonDeckRenderer {
     }
 
     private static float fullDeckScale(int maxWidth) {
-        int gaps = (CARD_TYPES.length - 1) * FULL_CARD_GAP;
-        float availableForCards = Math.max(CARD_TYPES.length, maxWidth - gaps);
-        return Math.min(MAX_FULL_SCALE, availableForCards / (CARD_TYPES.length * CARD_WIDTH));
+        return fullDeckScale(maxWidth, CARD_TYPES.length);
+    }
+
+    private static float fullDeckScale(int maxWidth, int count) {
+        int safeCount = Math.max(1, count);
+        int gaps = (safeCount - 1) * FULL_CARD_GAP;
+        float availableForCards = Math.max(safeCount, maxWidth - gaps);
+        return Math.min(MAX_FULL_SCALE, availableForCards / (safeCount * CARD_WIDTH));
+    }
+
+    private static List<Integer> visibleIndexes(List<CardState> deck, int limit) {
+        ArrayList<Integer> visible = new ArrayList<>();
+        for (int index = 0; index < Math.min(limit, deck.size()); index++) {
+            if (deck.get(index).count() > 0) visible.add(index);
+        }
+        return visible;
     }
 
     private static void drawScaledCentered(GuiGraphics guiGraphics, Font font, String text, float centerX, int y, float scale, int color) {

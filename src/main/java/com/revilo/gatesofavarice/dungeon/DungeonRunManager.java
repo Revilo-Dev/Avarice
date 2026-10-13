@@ -7,6 +7,7 @@ import com.revilo.gatesofavarice.dungeon.DungeonUpgradeManager;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCategory;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutPresetRegistry;
+import com.revilo.gatesofavarice.dungeon.loadout.LoadoutProgression;
 import com.revilo.gatesofavarice.dungeon.loadout.AuraAttributeSupport;
 import com.revilo.gatesofavarice.dungeon.loadout.RunicLoadoutService;
 import com.revilo.gatesofavarice.party.PartyManager;
@@ -18,6 +19,7 @@ import com.revilo.gatesofavarice.gateway.pool.EnemyPoolSet;
 import com.revilo.gatesofavarice.integration.LevelUpIntegration;
 import com.revilo.gatesofavarice.integration.CuriosCompat;
 import com.revilo.gatesofavarice.integration.ModCompat;
+import com.revilo.gatesofavarice.integration.AuraProgressionIntegration;
 import com.revilo.gatesofavarice.entity.MythicCoinOrbEntity;
 import com.revilo.gatesofavarice.item.MagnetItem;
 import com.revilo.gatesofavarice.item.MythicCoinStackData;
@@ -76,6 +78,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.SpawnGroupData;
+import net.minecraft.world.entity.monster.Creeper;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.ai.attributes.Attribute;
@@ -133,8 +136,9 @@ public final class DungeonRunManager {
     private static final int BASE_AMMO_PER_WAVE = 30;
     private static final ResourceLocation NO_AMMO = ResourceLocation.withDefaultNamespace("air");
     private static final List<ResourceLocation> AMMO_TIERS = List.of(
-            ResourceLocation.withDefaultNamespace("arrow"),
+            ResourceLocation.fromNamespaceAndPath("arsenal", "copper_arrow"),
             ResourceLocation.fromNamespaceAndPath("arsenal", "iron_arrow"),
+            ResourceLocation.fromNamespaceAndPath("arsenal", "golden_arrow"),
             ResourceLocation.fromNamespaceAndPath("arsenal", "diamond_arrow"),
             ResourceLocation.fromNamespaceAndPath("arsenal", "netherite_arrow"),
             ResourceLocation.fromNamespaceAndPath("arsenal", "amethyst_arrow"),
@@ -300,8 +304,11 @@ public final class DungeonRunManager {
         DungeonInstanceManager.teleportToDungeonInstance(player, run.instanceId);
         restoreDungeonEntryVitals(player);
         applyDungeonMapRestrictions(player);
-        if (player.getUUID().equals(ownerId) && run.phase == RunPhase.SELECTING_BOOSTER) {
-            rollBoosterOptions(run, player.serverLevel().random);
+        if (player.getUUID().equals(ownerId) && (run.phase == RunPhase.SELECTING_DIFFICULTY
+                || run.phase == RunPhase.SELECTING_BOOSTER)) {
+            if (run.phase == RunPhase.SELECTING_BOOSTER) {
+                rollBoosterOptions(run, player.serverLevel().random);
+            }
             openWaveMenu(player, run);
         }
         markStateDirty();
@@ -405,6 +412,18 @@ public final class DungeonRunManager {
         if (run == null || (run.phase != RunPhase.CHECKPOINT && run.phase != RunPhase.SHOP) || !run.participants.contains(player.getUUID()) || !isRunAdvancePortal(run, portal)) return;
         portal.discard();
         run.advancePortalId = -1;
+        if (run.wavesCompletedOnFloor < Math.max(1, run.waveNumber)) {
+            ServerLevel dungeon = getDungeonLevel(run);
+            if (dungeon != null) {
+                for (ServerPlayer participant : run.liveParticipants()) {
+                    DungeonInstanceManager.teleportToDungeonInstance(participant, run.instanceId);
+                }
+            }
+            startWave(run);
+            markStateDirty();
+            forceCriticalSave(player.server);
+            return;
+        }
         ServerLevel dungeon = getDungeonLevel(run);
         if (dungeon != null) {
             DungeonInstanceManager.reloadDungeonFloor(dungeon, run.instanceId, run.waveNumber + 1, run.quantityBonusModifier);
@@ -464,7 +483,23 @@ public final class DungeonRunManager {
         if (!(player instanceof ServerPlayer serverPlayer)) return false;
         RunState run = RUNS_BY_OWNER.get(ownerId);
         if (run == null || !run.participants.contains(serverPlayer.getUUID())) return false;
-        if (run.phase != RunPhase.SELECTING_BOOSTER && run.phase != RunPhase.SELECTING_LOOT) return false;
+        if (run.phase != RunPhase.SELECTING_DIFFICULTY
+                && run.phase != RunPhase.SELECTING_BOOSTER
+                && run.phase != RunPhase.SELECTING_LOOT) return false;
+
+        if (run.phase == RunPhase.SELECTING_DIFFICULTY) {
+            if (!serverPlayer.getUUID().equals(run.ownerId)
+                    || buttonId < 0 || buttonId >= DungeonDifficulty.values().length) {
+                return false;
+            }
+            run.difficulty = DungeonDifficulty.values()[buttonId];
+            run.phase = RunPhase.SELECTING_BOOSTER;
+            rollBoosterOptions(run, serverPlayer.serverLevel().random);
+            openWaveMenu(serverPlayer, run);
+            markStateDirty();
+            forceCriticalSave(serverPlayer.server);
+            return true;
+        }
 
         if (run.phase == RunPhase.SELECTING_BOOSTER) {
             // Booster selection remains a leader decision; loadouts are selected individually below.
@@ -474,7 +509,9 @@ public final class DungeonRunManager {
                 return false;
             }
             if (buttonId < 0 || buttonId >= run.boosterOptions.size()) return false;
-            applyBooster(run, run.boosterOptions.get(buttonId));
+            BoosterOption selectedBooster = run.boosterOptions.get(buttonId);
+            if (!MythicCoinWallet.spend(serverPlayer, selectedBooster.cost)) return false;
+            applyBooster(run, selectedBooster);
             if (run.waveNumber == 0 && !run.dungeonLoadouts.containsKey(serverPlayer.getUUID())) {
                 rollLoadoutOptions(run, serverPlayer.serverLevel().random);
                 run.phase = RunPhase.SELECTING_LOOT;
@@ -1168,7 +1205,9 @@ public final class DungeonRunManager {
         if (run == null || !player.getUUID().equals(run.ownerId) || !isRunShopkeeperInteraction(run, shopkeeperEntityId)) {
             return false;
         }
-        if (run.phase != RunPhase.SELECTING_BOOSTER && run.phase != RunPhase.SELECTING_LOOT) {
+        if (run.phase != RunPhase.SELECTING_DIFFICULTY
+                && run.phase != RunPhase.SELECTING_BOOSTER
+                && run.phase != RunPhase.SELECTING_LOOT) {
             return false;
         }
         openWaveMenu(player, run);
@@ -1241,6 +1280,12 @@ public final class DungeonRunManager {
             } else if (run.phase == RunPhase.IN_WAVE) {
                 if (!run.hasOnlineParticipant()) {
                     continue;
+                }
+                if (dungeon.getGameTime() % 20L == 0L) {
+                    for (ServerPlayer participant : run.liveParticipants()) {
+                        String loadoutId = run.activeLoadouts.get(participant.getUUID());
+                        if (loadoutId != null) LoadoutProgression.addPlayTime(participant, loadoutId, 20L);
+                    }
                 }
                 if (run.currentWavePools.isEmpty()) {
                     run.currentWavePools = buildWavePools(run);
@@ -1315,16 +1360,21 @@ public final class DungeonRunManager {
 
     @SubscribeEvent
     public static void onLivingIncomingDamage(LivingIncomingDamageEvent event) {
-        if (event.getEntity().level().isClientSide
-                || !(event.getEntity() instanceof ServerPlayer target)
-                || !(event.getSource().getEntity() instanceof ServerPlayer attacker)
+        if (event.getEntity().level().isClientSide || !(event.getEntity() instanceof ServerPlayer target)) {
+            return;
+        }
+
+        RunState targetRun = getRunForPlayer(target);
+        if (targetRun != null && targetRun.difficulty == DungeonDifficulty.EASY) {
+            event.setAmount(event.getAmount() * 0.75F);
+        }
+
+        if (!(event.getSource().getEntity() instanceof ServerPlayer attacker)
                 || attacker.level().dimension() != ModDimensions.DUNGEON_LEVEL
                 || target.level().dimension() != ModDimensions.DUNGEON_LEVEL) {
             return;
         }
-
         RunState attackerRun = getRunForPlayer(attacker);
-        RunState targetRun = getRunForPlayer(target);
         if (attackerRun != null
                 && attackerRun == targetRun
                 && PartyManager.areInSameParty(attacker.getUUID(), target.getUUID())) {
@@ -1380,6 +1430,9 @@ public final class DungeonRunManager {
             if (ownerId == null) return;
             RunState run = RUNS_BY_OWNER.get(ownerId);
             if (run == null) return;
+            if (run.difficulty == DungeonDifficulty.HARD) {
+                AuraProgressionIntegration.resetSkillsAndAbilities(player);
+            }
             PlayerSnapshot snapshot = run.snapshots.remove(player.getUUID());
             if (snapshot != null) {
                 PENDING_SNAPSHOT_RESTORES.put(player.getUUID(), new PendingSnapshotRestore(snapshot, createDeathSummary(run, player)));
@@ -1396,6 +1449,10 @@ public final class DungeonRunManager {
         if (run == null) return;
         trackDungeonKillProgress(run, dead);
         run.mobsKilled++;
+        if (event.getSource().getEntity() instanceof ServerPlayer killer) {
+            String loadoutId = run.activeLoadouts.get(killer.getUUID());
+            if (loadoutId != null) LoadoutProgression.addKill(killer, loadoutId);
+        }
         run.aliveMobs.remove(dead.getUUID());
         markStateDirty();
         if (dead.level() instanceof ServerLevel level) spawnDungeonMobDrops(level, dead, run);
@@ -1547,7 +1604,8 @@ public final class DungeonRunManager {
             DungeonInstanceManager.teleportToDungeonInstance(player, run.instanceId);
         }
         syncHudToPlayer(player, run.phase == RunPhase.IN_WAVE, run.waveNumber, Math.max(0, run.toSpawn + run.aliveMobs.size()), Math.max(1, run.waveTotalMobs));
-        if (player.getUUID().equals(run.ownerId) && (run.phase == RunPhase.SELECTING_BOOSTER || run.phase == RunPhase.SELECTING_LOOT)) {
+        if (player.getUUID().equals(run.ownerId) && (run.phase == RunPhase.SELECTING_DIFFICULTY
+                || run.phase == RunPhase.SELECTING_BOOSTER || run.phase == RunPhase.SELECTING_LOOT)) {
             openWaveMenu(player, run);
         } else if (run.phase == RunPhase.SHOP) {
             ServerLevel dungeon = getDungeonLevel(run);
@@ -1724,19 +1782,13 @@ public final class DungeonRunManager {
         run.wavesCompletedOnFloor++;
         DungeonInstanceManager.spawnWaveLootboxes(level, run.instanceId, Math.max(1, run.waveNumber), run.quantityBonusModifier,
                 GatewayExpansionConfig.LOOT_CRATES_PER_WAVE.get());
-        if (run.wavesCompletedOnFloor < wave) {
-            run.phase = RunPhase.INTERMISSION;
-            run.intermissionTicks = 20 * nextWaveDurationSeconds(run);
-            for (ServerPlayer player : run.liveParticipants()) {
-                player.displayClientMessage(Component.literal("Next wave begins in " + nextWaveDurationSeconds(run) + " seconds. Bail Stone is available.").withStyle(ChatFormatting.GOLD), true);
-            }
-            syncHud(run, false);
-            markStateDirty();
-            forceCriticalSave(run.server);
-            return;
-        }
         run.phase = RunPhase.SHOP;
         spawnShopPortal(run, level);
+        for (ServerPlayer player : run.liveParticipants()) {
+            player.displayClientMessage(Component.literal(run.wavesCompletedOnFloor < wave
+                    ? "Wave cleared. The shop gateway is open; continue when ready."
+                    : "Floor cleared. The shop gateway is open.").withStyle(ChatFormatting.GOLD), true);
+        }
         syncHud(run, false);
         markStateDirty();
         forceCriticalSave(run.server);
@@ -1882,6 +1934,8 @@ public final class DungeonRunManager {
         int before = getEffectivePlayerLevel(player);
         if (!LevelUpIntegration.awardXp(player, amount, source)) player.giveExperiencePoints(amount);
         run.experienceEarned += amount;
+        String loadoutId = run.activeLoadouts.get(player.getUUID());
+        if (loadoutId != null) LoadoutProgression.addXp(player, loadoutId, amount);
         applyLevelBasedLoadoutGrowth(player, before);
         markStateDirty();
         return true;
@@ -2113,7 +2167,8 @@ public final class DungeonRunManager {
         if (pools == null) {
             return false;
         }
-        EntityType<?> type = pickEntityType(level.random, pools, archetype);
+        boolean spawnCreeper = forcedArchetype == null && level.random.nextFloat() < 0.10F;
+        EntityType<?> type = spawnCreeper ? EntityType.CREEPER : pickEntityType(level.random, pools, archetype);
         if (type == null) return false;
         Entity entity = type.create(level);
         if (!(entity instanceof LivingEntity mob)) return false;
@@ -2125,6 +2180,14 @@ public final class DungeonRunManager {
         double z = spawnPos.z();
         mob.moveTo(x, y, z, level.random.nextFloat() * 360.0F, 0.0F);
         if (mob instanceof Mob aiMob) aiMob.finalizeSpawn(level, level.getCurrentDifficultyAt(BlockPos.containing(x, y, z)), MobSpawnType.EVENT, (SpawnGroupData) null);
+        if (mob instanceof Creeper creeper) {
+            CompoundTag creeperData = new CompoundTag();
+            creeper.saveWithoutId(creeperData);
+            creeperData.putShort("Fuse", (short) 60);
+            creeper.load(creeperData);
+            creeper.setCustomName(Component.literal("Unstable Creeper").withStyle(ChatFormatting.GREEN));
+            creeper.setCustomNameVisible(true);
+        }
         if (mob instanceof Mob aiMob && aiMob.getAttribute(Attributes.FOLLOW_RANGE) != null) {
             aiMob.getAttribute(Attributes.FOLLOW_RANGE).setBaseValue(Math.max(96.0D, aiMob.getAttributeValue(Attributes.FOLLOW_RANGE)));
         }
@@ -2206,7 +2269,7 @@ public final class DungeonRunManager {
         run.loadoutSelections.clear();
         ArrayList<LoadoutOption> rolled = new ArrayList<>();
         ArrayList<LoadoutModels.LoadoutDefinition> eligible = new ArrayList<>(LOADOUT_DEFINITIONS);
-        int avgLevel = averageParticipantLevel(run);
+        int avgLevel = averageParticipantLoadoutLevel(run);
         for (int i = 0; i < 3 && !eligible.isEmpty(); i++) {
             LoadoutModels.LoadoutDefinition definition = eligible.remove(random.nextInt(eligible.size()));
             rolled.add(buildLoadoutOptionFromDefinition(definition, avgLevel, random));
@@ -2225,7 +2288,7 @@ public final class DungeonRunManager {
             return;
         }
         LoadoutModels.LoadoutDefinition definition = LOADOUT_DEFINITIONS.get(random.nextInt(LOADOUT_DEFINITIONS.size()));
-        grantLoadout(owner, buildLoadoutOptionFromDefinition(definition, averageParticipantLevel(run), random), random);
+        grantLoadout(owner, buildLoadoutOptionFromDefinition(definition, averageParticipantLoadoutLevel(run), random), random);
         run.loadoutSelections.add(run.ownerId);
         owner.closeContainer();
         owner.displayClientMessage(Component.literal("Loadout Card applied: your dungeon loadout is ready.").withStyle(ChatFormatting.LIGHT_PURPLE), false);
@@ -2385,6 +2448,13 @@ public final class DungeonRunManager {
         DungeonGearRoller.rollAndBind(primary, random, playerLevel, timeTicks, player.registryAccess());
         DungeonGearRoller.rollAndBind(secondary, random, playerLevel, timeTicks, player.registryAccess());
         DungeonGearRoller.rollAndBind(utility, random, playerLevel, timeTicks, player.registryAccess());
+        DungeonBoundItems.forceMarkDungeonBound(head);
+        DungeonBoundItems.forceMarkDungeonBound(chest);
+        DungeonBoundItems.forceMarkDungeonBound(legs);
+        DungeonBoundItems.forceMarkDungeonBound(feet);
+        DungeonBoundItems.forceMarkDungeonBound(primary);
+        DungeonBoundItems.forceMarkDungeonBound(secondary);
+        DungeonBoundItems.forceMarkDungeonBound(utility);
         if (definition != null) {
             rollArmorPiece(player, head, definition, EquipmentSlot.HEAD, random);
             rollArmorPiece(player, chest, definition, EquipmentSlot.CHEST, random);
@@ -2419,11 +2489,16 @@ public final class DungeonRunManager {
             player.getInventory().add(foodCopy);
         }
         RunState run = getRunForPlayer(player);
+        if (run != null) {
+            run.activeLoadouts.put(player.getUUID(), loadout.loadoutId());
+            LoadoutProgression.recordPlay(player, loadout.loadoutId());
+        }
         if (run != null && !loadout.ammo().isEmpty()) {
             run.ammoItems.put(player.getUUID(), BuiltInRegistries.ITEM.getKey(loadout.ammo().getItem()));
             run.ammoPerWave.put(player.getUUID(), loadout.ammoCount());
         }
         removeBailStones(player);
+        player.setHealth(player.getMaxHealth());
         player.inventoryMenu.broadcastChanges();
         player.containerMenu.broadcastChanges();
     }
@@ -2628,37 +2703,18 @@ public final class DungeonRunManager {
         if (WEAPON_POOL.isEmpty()) {
             return Items.IRON_SWORD;
         }
-        int safeLevel = Math.max(1, playerLevel);
+        String material = rollWeaponMaterial(random, playerLevel);
         ArrayList<WeightedItem> eligible = new ArrayList<>();
         for (WeightedItem entry : WEAPON_POOL) {
             ResourceLocation id = BuiltInRegistries.ITEM.getKey(entry.item());
-            int tier = weaponTier(id);
-            if (safeLevel < 10) {
-                if (tier == 1) {
-                    eligible.add(new WeightedItem(entry.item(), Math.max(1, entry.weight() * 10)));
-                } else if (tier == 2) {
-                    eligible.add(new WeightedItem(entry.item(), Math.max(1, entry.weight() / 6)));
-                }
-                continue;
-            }
-            if (tier <= 2 && safeLevel < 20) {
-                eligible.add(entry);
-                continue;
-            }
-            if (tier <= 3 && safeLevel < 35) {
-                eligible.add(entry);
-                continue;
-            }
-            if (tier <= 4 && safeLevel < 50) {
-                eligible.add(entry);
-                continue;
-            }
-            if (tier <= 5 || safeLevel >= 50) {
+            if (material.equals(weaponMaterial(id))) {
                 eligible.add(entry);
             }
         }
         if (eligible.isEmpty()) {
-            eligible.addAll(WEAPON_POOL);
+            Item fallback = resolveItem("gatewayexpansion:" + material + "_sword");
+            if (fallback == null) fallback = resolveItem("arsenal:" + material + "_longsword");
+            return fallback == null ? Items.IRON_SWORD : fallback;
         }
         int totalWeight = 0;
         for (WeightedItem entry : eligible) totalWeight += entry.weight();
@@ -2688,6 +2744,10 @@ public final class DungeonRunManager {
         if ("crossbow".equals(kind)) {
             return Items.CROSSBOW;
         }
+        if ("heavy_crossbow".equals(kind) || "dual_crossbow".equals(kind) || "scatter_crossbow".equals(kind)) {
+            Item item = resolveItem("arsenal:" + kind);
+            return item == null ? Items.CROSSBOW : item;
+        }
         if ("axe".equals(kind)) {
             return pickWeaponByPath(random, playerLevel, "paxel");
         }
@@ -2695,27 +2755,23 @@ public final class DungeonRunManager {
     }
 
     private static Item pickWeaponByPath(RandomSource random, int playerLevel, String pathNeedle) {
-        int safeLevel = Math.max(1, playerLevel);
+        String material = rollWeaponMaterial(random, playerLevel);
         ArrayList<WeightedItem> eligible = new ArrayList<>();
         for (WeightedItem entry : WEAPON_POOL) {
             ResourceLocation id = BuiltInRegistries.ITEM.getKey(entry.item());
             if (id == null || !id.getPath().contains(pathNeedle)) {
                 continue;
             }
-            int tier = weaponTier(id);
-            if ((safeLevel < 10 && tier > 2) || (safeLevel < 20 && tier > 2) || (safeLevel < 35 && tier > 3) || (safeLevel < 50 && tier > 4)) {
-                continue;
+            if (material.equals(weaponMaterial(id))) {
+                eligible.add(entry);
             }
-            int weight = Math.max(1, entry.weight());
-            if (safeLevel < 10 && tier == 1) {
-                weight *= 10;
-            } else if (safeLevel < 10 && tier == 2) {
-                weight = Math.max(1, weight / 6);
-            }
-            eligible.add(new WeightedItem(entry.item(), weight));
         }
         if (eligible.isEmpty()) {
-            return pickWeightedWeapon(random, playerLevel);
+            String fallbackKind = "axe".equals(pathNeedle) || "paxel".equals(pathNeedle) ? "hammer" : pathNeedle;
+            Item fallback = resolveItem("arsenal:" + material + "_" + fallbackKind);
+            if (fallback == null) fallback = resolveItem("gatewayexpansion:" + material + "_" + pathNeedle);
+            if (fallback == null) fallback = resolveItem("arsenal:" + material + "_longsword");
+            return fallback == null ? Items.IRON_SWORD : fallback;
         }
         int totalWeight = 0;
         for (WeightedItem entry : eligible) totalWeight += entry.weight();
@@ -2730,14 +2786,35 @@ public final class DungeonRunManager {
         return eligible.getLast().item();
     }
 
-    private static int weaponTier(ResourceLocation id) {
-        if (id == null) return 1;
-        String p = id.getPath();
-        if (p.contains("mana_steel") || p.contains("elixrite")) return 1;
-        if (p.contains("astrite") || p.contains("lunarium")) return 2;
-        if (p.contains("ignite") || p.contains("iridium")) return 3;
-        if (p.contains("mythril") || p.contains("arcanium")) return 4;
-        return 5;
+    private static String rollWeaponMaterial(RandomSource random, int playerLevel) {
+        int level = Mth.clamp(playerLevel, 0, 100);
+        if (level <= 5) return "mana_steel";
+        if (level <= 20) return rollMaterialBand(random, level, 6, 20, "mana_steel", "elixrite");
+        if (level <= 40) return rollMaterialBand(random, level, 21, 40, "astrite", "lunarium");
+        if (level <= 60) return rollMaterialBand(random, level, 41, 60, "ignite", "iridium");
+        if (level <= 80) return rollMaterialBand(random, level, 61, 80, "mythril", "arcanium");
+        return "prismatic_steel";
+    }
+
+    private static String rollMaterialBand(RandomSource random, int level, int minLevel, int maxLevel,
+            String lowerMaterial, String upperMaterial) {
+        double upperChance = (level - minLevel + 1.0D) / (maxLevel - minLevel + 1.0D);
+        return random.nextDouble() < upperChance ? upperMaterial : lowerMaterial;
+    }
+
+    private static String weaponMaterial(ResourceLocation id) {
+        if (id == null) return "";
+        String path = id.getPath();
+        if (path.contains("prismatic_steel")) return "prismatic_steel";
+        if (path.contains("mana_steel")) return "mana_steel";
+        if (path.contains("elixrite")) return "elixrite";
+        if (path.contains("astrite")) return "astrite";
+        if (path.contains("lunarium")) return "lunarium";
+        if (path.contains("ignite") || path.contains("ignium")) return "ignite";
+        if (path.contains("iridium")) return "iridium";
+        if (path.contains("mythril")) return "mythril";
+        if (path.contains("arcanium")) return "arcanium";
+        return "";
     }
 
     private static String shortName(Item item) {
@@ -2965,6 +3042,17 @@ public final class DungeonRunManager {
         return Math.max(1, total / players.size());
     }
 
+    private static int averageParticipantLoadoutLevel(RunState run) {
+        List<ServerPlayer> players = run.liveParticipants();
+        if (players.isEmpty()) return 0;
+        int total = 0;
+        for (ServerPlayer player : players) {
+            int integrated = LevelUpIntegration.getPlayerLevel(player);
+            total += integrated >= 0 ? integrated : Math.max(0, player.experienceLevel);
+        }
+        return Math.max(0, total / players.size());
+    }
+
     private static void trackDungeonKillProgress(RunState run, LivingEntity dead) {
         // Intentionally no-op.
         // Dungeon completion progression is awarded at exit and sourced from non-kill activity only.
@@ -3127,7 +3215,22 @@ public final class DungeonRunManager {
 
     private static void openWaveMenu(ServerPlayer owner, RunState run) {
         List<DungeonWaveMenu.WaveOptionView> views;
-        if (run.phase == RunPhase.SELECTING_BOOSTER) {
+        if (run.phase == RunPhase.SELECTING_DIFFICULTY) {
+            views = Arrays.stream(DungeonDifficulty.values()).map(difficulty -> new DungeonWaveMenu.WaveOptionView(
+                    Component.literal(difficulty.displayName),
+                    Component.literal(difficulty.description),
+                    100,
+                    100,
+                    difficulty.rating,
+                    ItemStack.EMPTY,
+                    ItemStack.EMPTY,
+                    ItemStack.EMPTY,
+                    ItemStack.EMPTY,
+                    ItemStack.EMPTY,
+                    ItemStack.EMPTY,
+                    ItemStack.EMPTY,
+                    0, 0, 0, 0, 0, 0, 0, 0L, 0, 0, 0L, List.of())).toList();
+        } else if (run.phase == RunPhase.SELECTING_BOOSTER) {
             views = run.boosterOptions.stream().map(option -> new DungeonWaveMenu.WaveOptionView(
                     option.title,
                     option.details,
@@ -3146,11 +3249,18 @@ public final class DungeonRunManager {
                     0,
                     0,
                     0,
+                    option.cost,
+                    0,
+                    0L,
+                    0,
+                    0,
+                    0L,
                     toCardCounts(option.pulledCardCounts))).toList();
         } else if (run.selectingLoadout) {
             ArrayList<DungeonWaveMenu.WaveOptionView> loadoutViews = new ArrayList<>();
             for (LoadoutOption option : run.loadoutOptions) {
-                loadoutViews.add(new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, 0, option.primary().copy(), option.secondary().copy(), option.head().copy(), option.chest().copy(), option.legs().copy(), option.feet().copy(), option.ammo().copy(), option.ammoCount(), option.speedRating(), option.damageRating(), option.defenceRating(), option.attackSpeedRating(), List.of()));
+                LoadoutProgression.Stats stats = LoadoutProgression.get(owner, option.loadoutId());
+                loadoutViews.add(new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, 0, option.primary().copy(), option.secondary().copy(), option.head().copy(), option.chest().copy(), option.legs().copy(), option.feet().copy(), option.ammo().copy(), option.ammoCount(), option.speedRating(), option.damageRating(), option.defenceRating(), option.attackSpeedRating(), 0, stats.level(), stats.xp(), stats.plays(), stats.kills(), stats.playTimeTicks(), List.of()));
             }
             loadoutViews.add(new DungeonWaveMenu.WaveOptionView(
                     Component.literal("Random"),
@@ -3170,19 +3280,27 @@ public final class DungeonRunManager {
                     0,
                     0,
                     0,
+                    0,
+                    0,
+                    0L,
+                    0,
+                    0,
+                    0L,
                     List.of()
             ));
             views = List.copyOf(loadoutViews);
         } else {
-            views = run.lootOptions.stream().map(option -> new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, 0, option.stack().copy(), ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, 0, 0, 0, 0, 0, List.of())).toList();
+            views = run.lootOptions.stream().map(option -> new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, 0, option.stack().copy(), ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, ItemStack.EMPTY, 0, 0, 0, 0, 0, 0, 0, 0L, 0, 0, 0L, List.of())).toList();
         }
         int rerollsLeft = getUpgradeRerollsLeft(run.ownerId);
         int rerollCost = getUpgradeRerollCost(run.ownerId);
-        int stage = run.phase == RunPhase.SELECTING_BOOSTER
-                ? DungeonWaveMenu.STAGE_BOOSTER
+        int stage = run.phase == RunPhase.SELECTING_DIFFICULTY
+                ? DungeonWaveMenu.STAGE_DIFFICULTY
+                : run.phase == RunPhase.SELECTING_BOOSTER ? DungeonWaveMenu.STAGE_BOOSTER
                 : (run.selectingLoadout ? DungeonWaveMenu.STAGE_LOADOUT : DungeonWaveMenu.STAGE_UPGRADE);
         List<DungeonDeck.CardState> deck = deckSnapshot(run);
         Component menuTitle = switch (stage) {
+            case DungeonWaveMenu.STAGE_DIFFICULTY -> Component.literal("Dungeon Difficulty");
             case DungeonWaveMenu.STAGE_BOOSTER -> Component.translatable("screen.gatesofavarice.dungeon_wave.title");
             case DungeonWaveMenu.STAGE_LOADOUT -> Component.translatable("screen.gatesofavarice.dungeon_wave.loadout_title");
             default -> Component.translatable("screen.gatesofavarice.dungeon_wave.upgrade_title");
@@ -3870,6 +3988,7 @@ public final class DungeonRunManager {
         tag.putUUID("instance_id", run.instanceId);
         tag.putBoolean("guaranteed_owner_loadout", run.guaranteedOwnerLoadout);
         tag.putString("phase", run.phase.name());
+        tag.putString("difficulty", run.difficulty.name());
         tag.putInt("wave_number", run.waveNumber);
         tag.putInt("waves_completed_on_floor", run.wavesCompletedOnFloor);
         tag.putInt("intermission_ticks", run.intermissionTicks);
@@ -3936,6 +4055,14 @@ public final class DungeonRunManager {
             dungeonLoadouts.add(loadout);
         }
         tag.put("dungeon_loadouts", dungeonLoadouts);
+        ListTag activeLoadouts = new ListTag();
+        run.activeLoadouts.forEach((player, loadoutId) -> {
+            CompoundTag entry = new CompoundTag();
+            entry.putUUID("player", player);
+            entry.putString("loadout", loadoutId);
+            activeLoadouts.add(entry);
+        });
+        tag.put("active_loadouts", activeLoadouts);
         tag.put("level_source_points", saveIntegerMap(run.levelSourcePoints));
         tag.put("ammo_per_wave", saveIntegerMap(run.ammoPerWave));
         tag.put("ammo_remaining", saveIntegerMap(run.ammoRemaining));
@@ -3983,7 +4110,14 @@ public final class DungeonRunManager {
                 run.dungeonLoadouts.put(loadout.getUUID("player"), loadedLoadout);
             }
         }
+        for (Tag value : tag.getList("active_loadouts", Tag.TAG_COMPOUND)) {
+            CompoundTag entry = (CompoundTag) value;
+            if (entry.hasUUID("player") && !entry.getString("loadout").isBlank()) {
+                run.activeLoadouts.put(entry.getUUID("player"), entry.getString("loadout"));
+            }
+        }
         run.phase = parseRunPhase(tag.getString("phase"));
+        run.difficulty = parseDungeonDifficulty(tag.getString("difficulty"));
         run.waveNumber = tag.getInt("wave_number");
         run.wavesCompletedOnFloor = tag.getInt("waves_completed_on_floor");
         run.intermissionTicks = tag.getInt("intermission_ticks");
@@ -4207,6 +4341,14 @@ public final class DungeonRunManager {
         return buildCompletionPayload(run, player, player.serverLevel().getGameTime(), List.of(), gatheredLevelPoints, 0, false);
     }
 
+    private static DungeonDifficulty parseDungeonDifficulty(String name) {
+        try {
+            return DungeonDifficulty.valueOf(name);
+        } catch (IllegalArgumentException ignored) {
+            return DungeonDifficulty.NORMAL;
+        }
+    }
+
     private static void deriveLegacyDeckCounts(RunState run) {
         List<DungeonDeck.CardState> snapshot = deckSnapshot(run);
         DungeonDeck.CardType[] cardTypes = DungeonDeck.CardType.values();
@@ -4255,7 +4397,23 @@ public final class DungeonRunManager {
         }
     }
 
-    private enum RunPhase { SELECTING_BOOSTER, SELECTING_LOOT, IN_WAVE, INTERMISSION, SHOP, CHECKPOINT, WAITING_EXIT }
+    private enum RunPhase { SELECTING_DIFFICULTY, SELECTING_BOOSTER, SELECTING_LOOT, IN_WAVE, INTERMISSION, SHOP, CHECKPOINT, WAITING_EXIT }
+
+    private enum DungeonDifficulty {
+        EASY("Easy", "25% less damage taken", 1),
+        NORMAL("Normal", "Standard dungeon rules", 2),
+        HARD("Hard", "Death resets skills and abilities", 3);
+
+        private final String displayName;
+        private final String description;
+        private final int rating;
+
+        DungeonDifficulty(String displayName, String description, int rating) {
+            this.displayName = displayName;
+            this.description = description;
+            this.rating = rating;
+        }
+    }
 
     private enum WaveArchetype { UNDEAD, HORDE, ASSASSIN, ARCHER, TANK, NETHER }
 
@@ -4269,8 +4427,10 @@ public final class DungeonRunManager {
         private final Set<UUID> participants = new HashSet<>();
         private final Map<UUID, PlayerSnapshot> snapshots = new HashMap<>();
         private final Map<UUID, PlayerSnapshot> dungeonLoadouts = new HashMap<>();
+        private final Map<UUID, String> activeLoadouts = new HashMap<>();
         private final Set<UUID> floorIntroShown = new HashSet<>();
-        private RunPhase phase = RunPhase.SELECTING_BOOSTER;
+        private RunPhase phase = RunPhase.SELECTING_DIFFICULTY;
+        private DungeonDifficulty difficulty = DungeonDifficulty.NORMAL;
         private int waveNumber = 0;
         private int wavesCompletedOnFloor = 0;
         private int intermissionTicks = 0;
@@ -4408,21 +4568,23 @@ public final class DungeonRunManager {
     }
 
     private enum BoosterTier {
-        BASIC("Basic", 1, 2, 1),
-        NORMAL("Normal", 2, 3, 2),
-        HARD("Hard", 3, 4, 2),
-        CHALLENGING("Challenging", 4, 5, 3);
+        BASIC("Basic", 1, 2, 1, 0),
+        NORMAL("Normal", 2, 3, 2, 200),
+        HARD("Hard", 3, 4, 2, 400),
+        CHALLENGING("Challenging", 4, 5, 3, 650);
 
         private final String displayName;
         private final int difficulty;
         private final int negativeCards;
         private final int positiveCards;
+        private final int cost;
 
-        BoosterTier(String displayName, int difficulty, int negativeCards, int positiveCards) {
+        BoosterTier(String displayName, int difficulty, int negativeCards, int positiveCards, int cost) {
             this.displayName = displayName;
             this.difficulty = difficulty;
             this.negativeCards = negativeCards;
             this.positiveCards = positiveCards;
+            this.cost = cost;
         }
     }
 
@@ -4431,12 +4593,14 @@ public final class DungeonRunManager {
         private final Component details;
         private final int difficulty;
         private final int[] pulledCardCounts;
+        private final int cost;
 
-        private BoosterOption(Component title, Component details, int difficulty, int[] pulledCardCounts) {
+        private BoosterOption(Component title, Component details, int difficulty, int[] pulledCardCounts, int cost) {
             this.title = title;
             this.details = details;
             this.difficulty = difficulty;
             this.pulledCardCounts = pulledCardCounts;
+            this.cost = cost;
         }
 
         private static BoosterOption random(RandomSource random, BoosterTier tier, int bonusRewardCards) {
@@ -4448,7 +4612,7 @@ public final class DungeonRunManager {
             Component details = Component.literal(totalCards + " cards\n"
                     + tier.negativeCards + " enemy buffs\n"
                     + positiveCards + " reward buffs");
-            return new BoosterOption(Component.literal(tier.displayName), details, tier.difficulty, pulledCards);
+            return new BoosterOption(Component.literal(tier.displayName), details, tier.difficulty, pulledCards, tier.cost);
         }
 
         private static void addRandomCards(int[] pulledCards, RandomSource random, int startInclusive, int endExclusive, int amount) {

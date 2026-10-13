@@ -2,6 +2,9 @@ package com.revilo.gatesofavarice.integration.jei;
 
 import com.revilo.gatesofavarice.GatewayExpansion;
 import com.revilo.gatesofavarice.client.screen.DungeonWaveScreen;
+import com.revilo.gatesofavarice.client.screen.DungeonLoadoutScreen;
+import com.revilo.gatesofavarice.client.screen.GatewayWorkbenchScreen;
+import com.revilo.gatesofavarice.client.screen.SacrificialAltarScreen;
 import com.revilo.gatesofavarice.client.screen.ShopkeeperScreen;
 import com.revilo.gatesofavarice.registry.ModItems;
 import java.util.List;
@@ -60,6 +63,9 @@ public final class GatewayExpansionJeiPlugin implements IModPlugin {
                 return List.of(new Rect2i(-10000, -10000, 20000, 20000));
             }
         });
+        registration.addGuiContainerHandler(DungeonLoadoutScreen.class, fullScreenExclusion());
+        registration.addGuiContainerHandler(GatewayWorkbenchScreen.class, fullScreenExclusion());
+        registration.addGuiContainerHandler(SacrificialAltarScreen.class, fullScreenExclusion());
     }
 
     @Override
@@ -74,6 +80,15 @@ public final class GatewayExpansionJeiPlugin implements IModPlugin {
                 new ItemStack(ModItems.TIER_3_CRYSTAL.get()),
                 new ItemStack(ModItems.TIER_4_CRYSTAL.get()),
                 new ItemStack(ModItems.TIER_5_CRYSTAL.get()));
+    }
+
+    private static <T extends net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?>> IGuiContainerHandler<T> fullScreenExclusion() {
+        return new IGuiContainerHandler<>() {
+            @Override
+            public List<Rect2i> getGuiExtraAreas(T containerScreen) {
+                return List.of(new Rect2i(-10000, -10000, 20000, 20000));
+            }
+        };
     }
 
 }

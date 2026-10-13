@@ -49,9 +49,14 @@ public final class GatewaySellValues {
         if (item == Items.BOW) return 12;
         if (item == Items.NAUTILUS_SHELL) return 30;
         if (item == Items.STONE_SWORD) return 1;
+        if (item == Items.WOODEN_SWORD || item == Items.STONE_AXE || item == Items.STONE_PICKAXE || item == Items.STONE_SHOVEL || item == Items.STONE_HOE) return 1;
         if (item == Items.SLIME_BALL) return 1;
         if (item == Items.SPIDER_EYE) return 2;
         if (item == Items.STRING) return 1;
+        if (item == Items.GUNPOWDER || item == Items.FEATHER || item == Items.LEATHER || item == Items.FLINT) return 1;
+        if (item == Items.BLAZE_ROD || item == Items.ENDER_PEARL || item == Items.PRISMARINE_SHARD) return 4;
+        if (item == Items.WHEAT_SEEDS || item == Items.BEETROOT_SEEDS || item == Items.MELON_SEEDS || item == Items.PUMPKIN_SEEDS) return 1;
+        if (item == Items.PORKCHOP || item == Items.BEEF || item == Items.CHICKEN || item == Items.MUTTON || item == Items.RABBIT) return 1;
         if (ResourceLocation.fromNamespaceAndPath("farmersdelight", "onion").equals(itemId)) return 1;
         if (ResourceLocation.fromNamespaceAndPath("deeperdarker", "resonarium").equals(itemId)) return 15;
         if (item == ModItems.GRIMSTONE.get()) return 7;

@@ -46,7 +46,7 @@ final class JeiOverlayVisibility {
     }
 
     private static boolean isGatewayScreen(Screen screen) {
-        return screen != null && screen.getClass().getPackageName().equals("com.revilo.gatesofavarice.client.screen");
+        return screen != null && screen.getClass().getPackageName().startsWith("com.revilo.gatesofavarice.client");
     }
 
     private static void setVisible(boolean visible) {
