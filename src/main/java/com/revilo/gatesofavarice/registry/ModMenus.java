@@ -6,6 +6,7 @@ import com.revilo.gatesofavarice.menu.DungeonLoadoutMenu;
 import com.revilo.gatesofavarice.menu.GatewayWorkbenchMenu;
 import com.revilo.gatesofavarice.menu.ShopkeeperMenu;
 import com.revilo.gatesofavarice.menu.SacrificialAltarMenu;
+import com.revilo.gatesofavarice.menu.LootPouchMenu;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
@@ -28,6 +29,8 @@ public final class ModMenus {
             MENUS.register("dungeon_loadout", () -> IMenuTypeExtension.create(DungeonLoadoutMenu::new));
     public static final DeferredHolder<MenuType<?>, MenuType<SacrificialAltarMenu>> SACRIFICIAL_ALTAR =
             MENUS.register("sacrificial_altar", () -> IMenuTypeExtension.create(SacrificialAltarMenu::new));
+    public static final DeferredHolder<MenuType<?>, MenuType<LootPouchMenu>> LOOT_POUCH =
+            MENUS.register("loot_pouch", () -> IMenuTypeExtension.create(LootPouchMenu::new));
 
     private ModMenus() {
     }

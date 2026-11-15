@@ -4,6 +4,7 @@ import com.revilo.gatesofavarice.GatewayExpansion;
 import com.revilo.gatesofavarice.entity.GatekeeperEntity;
 import com.revilo.gatesofavarice.entity.GatewayCrystalEntity;
 import com.revilo.gatesofavarice.entity.MythicCoinOrbEntity;
+import com.revilo.gatesofavarice.entity.DungeonDropEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -33,6 +34,12 @@ public final class ModEntities {
                     .clientTrackingRange(8)
                     .updateInterval(1)
                     .build("mythic_coin_orb"));
+    public static final DeferredHolder<EntityType<?>, EntityType<DungeonDropEntity>> DUNGEON_DROP = ENTITY_TYPES.register("dungeon_drop",
+            () -> EntityType.Builder.<DungeonDropEntity>of(DungeonDropEntity::new, MobCategory.MISC)
+                    .sized(0.5F, 0.5F)
+                    .clientTrackingRange(10)
+                    .updateInterval(1)
+                    .build("dungeon_drop"));
 
     private ModEntities() {
     }

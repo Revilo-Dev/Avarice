@@ -3,6 +3,7 @@ package com.revilo.gatesofavarice.registry;
 import com.mojang.serialization.Codec;
 import com.revilo.gatesofavarice.GatewayExpansion;
 import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.attachment.AttachmentType;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -55,6 +56,18 @@ public final class ModAttachments {
                     .serialize(Codec.INT)
                     .copyOnDeath()
                     .sync(ByteBufCodecs.VAR_INT)
+                    .build());
+    public static final DeferredHolder<AttachmentType<?>, AttachmentType<ItemStack>> PRIMARY_DUNGEON_WEAPON =
+            ATTACHMENTS.register("primary_dungeon_weapon", () -> AttachmentType.builder(ItemStack::empty)
+                    .serialize(ItemStack.CODEC)
+                    .copyOnDeath()
+                    .sync(ItemStack.STREAM_CODEC)
+                    .build());
+    public static final DeferredHolder<AttachmentType<?>, AttachmentType<ItemStack>> SECONDARY_DUNGEON_WEAPON =
+            ATTACHMENTS.register("secondary_dungeon_weapon", () -> AttachmentType.builder(ItemStack::empty)
+                    .serialize(ItemStack.CODEC)
+                    .copyOnDeath()
+                    .sync(ItemStack.STREAM_CODEC)
                     .build());
     public static final DeferredHolder<AttachmentType<?>, AttachmentType<Boolean>> ARCHIVE_LOADED =
             ATTACHMENTS.register("archive_loaded", () -> AttachmentType.builder(() -> false)

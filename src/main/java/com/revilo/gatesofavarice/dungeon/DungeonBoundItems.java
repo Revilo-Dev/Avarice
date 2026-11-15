@@ -73,7 +73,8 @@ public final class DungeonBoundItems {
                 || stack.getItem() instanceof DiggerItem
                 || stack.getItem() instanceof BowItem
                 || stack.getItem() instanceof CrossbowItem
-                || stack.getItem() instanceof TridentItem;
+                || stack.getItem() instanceof TridentItem
+                || DungeonGearRoller.isArsenalWeapon(stack);
     }
 
     public static void markDungeonLootRarity(ItemStack stack, String rarityId) {

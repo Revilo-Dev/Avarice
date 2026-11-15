@@ -27,7 +27,7 @@ public class BoosterPackItem extends Item {
     private final GatewayCardData.BoosterRarity boosterRarity;
 
     public BoosterPackItem(GatewayCardData.BoosterRarity boosterRarity, Properties properties) {
-        super(properties);
+        super(properties.stacksTo(99));
         this.boosterRarity = boosterRarity;
     }
 

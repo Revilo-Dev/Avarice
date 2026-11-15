@@ -9,7 +9,7 @@ import net.minecraft.world.item.TooltipFlag;
 
 public class GatewayCardItem extends Item {
     public GatewayCardItem(Properties properties) {
-        super(properties);
+        super(properties.stacksTo(99));
     }
 
     @Override

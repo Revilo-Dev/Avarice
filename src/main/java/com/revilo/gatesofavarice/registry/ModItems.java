@@ -12,6 +12,7 @@ import com.revilo.gatesofavarice.item.HeartFragmentItem;
 import com.revilo.gatesofavarice.item.GodlyKnowledgeItem;
 import com.revilo.gatesofavarice.item.GodsTomeOfKnowledgeItem;
 import com.revilo.gatesofavarice.item.LootMaterialItem;
+import com.revilo.gatesofavarice.item.LootPouchItem;
 import com.revilo.gatesofavarice.item.MagnetItem;
 import com.revilo.gatesofavarice.item.MythicCoinItem;
 import com.revilo.gatesofavarice.item.PaxelItem;
@@ -53,8 +54,10 @@ public final class ModItems {
 
     public static final DeferredHolder<Item, MythicCoinItem> MYTHIC_COIN = ITEMS.register("mythic_coin",
             () -> new MythicCoinItem(new Item.Properties().stacksTo(99)));
+    public static final DeferredHolder<Item, LootPouchItem> LOOT_POUCH = ITEMS.register("loot_pouch",
+            () -> new LootPouchItem(new Item.Properties().rarity(Rarity.UNCOMMON)));
     public static final DeferredHolder<Item, Item> USELESS_KNOWLEDGE_BOOK = ITEMS.register("useless_knowledge_book",
-            () -> new Item(new Item.Properties().stacksTo(16).rarity(Rarity.RARE)));
+            () -> new Item(new Item.Properties().stacksTo(99).rarity(Rarity.RARE)));
     public static final DeferredHolder<Item, GodlyKnowledgeItem> GODLY_KNOWLEDGE_BOOK = ITEMS.register("godly_knowledge_book",
             () -> new GodlyKnowledgeItem(new Item.Properties().stacksTo(1).rarity(Rarity.EPIC)));
     public static final DeferredHolder<Item, GodsTomeOfKnowledgeItem> GODS_TOME_OF_KNOWLEDGE = ITEMS.register("gods_tome_of_knowledge",

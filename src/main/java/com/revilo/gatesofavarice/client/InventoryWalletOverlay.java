@@ -3,6 +3,7 @@ package com.revilo.gatesofavarice.client;
 import com.revilo.gatesofavarice.currency.GoldCoinWallet;
 import com.revilo.gatesofavarice.currency.MythicCoinWallet;
 import com.revilo.gatesofavarice.dungeon.ModDimensions;
+import com.revilo.gatesofavarice.dungeon.DungeonWeaponEquipment;
 import com.revilo.gatesofavarice.network.OpenKnowledgeLibraryPayload;
 import com.revilo.gatesofavarice.registry.ModItems;
 import java.text.DecimalFormat;
@@ -54,6 +55,7 @@ public final class InventoryWalletOverlay {
 
         renderWallet(event.getGuiGraphics(), minecraft, layout, hovered, inDungeon);
         renderKnowledgeButton(event.getGuiGraphics(), layout, knowledgeButtonHovered);
+        if (inDungeon) renderWeaponSlots(event.getGuiGraphics(), minecraft, layout);
 
         if (hovered) {
             ItemStack coinStack = coinStack(inDungeon);
@@ -104,6 +106,20 @@ public final class InventoryWalletOverlay {
         if (KnowledgeLibraryClientState.hasUnread()) {
             graphics.blit(KNOWLEDGE_TOAST, x + 11, y - 2, 0, 0, 4, 11, 4, 11);
         }
+    }
+
+    private static void renderWeaponSlots(GuiGraphics graphics, Minecraft minecraft, WalletLayout layout) {
+        int x = layout.inventoryLeft() + 8;
+        int y = layout.inventoryTop() + 162;
+        renderWeaponSlot(graphics, minecraft, DungeonWeaponEquipment.primary(minecraft.player), x, y, "Primary");
+        renderWeaponSlot(graphics, minecraft, DungeonWeaponEquipment.secondary(minecraft.player), x + 20, y, "Secondary");
+    }
+
+    private static void renderWeaponSlot(GuiGraphics graphics, Minecraft minecraft, ItemStack stack, int x, int y, String label) {
+        graphics.fill(x, y, x + 18, y + 18, 0xCC1B1427);
+        graphics.fill(x + 1, y + 1, x + 17, y + 17, 0xFF5D3E80);
+        if (!stack.isEmpty()) graphics.renderItem(stack, x + 1, y + 1);
+        else graphics.drawString(minecraft.font, label.substring(0, 1), x + 6, y + 5, 0xFFD6B5FF, false);
     }
 
     private static boolean isKnowledgeButtonHovered(WalletLayout layout, double mouseX, double mouseY) {

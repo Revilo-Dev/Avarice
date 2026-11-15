@@ -27,7 +27,7 @@ public class StabilityPearlItem extends Item {
     private static final int HEALTH_PENALTY_TICKS = Integer.MAX_VALUE;
 
     public StabilityPearlItem(Properties properties) {
-        super(properties);
+        super(properties.stacksTo(99));
     }
 
     @Override

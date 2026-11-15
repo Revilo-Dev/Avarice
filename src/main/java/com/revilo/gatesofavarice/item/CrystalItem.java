@@ -26,7 +26,7 @@ public class CrystalItem extends Item {
     private final CrystalTier crystalTier;
 
     public CrystalItem(CrystalTier crystalTier, Properties properties) {
-        super(properties);
+        super(properties.stacksTo(99));
         this.crystalTier = crystalTier;
     }
 

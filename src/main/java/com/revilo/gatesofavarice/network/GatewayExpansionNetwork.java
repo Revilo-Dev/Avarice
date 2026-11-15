@@ -43,6 +43,11 @@ public final class GatewayExpansionNetwork {
         registrar.playToServer(OpenKnowledgeLibraryPayload.TYPE, OpenKnowledgeLibraryPayload.STREAM_CODEC, (payload, context) -> {
             if (context.player() instanceof ServerPlayer player) KnowledgeManager.openLibrary(player);
         });
+        registrar.playToServer(UseDungeonWeaponPayload.TYPE, UseDungeonWeaponPayload.STREAM_CODEC, (payload, context) -> {
+            if (context.player() instanceof ServerPlayer player) {
+                DungeonRunManager.useEquippedWeapon(player, payload.secondary(), payload.targetEntityId());
+            }
+        });
         registrar.playToServer(RedeemKnowledgeBookPayload.TYPE, RedeemKnowledgeBookPayload.STREAM_CODEC, (payload, context) -> {
             if (!(context.player() instanceof ServerPlayer player)) return;
             int slot = payload.inventorySlot();

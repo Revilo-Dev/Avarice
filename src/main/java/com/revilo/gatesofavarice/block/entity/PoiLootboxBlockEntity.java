@@ -84,6 +84,9 @@ public class PoiLootboxBlockEntity extends BlockEntity {
                 Containers.dropItemStack(level, pos.getX() + 0.5D, pos.getY() + 1.0D, pos.getZ() + 0.5D, reward);
             }
         }
+        if (level.random.nextFloat() < 0.20F) {
+            DungeonRunManager.spawnDungeonWeaponDrop(level, pos.getX() + 0.5D, pos.getY() + 1.1D, pos.getZ() + 0.5D, floor);
+        }
         spawnRarityParticles(level, pos, effectiveRarity);
     }
 

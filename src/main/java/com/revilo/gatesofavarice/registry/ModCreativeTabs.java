@@ -32,6 +32,7 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.TIER_5_CRYSTAL.get());
 
                         output.accept(ModItems.MYTHIC_COIN.get());
+                        output.accept(ModItems.LOOT_POUCH.get());
                         output.accept(ModItems.USELESS_KNOWLEDGE_BOOK.get());
                         output.accept(ModItems.GODLY_KNOWLEDGE_BOOK.get());
                         output.accept(ModItems.GODS_TOME_OF_KNOWLEDGE.get());

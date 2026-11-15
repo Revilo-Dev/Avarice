@@ -1254,6 +1254,7 @@ public final class DungeonRunManager {
             if (dungeon == null) continue;
             DungeonInstanceManager.keepInstanceAlive(run.instanceId, dungeon);
             for (ServerPlayer participant : run.liveParticipants()) {
+                maintainDungeonSaturation(participant);
                 hideAuraSkillAndAbilityBooks(participant);
                 removeBailStones(participant);
             }
@@ -2295,8 +2296,8 @@ public final class DungeonRunManager {
     }
 
     private static LoadoutOption buildLoadoutOptionFromDefinition(LoadoutModels.LoadoutDefinition definition, int avgLevel, RandomSource random) {
-        ItemStack primary = new ItemStack(pickLoadoutWeapon(random, avgLevel, definition.primaryWeaponKind()));
-        ItemStack secondary = new ItemStack(pickLoadoutWeapon(random, avgLevel, definition.secondaryWeaponKind()));
+        ItemStack primary = new ItemStack(pickLoadoutWeapon(random, 0, definition.primaryWeaponKind()));
+        ItemStack secondary = new ItemStack(pickLoadoutWeapon(random, 0, definition.secondaryWeaponKind()));
         ItemStack head = new ItemStack(LoadoutArmorRegistry.get(definition.armorSet().setId(), ArmorItem.Type.HELMET));
         ItemStack chest = new ItemStack(LoadoutArmorRegistry.get(definition.armorSet().setId(), ArmorItem.Type.CHESTPLATE));
         ItemStack legs = new ItemStack(LoadoutArmorRegistry.get(definition.armorSet().setId(), ArmorItem.Type.LEGGINGS));
@@ -2320,6 +2321,7 @@ public final class DungeonRunManager {
                 itemStack(ammoId),
                 isRanged(definition) ? BASE_AMMO_PER_WAVE + Math.max(0, avgLevel - 1) / 5 * 2 : 0,
                 definition.supplies().stream()
+                        .filter(spec -> isAllowedLoadoutSupply(spec.item()))
                         .map(spec -> new ItemStack(spec.item(), spec.minCount() + random.nextInt(Math.max(1, spec.maxCount() - spec.minCount() + 1))))
                         .toList(),
                 loadoutSpeedRating(definition),
@@ -2376,6 +2378,13 @@ public final class DungeonRunManager {
             }
         }
         return max;
+    }
+
+    private static boolean isAllowedLoadoutSupply(Item item) {
+        return item == Items.GOLDEN_APPLE
+                || item == Items.ENCHANTED_GOLDEN_APPLE
+                || item == ModItems.ARCANE_APPLE.get()
+                || item == ModItems.ENCHANTED_ARCANE_APPLE.get();
     }
 
     private static void applyBooster(RunState run, BoosterOption option) {
@@ -2477,8 +2486,8 @@ public final class DungeonRunManager {
         player.setItemSlot(EquipmentSlot.LEGS, legs);
         player.setItemSlot(EquipmentSlot.FEET, feet);
         resendArmorSlots(player);
-        addRoleAware(player, primary);
-        addRoleAware(player, secondary);
+        DungeonWeaponEquipment.equip(player, primary);
+        DungeonWeaponEquipment.equip(player, secondary);
         if (!equipUtility(player, utility)) {
             player.getInventory().add(utility);
         }
@@ -2519,18 +2528,16 @@ public final class DungeonRunManager {
 
     public static void grantPrimaryWeapon(ServerPlayer player, ItemStack stack) {
         DungeonBoundItems.markPrimaryWeapon(stack);
-        addRoleAware(player, stack);
+        DungeonWeaponEquipment.equip(player, stack);
     }
 
     private static void grantSecondaryWeapon(ServerPlayer player, ItemStack stack) {
         DungeonBoundItems.markSecondaryWeapon(stack);
-        addRoleAware(player, stack);
+        DungeonWeaponEquipment.equip(player, stack);
     }
 
     private static void addRoleAware(ServerPlayer player, ItemStack stack) {
-        if (!DungeonBoundItems.replaceRoleWeapon(player, stack) && !player.getInventory().add(stack)) {
-            player.drop(stack, false);
-        }
+        DungeonWeaponEquipment.equip(player, stack);
     }
 
     private static boolean equipUtility(ServerPlayer player, ItemStack stack) {
@@ -2700,10 +2707,17 @@ public final class DungeonRunManager {
     }
 
     private static Item pickWeightedWeapon(RandomSource random, int playerLevel) {
+        return pickWeightedWeaponForMaterial(random, rollWeaponMaterial(random, playerLevel));
+    }
+
+    private static Item pickWeightedWeaponForFloor(RandomSource random, int floor) {
+        return pickWeightedWeaponForMaterial(random, rollWeaponMaterialForFloor(random, floor));
+    }
+
+    private static Item pickWeightedWeaponForMaterial(RandomSource random, String material) {
         if (WEAPON_POOL.isEmpty()) {
             return Items.IRON_SWORD;
         }
-        String material = rollWeaponMaterial(random, playerLevel);
         ArrayList<WeightedItem> eligible = new ArrayList<>();
         for (WeightedItem entry : WEAPON_POOL) {
             ResourceLocation id = BuiltInRegistries.ITEM.getKey(entry.item());
@@ -2794,6 +2808,26 @@ public final class DungeonRunManager {
         if (level <= 60) return rollMaterialBand(random, level, 41, 60, "ignite", "iridium");
         if (level <= 80) return rollMaterialBand(random, level, 61, 80, "mythril", "arcanium");
         return "prismatic_steel";
+    }
+
+    private static String rollWeaponMaterialForFloor(RandomSource random, int floor) {
+        int level = Math.max(0, floor);
+        ArrayList<String> eligible = new ArrayList<>();
+        addFloorMaterial(eligible, level, 0, 15, "mana_steel");
+        addFloorMaterial(eligible, level, 10, 25, "elixrite");
+        addFloorMaterial(eligible, level, 20, 40, "astrite");
+        addFloorMaterial(eligible, level, 30, 55, "lunarium");
+        addFloorMaterial(eligible, level, 50, 70, "ignite");
+        addFloorMaterial(eligible, level, 60, 80, "iridium");
+        addFloorMaterial(eligible, level, 70, 90, "mythril");
+        addFloorMaterial(eligible, level, 75, 100, "arcanium");
+        addFloorMaterial(eligible, level, 90, 100, "prismatic_steel");
+        if (eligible.isEmpty()) return level > 100 ? "prismatic_steel" : "mana_steel";
+        return eligible.get(random.nextInt(eligible.size()));
+    }
+
+    private static void addFloorMaterial(List<String> eligible, int floor, int min, int max, String material) {
+        if (floor >= min && floor <= max) eligible.add(material);
     }
 
     private static String rollMaterialBand(RandomSource random, int level, int minLevel, int maxLevel,
@@ -2963,9 +2997,26 @@ public final class DungeonRunManager {
                 dead.spawnAtLocation(drop);
             }
         }
+        if (level.random.nextFloat() < 0.08F) {
+            spawnDungeonWeaponDrop(level, dead.getX(), dead.getY() + .35D, dead.getZ(), Math.max(1, run.waveNumber));
+        }
+        ResourceLocation ammo = run.ammoItems.getOrDefault(run.ownerId, NO_AMMO);
+        if (!ammo.equals(NO_AMMO) && level.random.nextFloat() < 0.16F) {
+            ItemStack arrows = itemStack(ammo);
+            arrows.setCount(4 + level.random.nextInt(5));
+            com.revilo.gatesofavarice.entity.DungeonDropEntity.spawnArrows(level, dead.getX(), dead.getY() + .25D, dead.getZ(), arrows);
+        }
         int baseCoinValue = 2 + wave * 2 + avgLevel / 8;
         int coinValue = (int) Math.round(baseCoinValue * (1.0D + Math.max(0.0D, run.coinBonusModifier)));
         MythicCoinOrbEntity.spawn((ServerLevel) dead.level(), dead.getX(), dead.getY() + 0.35D, dead.getZ(), Math.max(1, coinValue));
+    }
+
+    public static void spawnDungeonWeaponDrop(ServerLevel level, double x, double y, double z, int floor) {
+        ItemStack weapon = new ItemStack(pickWeightedWeaponForFloor(level.random, floor));
+        DungeonGearRoller.rollAndBind(weapon, level.random, Math.max(1, floor), 0L, level.registryAccess());
+        if (level.random.nextBoolean()) DungeonBoundItems.markPrimaryWeapon(weapon);
+        else DungeonBoundItems.markSecondaryWeapon(weapon);
+        com.revilo.gatesofavarice.entity.DungeonDropEntity.spawnWeapon(level, x, y, z, weapon);
     }
 
     private static ItemStack createDungeonDrop(Item item, int playerLevel, int wave, RandomSource random) {
@@ -3505,6 +3556,7 @@ public final class DungeonRunManager {
 
     private static void clearForDungeon(ServerPlayer player) {
         clearDungeonBeltMagnet(player);
+        DungeonWeaponEquipment.clear(player);
         player.getInventory().clearContent();
         hideAuraSkillAndAbilityBooks(player);
         player.inventoryMenu.broadcastChanges();
@@ -3611,6 +3663,29 @@ public final class DungeonRunManager {
         player.inventoryMenu.broadcastChanges();
     }
 
+    public static void addArrowBundle(ServerPlayer player, ItemStack arrows) {
+        RunState run = getRunForPlayer(player);
+        if (run == null || arrows.isEmpty()) return;
+        ResourceLocation ammo = BuiltInRegistries.ITEM.getKey(arrows.getItem());
+        if (!ammo.equals(run.ammoItems.getOrDefault(player.getUUID(), NO_AMMO))) return;
+        run.ammoRemaining.merge(player.getUUID(), arrows.getCount(), Integer::sum);
+        markStateDirty();
+        syncHud(run, run.phase == RunPhase.IN_WAVE);
+    }
+
+    public static void useEquippedWeapon(ServerPlayer player, boolean secondary, int targetEntityId) {
+        if (getRunForPlayer(player) == null) return;
+        Entity target = player.level().getEntity(targetEntityId);
+        if (!(target instanceof LivingEntity) || target == player || player.distanceToSqr(target) > 36.0D) return;
+        ItemStack weapon = DungeonWeaponEquipment.forRole(player, secondary ? DungeonBoundItems.SECONDARY_WEAPON_ROLE : DungeonBoundItems.PRIMARY_WEAPON_ROLE);
+        if (weapon.isEmpty()) return;
+        ItemStack held = player.getMainHandItem().copy();
+        player.setItemSlot(EquipmentSlot.MAINHAND, weapon.copy());
+        player.attack(target);
+        player.setItemSlot(EquipmentSlot.MAINHAND, held);
+        player.inventoryMenu.broadcastChanges();
+    }
+
     private static int countAmmo(ServerPlayer player, ResourceLocation ammoId) {
         if (ammoId.equals(NO_AMMO)) return 0;
         RunState run = getRunForPlayer(player);
@@ -3657,6 +3732,10 @@ public final class DungeonRunManager {
 
     private static void restoreDungeonEntryVitals(ServerPlayer player) {
         player.setHealth(player.getMaxHealth());
+        maintainDungeonSaturation(player);
+    }
+
+    private static void maintainDungeonSaturation(ServerPlayer player) {
         player.getFoodData().setFoodLevel(20);
         player.getFoodData().setSaturation(20.0F);
         player.getFoodData().setExhaustion(0.0F);
@@ -3860,6 +3939,7 @@ public final class DungeonRunManager {
 
     private static void restorePlayerSnapshot(ServerPlayer player, PlayerSnapshot snapshot, boolean returnToSavedLocation) {
         clearDungeonBeltMagnet(player);
+        DungeonWeaponEquipment.clear(player);
         MythicCoinWallet.set(player, 0);
         setBoundlessQuestBookHidden(false);
         restoreSnapshot(player, snapshot);

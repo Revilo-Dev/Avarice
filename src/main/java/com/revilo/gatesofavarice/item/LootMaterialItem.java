@@ -13,7 +13,7 @@ public class LootMaterialItem extends Item implements RarityTintedItemName {
     private final LootRarity rarity;
 
     public LootMaterialItem(LootRarity rarity, Properties properties) {
-        super(properties);
+        super(properties.stacksTo(99));
         this.rarity = rarity;
     }
 

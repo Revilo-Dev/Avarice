@@ -4,12 +4,14 @@ import com.revilo.gatesofavarice.client.model.GatekeeperModel;
 import com.revilo.gatesofavarice.client.render.GatekeeperRenderer;
 import com.revilo.gatesofavarice.client.render.GatewayCrystalRenderer;
 import com.revilo.gatesofavarice.client.render.MythicCoinOrbRenderer;
+import com.revilo.gatesofavarice.client.render.DungeonDropRenderer;
 import com.revilo.gatesofavarice.client.render.GatewayWorkbenchBlockEntityRenderer;
 import com.revilo.gatesofavarice.client.screen.DungeonWaveScreen;
 import com.revilo.gatesofavarice.client.screen.DungeonLoadoutScreen;
 import com.revilo.gatesofavarice.client.screen.ShopkeeperScreen;
 import com.revilo.gatesofavarice.client.screen.GatewayWorkbenchScreen;
 import com.revilo.gatesofavarice.client.screen.SacrificialAltarScreen;
+import com.revilo.gatesofavarice.client.screen.LootPouchScreen;
 import com.revilo.gatesofavarice.registry.ModBlockEntities;
 import com.revilo.gatesofavarice.registry.ModEntities;
 import com.revilo.gatesofavarice.registry.ModMenus;
@@ -35,6 +37,7 @@ public final class GatewayExpansionClient {
             modEventBus.addListener(DungeonMythicCoinHudOverlay::registerGuiLayer);
             NeoForge.EVENT_BUS.register(DungeonWaveHudOverlay.class);
             NeoForge.EVENT_BUS.register(InventoryWalletOverlay.class);
+            NeoForge.EVENT_BUS.register(DungeonWeaponInputHandler.class);
             NeoForge.EVENT_BUS.addListener(MagnetKeybindHandler::onClientTick);
         }
     }
@@ -58,6 +61,7 @@ public final class GatewayExpansionClient {
             event.register(ModMenus.DUNGEON_WAVE.get(), DungeonWaveScreen::new);
             event.register(ModMenus.DUNGEON_LOADOUT.get(), DungeonLoadoutScreen::new);
             event.register(ModMenus.SACRIFICIAL_ALTAR.get(), SacrificialAltarScreen::new);
+            event.register(ModMenus.LOOT_POUCH.get(), LootPouchScreen::new);
         }
 
         @SubscribeEvent
@@ -66,6 +70,7 @@ public final class GatewayExpansionClient {
             event.registerEntityRenderer(ModEntities.GATEKEEPER.get(), GatekeeperRenderer::new);
             event.registerEntityRenderer(ModEntities.GATEWAY_CRYSTAL.get(), GatewayCrystalRenderer::new);
             event.registerEntityRenderer(ModEntities.MYTHIC_COIN_ORB.get(), MythicCoinOrbRenderer::new);
+            event.registerEntityRenderer(ModEntities.DUNGEON_DROP.get(), DungeonDropRenderer::new);
         }
 
         @SubscribeEvent
