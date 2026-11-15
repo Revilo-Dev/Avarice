@@ -1,26 +1,44 @@
 # eclipse
-bin
+/bin/
 *.launch
-.settings
-.metadata
+/.settings/
+/.metadata/
 .classpath
 .project
 
 # idea
-out
+/out/
 *.ipr
 *.iws
 *.iml
-.idea
+/.idea/
 
 # gradle
-build
-.gradle
+/build/
+/.gradle/
+/gradlew
+/gradlew.bat
+/settings.gradle
 
-# other
-eclipse
-run
-runs
-run-data
+# wiki
+/wiki/
 
-repo
+# runtime
+/run/
+/runs/
+/run-data/
+/logs/
+/crash-reports/
+*.log
+hs_err_pid*
+replay_pid*
+
+# local sources
+/.tmpneoforge/
+/.tmpneoforge2/
+/.tmpneoforge3/
+/repo/
+
+# os
+.DS_Store
+Thumbs.db
