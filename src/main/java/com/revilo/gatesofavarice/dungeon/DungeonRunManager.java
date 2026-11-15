@@ -7,7 +7,6 @@ import com.revilo.gatesofavarice.dungeon.DungeonUpgradeManager;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutModels.UpgradeCategory;
 import com.revilo.gatesofavarice.dungeon.loadout.LoadoutPresetRegistry;
-import com.revilo.gatesofavarice.dungeon.loadout.LoadoutProgression;
 import com.revilo.gatesofavarice.dungeon.loadout.AuraAttributeSupport;
 import com.revilo.gatesofavarice.dungeon.loadout.RunicLoadoutService;
 import com.revilo.gatesofavarice.party.PartyManager;
@@ -94,6 +93,8 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.SeededContainerLoot;
 import net.minecraft.world.level.Level;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.LootTable;
 import net.minecraft.world.item.enchantment.Enchantments;
@@ -111,6 +112,7 @@ import net.neoforged.neoforge.event.entity.player.ArrowLooseEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
+import net.neoforged.neoforge.event.level.ExplosionEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.attachment.AttachmentSync;
@@ -304,11 +306,8 @@ public final class DungeonRunManager {
         DungeonInstanceManager.teleportToDungeonInstance(player, run.instanceId);
         restoreDungeonEntryVitals(player);
         applyDungeonMapRestrictions(player);
-        if (player.getUUID().equals(ownerId) && (run.phase == RunPhase.SELECTING_DIFFICULTY
-                || run.phase == RunPhase.SELECTING_BOOSTER)) {
-            if (run.phase == RunPhase.SELECTING_BOOSTER) {
-                rollBoosterOptions(run, player.serverLevel().random);
-            }
+        if (player.getUUID().equals(ownerId) && run.phase == RunPhase.SELECTING_BOOSTER) {
+            rollBoosterOptions(run, player.serverLevel().random);
             openWaveMenu(player, run);
         }
         markStateDirty();
@@ -412,18 +411,6 @@ public final class DungeonRunManager {
         if (run == null || (run.phase != RunPhase.CHECKPOINT && run.phase != RunPhase.SHOP) || !run.participants.contains(player.getUUID()) || !isRunAdvancePortal(run, portal)) return;
         portal.discard();
         run.advancePortalId = -1;
-        if (run.wavesCompletedOnFloor < Math.max(1, run.waveNumber)) {
-            ServerLevel dungeon = getDungeonLevel(run);
-            if (dungeon != null) {
-                for (ServerPlayer participant : run.liveParticipants()) {
-                    DungeonInstanceManager.teleportToDungeonInstance(participant, run.instanceId);
-                }
-            }
-            startWave(run);
-            markStateDirty();
-            forceCriticalSave(player.server);
-            return;
-        }
         ServerLevel dungeon = getDungeonLevel(run);
         if (dungeon != null) {
             DungeonInstanceManager.reloadDungeonFloor(dungeon, run.instanceId, run.waveNumber + 1, run.quantityBonusModifier);
@@ -483,23 +470,8 @@ public final class DungeonRunManager {
         if (!(player instanceof ServerPlayer serverPlayer)) return false;
         RunState run = RUNS_BY_OWNER.get(ownerId);
         if (run == null || !run.participants.contains(serverPlayer.getUUID())) return false;
-        if (run.phase != RunPhase.SELECTING_DIFFICULTY
-                && run.phase != RunPhase.SELECTING_BOOSTER
+        if (run.phase != RunPhase.SELECTING_BOOSTER
                 && run.phase != RunPhase.SELECTING_LOOT) return false;
-
-        if (run.phase == RunPhase.SELECTING_DIFFICULTY) {
-            if (!serverPlayer.getUUID().equals(run.ownerId)
-                    || buttonId < 0 || buttonId >= DungeonDifficulty.values().length) {
-                return false;
-            }
-            run.difficulty = DungeonDifficulty.values()[buttonId];
-            run.phase = RunPhase.SELECTING_BOOSTER;
-            rollBoosterOptions(run, serverPlayer.serverLevel().random);
-            openWaveMenu(serverPlayer, run);
-            markStateDirty();
-            forceCriticalSave(serverPlayer.server);
-            return true;
-        }
 
         if (run.phase == RunPhase.SELECTING_BOOSTER) {
             // Booster selection remains a leader decision; loadouts are selected individually below.
@@ -508,8 +480,23 @@ public final class DungeonRunManager {
                 // Escaping is intentionally handled only by the Bail Stone so it can be held to confirm.
                 return false;
             }
+            int discardIndex = buttonId - DungeonWaveMenu.DISCARD_DECK_CARD_BUTTON_BASE;
+            if (discardIndex >= 0 && discardIndex < run.deckCardCounts.length) {
+                if (run.deckCardCounts[discardIndex] <= 0) return false;
+                run.deckCardCounts[discardIndex]--;
+                rebuildDeckModifiers(run);
+                openWaveMenu(serverPlayer, run);
+                markStateDirty();
+                forceCriticalSave(serverPlayer.server);
+                return true;
+            }
             if (buttonId < 0 || buttonId >= run.boosterOptions.size()) return false;
             BoosterOption selectedBooster = run.boosterOptions.get(buttonId);
+            if (deckCardCount(run) + boosterCardCount(selectedBooster) > deckCapacity(run)) {
+                serverPlayer.displayClientMessage(Component.literal("Deck capacity reached (" + deckCapacity(run) + "). Discard cards before choosing this booster.")
+                        .withStyle(ChatFormatting.RED), true);
+                return false;
+            }
             if (!MythicCoinWallet.spend(serverPlayer, selectedBooster.cost)) return false;
             applyBooster(run, selectedBooster);
             if (run.waveNumber == 0 && !run.dungeonLoadouts.containsKey(serverPlayer.getUUID())) {
@@ -764,6 +751,7 @@ public final class DungeonRunManager {
             case COIN_PILE -> run.coinPilesLooted++;
             case KNOWLEDGE_BOOK -> run.knowledgeBooksObtained++;
         }
+        syncHud(run, run.phase == RunPhase.IN_WAVE);
         markStateDirty();
     }
 
@@ -1205,8 +1193,7 @@ public final class DungeonRunManager {
         if (run == null || !player.getUUID().equals(run.ownerId) || !isRunShopkeeperInteraction(run, shopkeeperEntityId)) {
             return false;
         }
-        if (run.phase != RunPhase.SELECTING_DIFFICULTY
-                && run.phase != RunPhase.SELECTING_BOOSTER
+        if (run.phase != RunPhase.SELECTING_BOOSTER
                 && run.phase != RunPhase.SELECTING_LOOT) {
             return false;
         }
@@ -1254,6 +1241,7 @@ public final class DungeonRunManager {
             if (dungeon == null) continue;
             DungeonInstanceManager.keepInstanceAlive(run.instanceId, dungeon);
             for (ServerPlayer participant : run.liveParticipants()) {
+                DungeonWeaponEquipment.enforceHotbarSlots(participant);
                 maintainDungeonSaturation(participant);
                 hideAuraSkillAndAbilityBooks(participant);
                 removeBailStones(participant);
@@ -1281,12 +1269,6 @@ public final class DungeonRunManager {
             } else if (run.phase == RunPhase.IN_WAVE) {
                 if (!run.hasOnlineParticipant()) {
                     continue;
-                }
-                if (dungeon.getGameTime() % 20L == 0L) {
-                    for (ServerPlayer participant : run.liveParticipants()) {
-                        String loadoutId = run.activeLoadouts.get(participant.getUUID());
-                        if (loadoutId != null) LoadoutProgression.addPlayTime(participant, loadoutId, 20L);
-                    }
                 }
                 if (run.currentWavePools.isEmpty()) {
                     run.currentWavePools = buildWavePools(run);
@@ -1366,6 +1348,14 @@ public final class DungeonRunManager {
         }
 
         RunState targetRun = getRunForPlayer(target);
+        if (targetRun != null) {
+            double autoBlockChance = DungeonBoundItems.getAutoBlockChance(target.getOffhandItem());
+            if (autoBlockChance > 0.0D && target.getRandom().nextDouble() < autoBlockChance) {
+                event.setCanceled(true);
+                target.level().playSound(null, target.blockPosition(), SoundEvents.SHIELD_BLOCK, SoundSource.PLAYERS, 0.8F, 1.0F);
+                return;
+            }
+        }
         if (targetRun != null && targetRun.difficulty == DungeonDifficulty.EASY) {
             event.setAmount(event.getAmount() * 0.75F);
         }
@@ -1450,11 +1440,8 @@ public final class DungeonRunManager {
         if (run == null) return;
         trackDungeonKillProgress(run, dead);
         run.mobsKilled++;
-        if (event.getSource().getEntity() instanceof ServerPlayer killer) {
-            String loadoutId = run.activeLoadouts.get(killer.getUUID());
-            if (loadoutId != null) LoadoutProgression.addKill(killer, loadoutId);
-        }
         run.aliveMobs.remove(dead.getUUID());
+        syncHud(run, run.phase == RunPhase.IN_WAVE);
         markStateDirty();
         if (dead.level() instanceof ServerLevel level) spawnDungeonMobDrops(level, dead, run);
     }
@@ -1484,6 +1471,19 @@ public final class DungeonRunManager {
             return;
         }
         ItemStack stack = event.getItemEntity().getItem();
+        if (DungeonBoundItems.isWeapon(stack)) {
+            event.setCanPickup(net.neoforged.neoforge.common.util.TriState.FALSE);
+            if (event.getItemEntity().level() instanceof ServerLevel level) {
+                ItemStack weapon = stack.copy();
+                if (DungeonBoundItems.getWeaponRole(weapon).isBlank()) {
+                    DungeonBoundItems.markPrimaryWeapon(weapon);
+                }
+                com.revilo.gatesofavarice.entity.DungeonDropEntity.spawnWeapon(level,
+                        event.getItemEntity().getX(), event.getItemEntity().getY(), event.getItemEntity().getZ(), weapon);
+                event.getItemEntity().discard();
+            }
+            return;
+        }
         if (stack.isEmpty() || stack.is(ModItems.MYTHIC_COIN.get())) {
             return;
         }
@@ -1521,6 +1521,16 @@ public final class DungeonRunManager {
     }
 
     @SubscribeEvent
+    public static void onDungeonCreeperExplosion(ExplosionEvent.Detonate event) {
+        if (!(event.getLevel() instanceof ServerLevel level) || level.dimension() != ModDimensions.DUNGEON_LEVEL) {
+            return;
+        }
+        if (event.getExplosion().getDirectSourceEntity() instanceof Creeper) {
+            event.getAffectedBlocks().clear();
+        }
+    }
+
+    @SubscribeEvent
     public static void onGetDungeonProjectile(LivingGetProjectileEvent event) {
         if (!(event.getEntity() instanceof Player player) || !isRangedWeapon(event.getProjectileWeaponItemStack())) return;
         ResourceLocation ammoId;
@@ -1534,7 +1544,17 @@ public final class DungeonRunManager {
             ammoId = DungeonHudState.ammoItem();
             remaining = DungeonHudState.ammoCount();
         }
-        event.setProjectileItemStack(remaining > 0 ? itemStack(ammoId).copy() : ItemStack.EMPTY);
+        if (remaining <= 0) {
+            event.setProjectileItemStack(ItemStack.EMPTY);
+            return;
+        }
+        ItemStack projectile = itemStack(ammoId).copy();
+        if (event.getProjectileWeaponItemStack().getItem() instanceof net.minecraft.world.item.CrossbowItem
+                && !(projectile.getItem() instanceof net.minecraft.world.item.ArrowItem)
+                && !projectile.is(Items.FIREWORK_ROCKET)) {
+            projectile = new ItemStack(Items.ARROW);
+        }
+        event.setProjectileItemStack(projectile);
     }
 
     @SubscribeEvent
@@ -1605,8 +1625,7 @@ public final class DungeonRunManager {
             DungeonInstanceManager.teleportToDungeonInstance(player, run.instanceId);
         }
         syncHudToPlayer(player, run.phase == RunPhase.IN_WAVE, run.waveNumber, Math.max(0, run.toSpawn + run.aliveMobs.size()), Math.max(1, run.waveTotalMobs));
-        if (player.getUUID().equals(run.ownerId) && (run.phase == RunPhase.SELECTING_DIFFICULTY
-                || run.phase == RunPhase.SELECTING_BOOSTER || run.phase == RunPhase.SELECTING_LOOT)) {
+        if (player.getUUID().equals(run.ownerId) && (run.phase == RunPhase.SELECTING_BOOSTER || run.phase == RunPhase.SELECTING_LOOT)) {
             openWaveMenu(player, run);
         } else if (run.phase == RunPhase.SHOP) {
             ServerLevel dungeon = getDungeonLevel(run);
@@ -1688,7 +1707,7 @@ public final class DungeonRunManager {
     private static void startWave(RunState run) {
         discardRunShopkeeper(run);
         discardAdvancePortal(run);
-        if (run.waveNumber == 0 || run.wavesCompletedOnFloor >= run.waveNumber) {
+        if (run.waveNumber == 0 || run.wavesCompletedOnFloor > 0) {
             run.waveNumber++;
             run.wavesCompletedOnFloor = 0;
         }
@@ -1703,8 +1722,9 @@ public final class DungeonRunManager {
         int extraPlayers = Math.max(0, run.liveParticipants().size() - 1);
         int avgLevel = averageParticipantLevel(run);
         double progressionDifficulty = ProgressionSystem.dungeonDifficultyScalar(avgLevel, Math.max(1, run.waveNumber));
-        int baseCount = 30 + waveStrength(run) * 2 + extraPlayers * 8;
-        run.toSpawn = Math.max(4, (int) Math.round(baseCount * run.enemyCountMultiplier * progressionDifficulty));
+        double baseCount = 50.0D * Math.pow(1.18D, Math.max(0, run.waveNumber - 1));
+        double partyMultiplier = 1.0D + extraPlayers * 0.15D;
+        run.toSpawn = Math.max(50, (int) Math.round(baseCount * partyMultiplier * run.enemyCountMultiplier * progressionDifficulty));
         run.waveTotalMobs = run.toSpawn;
         run.currentWavePools = buildWavePools(run);
         for (ServerPlayer player : run.liveParticipants()) replenishWaveAmmo(player, run);
@@ -1786,9 +1806,8 @@ public final class DungeonRunManager {
         run.phase = RunPhase.SHOP;
         spawnShopPortal(run, level);
         for (ServerPlayer player : run.liveParticipants()) {
-            player.displayClientMessage(Component.literal(run.wavesCompletedOnFloor < wave
-                    ? "Wave cleared. The shop gateway is open; continue when ready."
-                    : "Floor cleared. The shop gateway is open.").withStyle(ChatFormatting.GOLD), true);
+            player.displayClientMessage(Component.literal("Floor cleared. The shop gateway is open.")
+                    .withStyle(ChatFormatting.GOLD), true);
         }
         syncHud(run, false);
         markStateDirty();
@@ -1935,8 +1954,6 @@ public final class DungeonRunManager {
         int before = getEffectivePlayerLevel(player);
         if (!LevelUpIntegration.awardXp(player, amount, source)) player.giveExperiencePoints(amount);
         run.experienceEarned += amount;
-        String loadoutId = run.activeLoadouts.get(player.getUUID());
-        if (loadoutId != null) LoadoutProgression.addXp(player, loadoutId, amount);
         applyLevelBasedLoadoutGrowth(player, before);
         markStateDirty();
         return true;
@@ -2186,8 +2203,6 @@ public final class DungeonRunManager {
             creeper.saveWithoutId(creeperData);
             creeperData.putShort("Fuse", (short) 60);
             creeper.load(creeperData);
-            creeper.setCustomName(Component.literal("Unstable Creeper").withStyle(ChatFormatting.GREEN));
-            creeper.setCustomNameVisible(true);
         }
         if (mob instanceof Mob aiMob && aiMob.getAttribute(Attributes.FOLLOW_RANGE) != null) {
             aiMob.getAttribute(Attributes.FOLLOW_RANGE).setBaseValue(Math.max(96.0D, aiMob.getAttributeValue(Attributes.FOLLOW_RANGE)));
@@ -2392,9 +2407,36 @@ public final class DungeonRunManager {
         for (int index = 0; index < cardTypes.length; index++) {
             int count = index < option.pulledCardCounts.length ? Math.max(0, option.pulledCardCounts[index]) : 0;
             if (count <= 0) continue;
-            DungeonDeck.CardType cardType = cardTypes[index];
             run.deckCardCounts[index] += count;
-            double amount = cardType.effectPercent() * count / 100.0D;
+        }
+        rebuildDeckModifiers(run);
+        syncHud(run, run.phase == RunPhase.IN_WAVE);
+    }
+
+    private static int deckCapacity(RunState run) {
+        return 12 + Math.max(0, averageParticipantLevel(run) / 2);
+    }
+
+    private static int deckCardCount(RunState run) {
+        return Arrays.stream(run.deckCardCounts).map(count -> Math.max(0, count)).sum();
+    }
+
+    private static int boosterCardCount(BoosterOption option) {
+        return Arrays.stream(option.pulledCardCounts).map(count -> Math.max(0, count)).sum();
+    }
+
+    private static void rebuildDeckModifiers(RunState run) {
+        run.enemyCountMultiplier = 1.0D;
+        run.healthMultiplier = 1.0D;
+        run.damageMultiplier = 1.0D;
+        run.speedMultiplier = 1.0D;
+        run.mobLeechPercent = 0.0D;
+        run.coinBonusModifier = 0.0D;
+        run.quantityBonusModifier = 0.0D;
+        run.rarityBonusModifier = 0.0D;
+        run.levelMultiplier = 1.0D;
+        for (DungeonDeck.CardType cardType : DungeonDeck.CardType.values()) {
+            double amount = cardType.effectPercent() * run.deckCardCounts[cardType.ordinal()] / 100.0D;
             switch (cardType) {
                 case ENEMY_HEALTH -> run.healthMultiplier += amount;
                 case ENEMY_DAMAGE -> run.damageMultiplier += amount;
@@ -2407,7 +2449,6 @@ public final class DungeonRunManager {
                 case XP -> run.levelMultiplier += amount;
             }
         }
-        run.totalDifficultySelected += option.difficulty;
     }
 
     private static void grantLoot(ServerPlayer player, RunState run, LootOption option, RandomSource random) {}
@@ -2500,7 +2541,6 @@ public final class DungeonRunManager {
         RunState run = getRunForPlayer(player);
         if (run != null) {
             run.activeLoadouts.put(player.getUUID(), loadout.loadoutId());
-            LoadoutProgression.recordPlay(player, loadout.loadoutId());
         }
         if (run != null && !loadout.ammo().isEmpty()) {
             run.ammoItems.put(player.getUUID(), BuiltInRegistries.ITEM.getKey(loadout.ammo().getItem()));
@@ -2542,6 +2582,8 @@ public final class DungeonRunManager {
 
     private static boolean equipUtility(ServerPlayer player, ItemStack stack) {
         if (stack.is(Items.SHIELD)) {
+            DungeonGearRoller.rollAndBind(stack, player.getRandom(), getEffectivePlayerLevel(player), 0L, player.registryAccess());
+            DungeonBoundItems.setAutoBlockChance(stack, DungeonBoundItems.BASE_AUTO_BLOCK_CHANCE);
             player.setItemSlot(EquipmentSlot.OFFHAND, stack);
             return true;
         }
@@ -2891,8 +2933,8 @@ public final class DungeonRunManager {
     }
 
     private static void equipVanguard(ServerPlayer player) {
-        player.getInventory().add(new ItemStack(Items.IRON_SWORD));
-        player.setItemSlot(EquipmentSlot.OFFHAND, new ItemStack(Items.SHIELD));
+        equipWeaponSlots(player, new ItemStack(Items.IRON_SWORD), new ItemStack(Items.IRON_AXE));
+        equipUtility(player, new ItemStack(Items.SHIELD));
         equipArmorSet(player, Items.IRON_HELMET, Items.IRON_CHESTPLATE, Items.IRON_LEGGINGS, Items.IRON_BOOTS);
     }
 
@@ -2900,14 +2942,12 @@ public final class DungeonRunManager {
         ItemStack bow = new ItemStack(Items.BOW);
         bow.enchant(player.registryAccess().holderOrThrow(Enchantments.POWER), 1);
         applyRangedLoadoutEnchantments(player, bow, null);
-        player.getInventory().add(bow);
-        player.getInventory().add(new ItemStack(Items.STONE_SWORD));
+        equipWeaponSlots(player, bow, new ItemStack(Items.STONE_SWORD));
         equipArmorSet(player, Items.CHAINMAIL_HELMET, Items.CHAINMAIL_CHESTPLATE, Items.CHAINMAIL_LEGGINGS, Items.CHAINMAIL_BOOTS);
     }
 
     private static void equipSpellblade(ServerPlayer player) {
-        player.getInventory().add(new ItemStack(Items.TRIDENT));
-        player.getInventory().add(new ItemStack(Items.IRON_AXE));
+        equipWeaponSlots(player, new ItemStack(Items.TRIDENT), new ItemStack(Items.IRON_AXE));
         equipArmorSet(player, Items.GOLDEN_HELMET, Items.GOLDEN_CHESTPLATE, Items.GOLDEN_LEGGINGS, Items.GOLDEN_BOOTS);
     }
 
@@ -2945,6 +2985,15 @@ public final class DungeonRunManager {
             }
         }
         run.aliveMobs.clear();
+    }
+
+    private static void equipWeaponSlots(ServerPlayer player, ItemStack primary, ItemStack secondary) {
+        DungeonGearRoller.rollAndBind(primary, player.getRandom(), getEffectivePlayerLevel(player), 0L, player.registryAccess());
+        DungeonGearRoller.rollAndBind(secondary, player.getRandom(), getEffectivePlayerLevel(player), 0L, player.registryAccess());
+        DungeonBoundItems.markPrimaryWeapon(primary);
+        DungeonBoundItems.markSecondaryWeapon(secondary);
+        DungeonWeaponEquipment.equip(player, primary);
+        DungeonWeaponEquipment.equip(player, secondary);
     }
 
     /** Removes wave mobs left by a completed or otherwise lost run before a fresh run begins. */
@@ -3267,6 +3316,10 @@ public final class DungeonRunManager {
     private static void openWaveMenu(ServerPlayer owner, RunState run) {
         List<DungeonWaveMenu.WaveOptionView> views;
         if (run.phase == RunPhase.SELECTING_DIFFICULTY) {
+            run.phase = RunPhase.SELECTING_BOOSTER;
+            rollBoosterOptions(run, owner.serverLevel().random);
+        }
+        if (run.phase == RunPhase.SELECTING_DIFFICULTY) {
             views = Arrays.stream(DungeonDifficulty.values()).map(difficulty -> new DungeonWaveMenu.WaveOptionView(
                     Component.literal(difficulty.displayName),
                     Component.literal(difficulty.description),
@@ -3310,8 +3363,7 @@ public final class DungeonRunManager {
         } else if (run.selectingLoadout) {
             ArrayList<DungeonWaveMenu.WaveOptionView> loadoutViews = new ArrayList<>();
             for (LoadoutOption option : run.loadoutOptions) {
-                LoadoutProgression.Stats stats = LoadoutProgression.get(owner, option.loadoutId());
-                loadoutViews.add(new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, 0, option.primary().copy(), option.secondary().copy(), option.head().copy(), option.chest().copy(), option.legs().copy(), option.feet().copy(), option.ammo().copy(), option.ammoCount(), option.speedRating(), option.damageRating(), option.defenceRating(), option.attackSpeedRating(), 0, stats.level(), stats.xp(), stats.plays(), stats.kills(), stats.playTimeTicks(), List.of()));
+                loadoutViews.add(new DungeonWaveMenu.WaveOptionView(option.title, option.details, 100, 100, 0, option.primary().copy(), option.secondary().copy(), option.head().copy(), option.chest().copy(), option.legs().copy(), option.feet().copy(), option.ammo().copy(), option.ammoCount(), option.speedRating(), option.damageRating(), option.defenceRating(), option.attackSpeedRating(), 0, 0, 0L, 0, 0, 0L, List.of()));
             }
             loadoutViews.add(new DungeonWaveMenu.WaveOptionView(
                     Component.literal("Random"),
@@ -3459,12 +3511,16 @@ public final class DungeonRunManager {
         boolean gatewayOpen = run != null && (run.phase == RunPhase.CHECKPOINT || (run.phase == RunPhase.SHOP && run.advancePortalId >= 0));
         int countdownTicks = run != null && run.phase == RunPhase.INTERMISSION ? Math.max(0, run.intermissionTicks) : 0;
         boolean displayActive = active || upgradePhase || gatewayOpen || countdownTicks > 0;
-        int displayRemaining = upgradePhase ? 1 : remaining;
-        int displayTotal = upgradePhase ? 1 : total;
+        int displayRemaining = corruption(run);
+        int displayTotal = 100;
         int waveInFloor = run == null ? 0 : Math.max(1, run.wavesCompletedOnFloor + 1);
         PartyManager.PartyHudData party = PartyManager.hudData(recipient);
         ResourceLocation ammo = run.ammoItems.getOrDefault(recipient.getUUID(), NO_AMMO);
         return new DungeonWaveHudPayload(displayActive, true, upgradePhase, gatewayOpen, wave, waveInFloor, displayRemaining, displayTotal, countdownTicks, elapsedRunTicks(run), run.mobsKilled, ammo, countAmmo(recipient, ammo), deckSnapshot(run), party.name(), party.members());
+    }
+
+    private static int corruption(RunState run) {
+        return Mth.clamp(run.mobsKilled + run.lootboxesLooted * 10 + deckCardCount(run) * 3, 0, 100);
     }
 
     private static long elapsedRunTicks(RunState run) {
@@ -3671,19 +3727,6 @@ public final class DungeonRunManager {
         run.ammoRemaining.merge(player.getUUID(), arrows.getCount(), Integer::sum);
         markStateDirty();
         syncHud(run, run.phase == RunPhase.IN_WAVE);
-    }
-
-    public static void useEquippedWeapon(ServerPlayer player, boolean secondary, int targetEntityId) {
-        if (getRunForPlayer(player) == null) return;
-        Entity target = player.level().getEntity(targetEntityId);
-        if (!(target instanceof LivingEntity) || target == player || player.distanceToSqr(target) > 36.0D) return;
-        ItemStack weapon = DungeonWeaponEquipment.forRole(player, secondary ? DungeonBoundItems.SECONDARY_WEAPON_ROLE : DungeonBoundItems.PRIMARY_WEAPON_ROLE);
-        if (weapon.isEmpty()) return;
-        ItemStack held = player.getMainHandItem().copy();
-        player.setItemSlot(EquipmentSlot.MAINHAND, weapon.copy());
-        player.attack(target);
-        player.setItemSlot(EquipmentSlot.MAINHAND, held);
-        player.inventoryMenu.broadcastChanges();
     }
 
     private static int countAmmo(ServerPlayer player, ResourceLocation ammoId) {
@@ -4372,7 +4415,7 @@ public final class DungeonRunManager {
     }
 
     private static RunPhase parseRunPhase(String name) {
-        if ("SELECTING_TAROT".equals(name)) {
+        if ("SELECTING_TAROT".equals(name) || "SELECTING_DIFFICULTY".equals(name)) {
             return RunPhase.SELECTING_BOOSTER;
         }
         try {
@@ -4509,7 +4552,7 @@ public final class DungeonRunManager {
         private final Map<UUID, PlayerSnapshot> dungeonLoadouts = new HashMap<>();
         private final Map<UUID, String> activeLoadouts = new HashMap<>();
         private final Set<UUID> floorIntroShown = new HashSet<>();
-        private RunPhase phase = RunPhase.SELECTING_DIFFICULTY;
+        private RunPhase phase = RunPhase.SELECTING_BOOSTER;
         private DungeonDifficulty difficulty = DungeonDifficulty.NORMAL;
         private int waveNumber = 0;
         private int wavesCompletedOnFloor = 0;

@@ -8,6 +8,7 @@ import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.BowItem;
 import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.ShieldItem;
 import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.item.TridentItem;
 import net.minecraft.world.item.component.ItemLore;
@@ -46,6 +47,7 @@ public final class DungeonGearRoller {
                 || stack.getItem() instanceof BowItem
                 || stack.getItem() instanceof CrossbowItem
                 || stack.getItem() instanceof TridentItem
+                || stack.getItem() instanceof ShieldItem
                 || stack.getItem() instanceof MagnetItem
                 || isArsenalWeapon(stack);
     }

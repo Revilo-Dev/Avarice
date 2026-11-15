@@ -24,6 +24,8 @@ public final class DungeonBoundItems {
     public static final String WEAPON_ROLE_KEY = "dungeon_weapon_role";
     public static final String PRIMARY_WEAPON_ROLE = "primary";
     public static final String SECONDARY_WEAPON_ROLE = "secondary";
+    public static final String AUTO_BLOCK_CHANCE_KEY = "dungeon_auto_block_chance";
+    public static final double BASE_AUTO_BLOCK_CHANCE = 0.05D;
 
     private DungeonBoundItems() {
     }
@@ -91,6 +93,25 @@ public final class DungeonBoundItems {
     public static String getDungeonLootRarity(ItemStack stack) {
         CompoundTag root = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag().getCompound(GatewayExpansion.MOD_ID);
         return root.getString(DUNGEON_LOOT_RARITY_KEY);
+    }
+
+    public static void setAutoBlockChance(ItemStack stack, double chance) {
+        if (!(stack.getItem() instanceof ShieldItem)) {
+            return;
+        }
+        CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+        CompoundTag root = tag.getCompound(GatewayExpansion.MOD_ID);
+        root.putDouble(AUTO_BLOCK_CHANCE_KEY, Math.clamp(chance, 0.0D, 1.0D));
+        tag.put(GatewayExpansion.MOD_ID, root);
+        stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+    }
+
+    public static double getAutoBlockChance(ItemStack stack) {
+        if (!(stack.getItem() instanceof ShieldItem)) {
+            return 0.0D;
+        }
+        CompoundTag root = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag().getCompound(GatewayExpansion.MOD_ID);
+        return Math.clamp(root.contains(AUTO_BLOCK_CHANCE_KEY) ? root.getDouble(AUTO_BLOCK_CHANCE_KEY) : 0.0D, 0.0D, 1.0D);
     }
 
     public static boolean replaceRoleWeapon(Player player, ItemStack stack) {

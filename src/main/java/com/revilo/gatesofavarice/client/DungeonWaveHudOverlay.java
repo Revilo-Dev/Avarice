@@ -65,9 +65,8 @@ public final class DungeonWaveHudOverlay {
         int x = (screenWidth - BAR_WIDTH) / 2;
         int y = 8;
 
-        int total = Math.max(1, DungeonHudState.totalMobs());
-        int remaining = Mth.clamp(DungeonHudState.mobsRemaining(), 0, total);
-        int filled = Math.round(BAR_WIDTH * ((total - remaining) / (float) total));
+        int corruption = Mth.clamp(DungeonHudState.mobsRemaining(), 0, 100);
+        int filled = Math.round(BAR_WIDTH * (corruption / 100.0F));
 
         guiGraphics.blit(BAR_TEXTURE, x, y, 0, 0, BAR_WIDTH, BAR_HEIGHT, BAR_WIDTH, BAR_HEIGHT);
         if (filled > 0) {
@@ -77,25 +76,18 @@ public final class DungeonWaveHudOverlay {
         }
 
         int countdownTicks = DungeonHudState.nextWaveCountdownTicks();
-        Component waveLabel = DungeonHudState.gatewayOpen()
-                ? Component.literal("A gateway has opened to the next floor")
-                : DungeonHudState.upgradePhase()
-                ? Component.literal("Upgrade phase")
-                : Component.literal("Floor " + DungeonHudState.floorNumber() + "  Wave " + DungeonHudState.waveInFloor());
+        Component waveLabel = Component.literal("Corruption " + corruption + "%");
         int waveTextAreaWidth = WAVE_TEXT_RIGHT - WAVE_TEXT_LEFT;
         int waveTextX = x + WAVE_TEXT_LEFT + (waveTextAreaWidth - minecraft.font.width(waveLabel)) / 2;
         guiGraphics.drawString(minecraft.font, waveLabel, waveTextX, y + WAVE_TEXT_TOP, 0xFFFFFF, false);
 
-        if (countdownTicks > 0) {
-            int seconds = Mth.ceil(countdownTicks / 20.0F);
-            Component countdownLabel = Component.literal("Next wave in " + seconds + "s");
-            int countdownWidth = minecraft.font.width(countdownLabel);
-            guiGraphics.drawString(minecraft.font, countdownLabel, x + (BAR_WIDTH - countdownWidth) / 2, y + BAR_HEIGHT + 4, 0xFFE36B, false);
-        } else if (!DungeonHudState.upgradePhase() && !DungeonHudState.gatewayOpen()) {
-            Component mobsLabel = Component.literal(remaining + " mobs remaining");
-            int mobsLabelWidth = minecraft.font.width(mobsLabel);
-            guiGraphics.drawString(minecraft.font, mobsLabel, x + (BAR_WIDTH - mobsLabelWidth) / 2, y + BAR_HEIGHT + 4, 0xFFFFFF, false);
-        }
+        Component statusLabel = DungeonHudState.gatewayOpen()
+                ? Component.literal("Floor clear - gateway open")
+                : DungeonHudState.upgradePhase()
+                ? Component.literal("Shop open")
+                : Component.literal("Floor " + DungeonHudState.floorNumber() + " entry room");
+        int statusWidth = minecraft.font.width(statusLabel);
+        guiGraphics.drawString(minecraft.font, statusLabel, x + (BAR_WIDTH - statusWidth) / 2, y + BAR_HEIGHT + 4, 0xFFFFFF, false);
     }
 
     private static void renderAmmo(GuiGraphics guiGraphics, Minecraft minecraft, boolean expandedDeck) {

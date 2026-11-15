@@ -23,5 +23,10 @@ public final class DungeonBoundTooltipHandler {
             return;
         }
         event.getToolTip().addAll(List.of(Component.literal("Dungeon Bound").withStyle(ChatFormatting.RED)));
+        double autoBlockChance = DungeonBoundItems.getAutoBlockChance(event.getItemStack());
+        if (autoBlockChance > 0.0D) {
+            event.getToolTip().add(Component.literal("Auto Block: " + Math.round(autoBlockChance * 100.0D) + "%")
+                    .withStyle(ChatFormatting.AQUA));
+        }
     }
 }

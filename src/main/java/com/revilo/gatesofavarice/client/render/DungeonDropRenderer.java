@@ -34,7 +34,7 @@ public final class DungeonDropRenderer extends EntityRenderer<DungeonDropEntity>
         this.itemRenderer.renderStatic(entity.stack(), ItemDisplayContext.GROUND, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, poseStack, buffer, entity.level(), entity.getId());
         poseStack.popPose();
         if (Minecraft.getInstance().hitResult instanceof EntityHitResult hit && hit.getEntity() == entity) {
-            this.renderNameTag(entity, tooltip(entity), poseStack, buffer, packedLight);
+            this.renderNameTag(entity, tooltip(entity), poseStack, buffer, packedLight, partialTick);
         }
     }
 

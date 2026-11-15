@@ -163,6 +163,10 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
                 : this.menu.deck();
         DungeonDeckRenderer.renderFullDeck(guiGraphics, this.font, displayedDeck,
                 this.width / 2, this.height - 8, boosterDeckWidth(), true);
+        int deckCards = this.menu.deck().stream().mapToInt(CardState::count).sum();
+        guiGraphics.drawCenteredString(this.font,
+                Component.literal("Deck: " + deckCards + " cards  |  Right-click a card to discard").withStyle(ChatFormatting.GRAY),
+                this.width / 2, boosterDeckTop() - 22, 0xFFC9BED4);
 
         if (showingPull) {
             renderPulledCards(guiGraphics, selectedOption);
@@ -475,6 +479,14 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
     protected void renderTooltip(GuiGraphics guiGraphics, int x, int y) {
         super.renderTooltip(guiGraphics, x, y);
         if (this.menu.stage() == DungeonWaveMenu.STAGE_BOOSTER) {
+            int deckCard = boosterDeckCardAt(x, y);
+            if (deckCard >= 0) {
+                DungeonDeck.CardType type = DungeonDeck.CardType.values()[deckCard];
+                guiGraphics.renderTooltip(this.font, List.of(
+                        Component.literal(type.title()).withStyle(ChatFormatting.GOLD).getVisualOrderText(),
+                        Component.literal("Right-click to discard one card").withStyle(ChatFormatting.GRAY).getVisualOrderText()), x, y);
+                return;
+            }
             if (this.animationState == AnimationState.IDLE) {
                 for (int index = 0; index < this.optionButtons.size() && index < this.menu.options().size(); index++) {
                     Button button = this.optionButtons.get(index);
@@ -518,20 +530,6 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
             for (int i = 0; i < this.optionButtons.size() && i < this.menu.options().size(); i++) {
                 DungeonWaveMenu.WaveOptionView option = this.menu.options().get(i);
                 Button button = this.optionButtons.get(i);
-                boolean cardHover = x >= button.getX() && x < button.getX() + CARD_W
-                        && y >= button.getY() && y < button.getY() + CARD_H;
-                if (cardHover && !option.displayStack().isEmpty()) {
-                    long seconds = option.loadoutPlayTimeTicks() / 20L;
-                    long nextXp = com.revilo.gatesofavarice.dungeon.loadout.LoadoutProgression.xpForNextLevel(option.loadoutLevel());
-                    List<Component> stats = List.of(
-                            Component.literal("Loadout Level " + option.loadoutLevel()).withStyle(ChatFormatting.GOLD),
-                            Component.literal("XP: " + option.loadoutXp() + " / " + nextXp).withStyle(ChatFormatting.AQUA),
-                            Component.literal("Plays: " + option.loadoutPlays()).withStyle(ChatFormatting.GRAY),
-                            Component.literal("Kills: " + option.loadoutKills()).withStyle(ChatFormatting.GRAY),
-                            Component.literal("Play Time: " + formatPlayTime(seconds)).withStyle(ChatFormatting.GRAY));
-                    guiGraphics.renderComponentTooltip(this.font, stats, button.getX(), button.getY() + CARD_H + 4);
-                    return;
-                }
                 boolean lowerHover = x >= button.getX() && x < button.getX() + CARD_W
                         && y >= button.getY() + CARD_H / 2 && y < button.getY() + CARD_H;
                 if (!lowerHover) continue;
@@ -818,8 +816,46 @@ public class DungeonWaveScreen extends AbstractContainerScreen<DungeonWaveMenu> 
         }
     }
 
-    private static String formatPlayTime(long seconds) {
-        return String.format(Locale.ROOT, "%d:%02d:%02d", seconds / 3600L, seconds / 60L % 60L, seconds % 60L);
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (this.menu.stage() == DungeonWaveMenu.STAGE_BOOSTER
+                && this.animationState == AnimationState.IDLE
+                && button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+            int cardIndex = boosterDeckCardAt(mouseX, mouseY);
+            if (cardIndex >= 0 && this.minecraft != null && this.minecraft.gameMode != null) {
+                this.minecraft.gameMode.handleInventoryButtonClick(
+                        this.menu.containerId, DungeonWaveMenu.DISCARD_DECK_CARD_BUTTON_BASE + cardIndex);
+                return true;
+            }
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    private int boosterDeckCardAt(double mouseX, double mouseY) {
+        if (this.menu.stage() != DungeonWaveMenu.STAGE_BOOSTER) {
+            return -1;
+        }
+        ArrayList<Integer> visible = new ArrayList<>();
+        List<CardState> deck = this.menu.deck();
+        for (int index = 0; index < deck.size(); index++) {
+            if (deck.get(index).count() > 0) visible.add(index);
+        }
+        if (visible.isEmpty()) return -1;
+        int gaps = (visible.size() - 1) * 4;
+        float scale = Math.min(0.86F, Math.max(visible.size(), boosterDeckWidth() - gaps)
+                / (visible.size() * (float) DungeonDeckRenderer.cardWidth()));
+        int cardWidth = Math.round(DungeonDeckRenderer.cardWidth() * scale);
+        int cardHeight = Math.round(DungeonDeckRenderer.cardHeight() * scale);
+        int totalWidth = visible.size() * cardWidth + gaps;
+        int startX = this.width / 2 - totalWidth / 2;
+        int cardY = this.height - 8 - cardHeight;
+        for (int position = 0; position < visible.size(); position++) {
+            int x = startX + position * (cardWidth + 4);
+            if (mouseX >= x && mouseX < x + cardWidth && mouseY >= cardY && mouseY < cardY + cardHeight) {
+                return visible.get(position);
+            }
+        }
+        return -1;
     }
 
     private void tickBoosterAnimations() {

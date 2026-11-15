@@ -23,6 +23,7 @@ public class DungeonWaveMenu extends AbstractContainerMenu {
     public static final int BAIL_BUTTON_ID = 100;
     public static final int REROLL_BUTTON_ID = 101;
     public static final int SKIP_BUTTON_ID = 102;
+    public static final int DISCARD_DECK_CARD_BUTTON_BASE = 200;
 
     private final UUID ownerId;
     private final int waveNumber;

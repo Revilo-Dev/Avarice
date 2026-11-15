@@ -17,6 +17,7 @@ import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import java.util.UUID;
 
 /** Floating dungeon-only loot. It intentionally is not an ItemEntity. */
 public final class DungeonDropEntity extends Entity {
@@ -25,6 +26,8 @@ public final class DungeonDropEntity extends Entity {
     private static final EntityDataAccessor<ItemStack> STACK = SynchedEntityData.defineId(DungeonDropEntity.class, EntityDataSerializers.ITEM_STACK);
     private static final EntityDataAccessor<Boolean> ARROW_BUNDLE = SynchedEntityData.defineId(DungeonDropEntity.class, EntityDataSerializers.BOOLEAN);
     private int age;
+    private UUID swappingPlayerId;
+    private int sneakTicks;
 
     public DungeonDropEntity(EntityType<? extends DungeonDropEntity> type, Level level) {
         super(type, level);
@@ -60,6 +63,13 @@ public final class DungeonDropEntity extends Entity {
         this.move(MoverType.SELF, this.getDeltaMovement());
         if (this.onGround()) this.setDeltaMovement(this.getDeltaMovement().multiply(.7D, -.3D, .7D));
         if (!this.level().isClientSide()) {
+            if (swappingPlayerId != null && this.level() instanceof ServerLevel level) {
+                ServerPlayer swappingPlayer = level.getServer().getPlayerList().getPlayer(swappingPlayerId);
+                if (swappingPlayer == null || !swappingPlayer.isShiftKeyDown() || swappingPlayer.distanceToSqr(this) > 1.0D) {
+                    swappingPlayerId = null;
+                    sneakTicks = 0;
+                }
+            }
             Player player = this.level().getNearestPlayer(this, 1.0D);
             if (player instanceof ServerPlayer serverPlayer && serverPlayer.isAlive()) collect(serverPlayer);
         }
@@ -73,7 +83,16 @@ public final class DungeonDropEntity extends Entity {
         if (isArrowBundle()) {
             DungeonRunManager.addArrowBundle(player, stack);
         } else {
-            if (!player.isShiftKeyDown()) return;
+            if (!player.isShiftKeyDown()) {
+                swappingPlayerId = null;
+                sneakTicks = 0;
+                return;
+            }
+            if (!player.getUUID().equals(swappingPlayerId)) {
+                swappingPlayerId = player.getUUID();
+                sneakTicks = 0;
+            }
+            if (++sneakTicks < 60) return;
             DungeonWeaponEquipment.equip(player, stack);
         }
         player.take(this, 1);
