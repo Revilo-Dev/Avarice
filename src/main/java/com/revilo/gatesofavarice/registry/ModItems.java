@@ -5,6 +5,7 @@ import com.revilo.gatesofavarice.item.ArcaneAppleItem;
 import com.revilo.gatesofavarice.item.BailStoneItem;
 import com.revilo.gatesofavarice.item.BoosterPackItem;
 import com.revilo.gatesofavarice.item.CrystalItem;
+import com.revilo.gatesofavarice.item.DungeonKeyItem;
 import com.revilo.gatesofavarice.item.GatewayCardItem;
 import com.revilo.gatesofavarice.item.GatewaySwordItem;
 import com.revilo.gatesofavarice.item.GoldCoinItem;
@@ -51,6 +52,8 @@ public final class ModItems {
             () -> new CrystalItem(new CrystalItem.CrystalTier(4), new Item.Properties()));
     public static final DeferredHolder<Item, CrystalItem> TIER_5_CRYSTAL = ITEMS.register("tier_5_crystal",
             () -> new CrystalItem(new CrystalItem.CrystalTier(5), new Item.Properties()));
+    public static final DeferredHolder<Item, DungeonKeyItem> DUNGEON_KEY = ITEMS.register("dungeon_key",
+            () -> new DungeonKeyItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON)));
 
     public static final DeferredHolder<Item, MythicCoinItem> MYTHIC_COIN = ITEMS.register("mythic_coin",
             () -> new MythicCoinItem(new Item.Properties().stacksTo(99)));

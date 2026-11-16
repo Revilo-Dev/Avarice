@@ -163,7 +163,8 @@ public final class DungeonBoundItems {
     }
 
     private static boolean isBoundCandidate(ItemStack stack) {
-        return stack.getItem() instanceof ArmorItem
+        return stack.is(ModItems.LOOT_POUCH.get())
+                || stack.getItem() instanceof ArmorItem
                 || stack.getItem() instanceof SwordItem
                 || stack.getItem() instanceof DiggerItem
                 || stack.getItem() instanceof BowItem

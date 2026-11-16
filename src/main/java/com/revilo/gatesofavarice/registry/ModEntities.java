@@ -22,6 +22,7 @@ public final class ModEntities {
                     .sized(0.6F, 1.95F)
                     .clientTrackingRange(8)
                     .build("gatekeeper"));
+    /** Retained only so worlds with old portal entities can load; new portals are gateway blocks. */
     public static final DeferredHolder<EntityType<?>, EntityType<GatewayCrystalEntity>> GATEWAY_CRYSTAL = ENTITY_TYPES.register("gateway_crystal",
             () -> EntityType.Builder.<GatewayCrystalEntity>of(GatewayCrystalEntity::new, MobCategory.MISC)
                     .sized(1.4F, 2.4F)

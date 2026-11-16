@@ -195,8 +195,26 @@ public final class RunicLoadoutService {
         RunicItemSupport.ensureRunicData(stack, capacity);
     }
 
-    public static int runeSlotsForPlayerLevel(int playerLevel) {
-        return Math.max(4, Math.min(12, 4 + Math.max(0, playerLevel) / 10));
+    /** Rune capacity is an intrinsic property of the item material, never player level. */
+    public static void applyMaterialRuneSlots(ItemStack stack) {
+        applyRuneSlotCapacity(stack, runeSlotsForGear(stack));
+    }
+
+    public static int runeSlotsForGear(ItemStack stack) {
+        if (stack.isEmpty()) {
+            return 5;
+        }
+        ResourceLocation id = stack.getItemHolder().unwrapKey().map(key -> key.location()).orElse(null);
+        String path = id == null ? "" : id.getPath();
+        if (path.contains("prismatic")) return 13;
+        if (path.contains("arcanium")) return 12;
+        if (path.contains("mythril")) return 11;
+        if (path.contains("iridium")) return 10;
+        if (path.contains("ignite")) return 9;
+        if (path.contains("lunarium")) return 8;
+        if (path.contains("astrite")) return 7;
+        if (path.contains("elixrite")) return 6;
+        return 5;
     }
 
     public static int runeSlotsCapacity(ItemStack stack) {

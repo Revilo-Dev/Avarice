@@ -10,9 +10,12 @@ import com.revilo.gatesofavarice.registry.ModItems;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 
+/** Fixed, class-focused starter kits. Random affixes belong on dungeon loot, not loadouts. */
 public final class LoadoutPresetRegistry {
     private static final List<LoadoutDefinition> PRESETS = build();
 
@@ -23,133 +26,86 @@ public final class LoadoutPresetRegistry {
     }
 
     public static Optional<LoadoutDefinition> byId(String id) {
-        return PRESETS.stream().filter(p -> p.id().equals(id)).findFirst();
+        return PRESETS.stream().filter(preset -> preset.id().equals(id)).findFirst();
     }
 
     private static List<LoadoutDefinition> build() {
-        ArrayList<LoadoutDefinition> out = new ArrayList<>();
-        out.add(preset("assassin", "Assassin", LoadoutTheme.ASSASSIN, "dagger", "dagger", optionalItem("arsenal:poison_bomb", ModItems.DUNGEON_MAGNET.get()), armor("shadow_set", "Assassin Set", 1.0F, 3.0F, 0.00F, 0.02F, 0.00F, 0.02F),
-                List.of(stat("movement_speed", 0.06F, 0.12F), stat("attack_speed", 0.03F, 0.07F), stat("aura:ability_power", 0.10F, 0.20F), stat("aura:ability_force_rampage_bonus", 1.0F, 1.0F)),
-                List.of(stat("attack_speed", 0.01F, 0.05F), stat("bleeding_chance", 0.01F, 0.03F), stat("poison_chance", 0.01F, 0.03F), stat("leeching_chance", 0.01F, 0.02F)),
-                List.of(),
-                List.of(effect("farmersdelight:backstabbing", 1, 1)),
-                List.of(supply(Items.GOLDEN_APPLE, 2, 2), supply(Items.COOKED_PORKCHOP, 16, 16))));
-        out.add(preset("knight", "Knight", LoadoutTheme.KNIGHT, "longsword", "dual_crossbow", Items.SHIELD, armor("steel_knight_set", "Knight Set", 9.0F, 13.0F, 0.03F, 0.08F, 0.03F, 0.08F),
-                List.of(stat("resistance", 0.05F, 0.09F), stat("movement_speed", 0.04F, 0.09F), stat("health", 2.0F, 4.0F), stat("aura:ability_power", 0.10F, 0.20F), stat("aura:skill_strength_bonus", 2.0F, 2.0F)),
-                List.of(stat("resistance", 0.02F, 0.08F), stat("health", 1.0F, 4.0F), stat("attack_damage", 1.0F, 3.0F), stat("attack_range", 0.2F, 0.7F), stat("toughness", 1.0F, 3.0F)),
-                List.of(),
-                List.of(effect("expanded_combat:blocking", 1, 1)),
-                List.of(supply(Items.COOKED_BEEF, 16, 16), supply(Items.GOLDEN_CARROT, 8, 8), supply(Items.ARROW, 32, 32))));
-        out.add(preset("berserker", "Berserker", LoadoutTheme.BERSERKER, "axe", "machete", optionalItem("arsenal:golden_bomb", ModItems.DUNGEON_MAGNET.get()), armor("rage_set", "Berserker Set", 7.0F, 10.0F, 0.02F, 0.06F, 0.00F, 0.03F),
-                List.of(stat("resistance", 0.03F, 0.07F), stat("movement_speed", 0.02F, 0.06F), stat("health", 2.0F, 2.0F), stat("aura:ability_power", 0.10F, 0.20F), stat("aura:ability_force_rampage_bonus", 1.0F, 1.0F), stat("aura:skill_strength_bonus", 1.0F, 1.0F)),
-                List.of(stat("attack_damage", 1.0F, 4.0F), stat("attack_speed", 0.01F, 0.05F), stat("health", 2.0F, 5.0F), stat("bleeding_chance", 0.01F, 0.03F), stat("leeching_chance", 0.01F, 0.02F)),
-                List.of(effect("minecraft:thorns", 1, 1)),
-                List.of(effect("twilightforest:destruction", 1, 1)),
-                List.of(supply(Items.COOKED_BEEF, 24, 24), supply(Items.GOLDEN_APPLE, 5, 5))));
-        out.add(preset("vanguard", "Vanguard", LoadoutTheme.VANGUARD, "hammer", "broadsword", Items.SHIELD, armor("fortress_set", "Vanguard Set", 13.0F, 17.0F, 0.08F, 0.14F, 0.08F, 0.15F),
-                List.of(stat("resistance", 0.08F, 0.14F), stat("movement_speed", 0.005F, 0.02F), stat("health", 6.0F, 10.0F), stat("aura:ability_power", 0.05F, 0.15F), stat("aura:ability_lightning_bonus", 1.0F, 1.0F)),
-                List.of(stat("resistance", 0.05F, 0.12F), stat("toughness", 2.0F, 5.0F), stat("health", 3.0F, 7.0F), stat("knockback_resistance", 0.04F, 0.12F), stat("stun_chance", 0.01F, 0.03F)),
-                List.of(effect("minecraft:thorns", 1, 1)),
-                List.of(effect("expanded_combat:ground_slam", 1, 1)),
-                List.of(supply(Items.GOLDEN_APPLE, 5, 5), supply(Items.COOKED_BEEF, 12, 12))));
-        out.add(preset("samurai", "Samurai", LoadoutTheme.SAMURAI, "gaundao", "dagger", ModItems.DUNGEON_MAGNET.get(), armor("windwalker_set", "Samurai Set", 8.0F, 11.0F, 0.02F, 0.07F, 0.02F, 0.06F),
-                List.of(stat("movement_speed", 0.04F, 0.09F), stat("resistance", 0.03F, 0.07F), stat("health", 2.0F, 4.0F), stat("aura:ability_power", 0.10F, 0.25F), stat("aura:ability_poison_bonus", 1.0F, 1.0F)),
-                List.of(stat("attack_range", 0.2F, 0.8F), stat("attack_speed", 0.01F, 0.06F), stat("sweeping_range", 0.1F, 0.5F), stat("attack_damage", 1.0F, 2.0F)),
-                List.of(effect("combat_roll:acrobat", 1, 1), effect("combat_roll:longfooted", 1, 1)),
-                List.of(),
-                List.of(supply(Items.COOKED_SALMON, 16, 16), supply(Items.GOLDEN_CARROT, 12, 12), supply(ModItems.ARCANE_APPLE.get(), 2, 2))));
-        out.add(preset("reaper", "Reaper", LoadoutTheme.REAPER, "glaive", "dagger", ModItems.DUNGEON_MAGNET.get(), armor("soulbound_set", "Reaper Set", 8.0F, 11.0F, 0.03F, 0.07F, 0.02F, 0.07F),
-                List.of(stat("resistance", 0.03F, 0.07F), stat("movement_speed", 0.02F, 0.06F), stat("aura:ability_power", 0.45F, 0.65F), stat("aura:ability_wind_bonus", 1.0F, 1.0F)),
-                List.of(stat("withering_chance", 0.01F, 0.03F), stat("leeching_chance", 0.01F, 0.02F), stat("fangs", 1.0F, 3.0F), stat("undead_damage", 1.5F, 5.0F), stat("sweeping_range", 0.1F, 0.5F)),
-                List.of(),
-                List.of(effect("simplyswords:soul_siphoner", 1, 1), effect("mysticalagriculture:soul_siphoner", 1, 1)),
-                List.of(supply(ModItems.ARCANE_APPLE.get(), 3, 3), supply(Items.GOLDEN_CARROT, 16, 16))));
-        out.add(preset("ranger", "Ranger", LoadoutTheme.RANGER, "short_bow", "machete", Items.SHIELD, armor("hunter_set", "Ranger Set", 5.0F, 8.0F, 0.00F, 0.04F, 0.00F, 0.03F),
-                List.of(stat("movement_speed", 0.04F, 0.09F), stat("resistance", 0.03F, 0.07F), stat("health", 1.0F, 2.0F), stat("aura:ability_power", 0.10F, 0.20F), stat("aura:skill_power_bonus", 1.0F, 1.0F), stat("aura:skill_agility_bonus", 1.0F, 1.0F)),
-                List.of(stat("draw_speed", 0.02F, 0.08F), stat("projectile_resistance", 0.01F, 0.06F), stat("bonus_chance", 0.01F, 0.03F), stat("attack_damage", 1.0F, 3.0F)),
-                List.of(),
-                List.of(effect("minecraft:flame", 1, 1), effect("minecraft:punch", 1, 2)),
-                List.of(supply(ModItems.ARCANE_APPLE.get(), 1, 1), supply(Items.COOKED_CHICKEN, 16, 16), supply(Items.SWEET_BERRIES, 32, 32))));
-        out.add(preset("marksman", "Marksman", LoadoutTheme.MARKSMAN, "heavy_crossbow", "longsword", Items.SHIELD, armor("sharpshooter_set", "Marksman Set", 7.0F, 10.0F, 0.01F, 0.05F, 0.01F, 0.05F),
-                List.of(stat("resistance", 0.03F, 0.07F), stat("movement_speed", 0.05F, 0.10F), stat("health", 1.0F, 2.0F), stat("aura:ability_power", 0.25F, 0.45F), stat("aura:skill_power_bonus", 1.0F, 1.0F), stat("aura:skill_resistance_bonus", 1.0F, 1.0F)),
-                List.of(stat("draw_speed", 0.02F, 0.08F), stat("projectile_resistance", 0.01F, 0.06F), stat("attack_damage", 1.0F, 3.0F), stat("bonus_chance", 0.01F, 0.03F), stat("attack_range", 0.2F, 0.8F)),
-                List.of(),
-                List.of(effect("minecraft:power", 1, 2), effect("minecraft:punch", 1, 1), effect("minecraft:flame", 1, 1)),
-                List.of(supply(ModItems.ARCANE_APPLE.get(), 2, 2), supply(Items.GOLDEN_CARROT, 16, 16), supply(Items.PUMPKIN_PIE, 8, 8))));
-        out.add(preset("gladiator", "Gladiator", LoadoutTheme.GLADIATOR, "broadsword", "dagger", Items.SHIELD, armor("arena_set", "Gladiator Set", 9.0F, 13.0F, 0.02F, 0.08F, 0.02F, 0.08F),
-                List.of(stat("resistance", 0.04F, 0.08F), stat("movement_speed", 0.02F, 0.05F), stat("health", 2.0F, 4.0F), stat("aura:ability_power", 0.25F, 0.45F), stat("aura:skill_resistance_bonus", 1.0F, 1.0F), stat("aura:skill_strength_bonus", 1.0F, 1.0F)),
-                List.of(stat("attack_damage", 1.0F, 4.0F), stat("sweeping_range", 0.1F, 0.6F), stat("resistance", 0.01F, 0.06F), stat("health", 2.0F, 5.0F), stat("stun_chance", 0.01F, 0.03F)),
-                List.of(effect("minecraft:thorns", 1, 1)),
-                List.of(effect("expanded_combat:blocking", 1, 1)),
-                List.of(supply(Items.COOKED_BEEF, 20, 20), supply(Items.GOLDEN_APPLE, 1, 1))));
-        out.add(preset("spellblade", "Spellblade", LoadoutTheme.SPELLBLADE, "longsword", "glaive", ModItems.DUNGEON_MAGNET.get(), armor("arcane_set", "Spellblade Set", 8.0F, 11.0F, 0.02F, 0.07F, 0.01F, 0.05F),
-                List.of(stat("resistance", 0.03F, 0.07F), stat("movement_speed", 0.02F, 0.06F), stat("aura:ability_power", 0.65F, 0.90F), stat("health", 1.0F, 2.0F), stat("aura:ability_magic_bonus", 1.0F, 1.0F), stat("aura:ability_ice_bonus", 1.0F, 1.0F)),
-                List.of(stat("shocking_chance", 0.01F, 0.03F), stat("fangs", 1.0F, 3.0F), stat("bonus_chance", 0.01F, 0.03F), stat("attack_damage", 1.0F, 3.0F), stat("attack_speed", 0.01F, 0.05F)),
-                List.of(),
-                List.of(effect("aether:renewal", 1, 1), effect("simplyswords:catalysis", 1, 1), effect("deeperdarker:catalysis", 1, 1)),
-                List.of(supply(ModItems.ARCANE_APPLE.get(), 4, 4), supply(Items.GOLDEN_CARROT, 16, 16))));
-        out.add(preset("warlord", "Warlord", LoadoutTheme.WARLORD, "hammer", "scatter_crossbow", optionalItem("arsenal:bomb", Items.SHIELD), armor("tyrant_set", "Warlord Set", 12.0F, 16.0F, 0.08F, 0.14F, 0.06F, 0.12F),
-                List.of(stat("resistance", 0.08F, 0.14F), stat("health", 4.0F, 7.0F), stat("movement_speed", 0.04F, 0.08F), stat("aura:ability_power", 0.25F, 0.45F), stat("aura:ability_fire_bonus", 1.0F, 1.0F), stat("aura:skill_strength_bonus", 1.0F, 1.0F)),
-                List.of(stat("resistance", 0.05F, 0.12F), stat("toughness", 2.0F, 5.0F), stat("health", 3.0F, 7.0F), stat("knockback_resistance", 0.04F, 0.12F), stat("stun_chance", 0.01F, 0.03F), stat("attack_damage", 1.0F, 4.0F)),
-                List.of(effect("minecraft:thorns", 1, 1)),
-                List.of(effect("expanded_combat:ground_slam", 1, 1), effect("dungeons_arise:ensnaring", 1, 1)),
-                List.of(supply(Items.COOKED_MUTTON, 24, 24), supply(Items.GOLDEN_APPLE, 3, 3), supply(Items.ARROW, 32, 32))));
-        out.add(preset("nomad", "Nomad", LoadoutTheme.NOMAD, "machete", "long_bow", Items.SHIELD, armor("traveler_set", "Nomad Set", 5.0F, 8.0F, 0.00F, 0.03F, 0.00F, 0.03F),
-                List.of(stat("movement_speed", 0.06F, 0.12F), stat("resistance", 0.01F, 0.04F), stat("health", 1.0F, 2.0F), stat("aura:ability_power", 0.25F, 0.45F), stat("aura:ability_fire_bonus", 1.0F, 1.0F), stat("aura:ability_poison_bonus", 1.0F, 1.0F)),
-                List.of(stat("attack_speed", 0.01F, 0.06F), stat("draw_speed", 0.02F, 0.07F), stat("durability", 5.0F, 18.0F)),
-                List.of(effect("combat_roll:longfooted", 1, 1)),
-                List.of(),
-                List.of(supply(Items.BREAD, 24, 24), supply(Items.COOKED_COD, 12, 12), supply(Items.ARROW, 32, 32))));
-        return List.copyOf(out);
+        ArrayList<LoadoutDefinition> presets = new ArrayList<>();
+        presets.add(preset("assassin", "Assassin", LoadoutTheme.ASSASSIN, "dagger", "dagger", requiredItem("arsenal:poison_bomb"), armor("shadow_set", "Assassin Set", 2, .01F, .01F),
+                stats("movement_speed", .09F, "attack_speed", .05F, "aura:ability_power", .15F, "aura:ability_force_rampage_bonus", 1),
+                stats("attack_speed", .06F, "bleeding_chance", .02F, "poison_chance", .12F, "leeching_chance", .01F), List.of(), effects("farmersdelight:backstabbing", 1), supplies(Items.GOLDEN_APPLE, 2)));
+        presets.add(preset("knight", "Knight", LoadoutTheme.KNIGHT, "longsword", "dual_crossbow", Items.SHIELD, armor("steel_knight_set", "Knight Set", 11, .06F, .06F),
+                stats("resistance", .07F, "movement_speed", .06F, "health", 3, "aura:ability_power", .15F, "aura:skill_strength_bonus", 2),
+                stats("resistance", .05F, "health", 2, "attack_damage", 2, "attack_range", .4F, "toughness", 2), List.of(), effects("expanded_combat:blocking", 1), List.of()));
+        presets.add(preset("berserker", "Berserker", LoadoutTheme.BERSERKER, "axe", "machete", requiredItem("arsenal:golden_bomb"), armor("rage_set", "Berserker Set", 9, .04F, .02F),
+                stats("resistance", .05F, "movement_speed", .04F, "health", 2, "aura:ability_power", .15F, "aura:ability_force_rampage_bonus", 1, "aura:skill_strength_bonus", 1),
+                stats("attack_damage", 6, "attack_speed", .03F, "health", 3, "bleeding_chance", .02F, "leeching_chance", .01F), effects("minecraft:thorns", 1), effects("twilightforest:destruction", 1), supplies(Items.GOLDEN_APPLE, 5)));
+        presets.add(preset("vanguard", "Vanguard", LoadoutTheme.VANGUARD, "hammer", "broadsword", Items.SHIELD, armor("fortress_set", "Vanguard Set", 15, .11F, .11F),
+                stats("resistance", .11F, "movement_speed", .01F, "health", 8, "aura:ability_power", .10F, "aura:ability_lightning_bonus", 1),
+                stats("resistance", .09F, "toughness", 4, "health", 5, "knockback_resistance", .08F, "stun_chance", .02F), effects("minecraft:thorns", 1), effects("expanded_combat:ground_slam", 1), supplies(Items.GOLDEN_APPLE, 5)));
+        presets.add(preset("samurai", "Samurai", LoadoutTheme.SAMURAI, "gaundao", "dagger", ModItems.DUNGEON_MAGNET.get(), armor("windwalker_set", "Samurai Set", 10, .05F, .04F),
+                stats("movement_speed", .07F, "resistance", .05F, "health", 3, "aura:ability_power", .18F, "aura:ability_poison_bonus", 1),
+                stats("attack_range", .5F, "attack_speed", .04F, "sweeping_range", .3F, "attack_damage", 2), effects("combat_roll:acrobat", 1, "combat_roll:longfooted", 1), List.of(), supplies(ModItems.ARCANE_APPLE.get(), 2)));
+        presets.add(preset("reaper", "Reaper", LoadoutTheme.REAPER, "glaive", "dagger", ModItems.DUNGEON_MAGNET.get(), armor("soulbound_set", "Reaper Set", 10, .05F, .05F),
+                stats("resistance", .05F, "movement_speed", .04F, "aura:ability_power", .55F, "aura:ability_wind_bonus", 1),
+                stats("withering_chance", .02F, "leeching_chance", .02F, "fangs", 2, "undead_damage", 3, "sweeping_range", .3F), List.of(), effects("simplyswords:soul_siphoner", 1, "mysticalagriculture:soul_siphoner", 1), supplies(ModItems.ARCANE_APPLE.get(), 3)));
+        presets.add(preset("ranger", "Ranger", LoadoutTheme.RANGER, "short_bow", "machete", Items.SHIELD, armor("hunter_set", "Ranger Set", 7, .02F, .02F),
+                stats("movement_speed", .07F, "resistance", .05F, "health", 2, "aura:ability_power", .15F, "aura:skill_power_bonus", 1, "aura:skill_agility_bonus", 1),
+                stats("draw_speed", .05F, "projectile_resistance", .04F, "bonus_chance", .02F, "attack_damage", 2), List.of(), effects("minecraft:flame", 1, "minecraft:punch", 1), supplies(ModItems.ARCANE_APPLE.get(), 1)));
+        presets.add(preset("marksman", "Marksman", LoadoutTheme.MARKSMAN, "heavy_crossbow", "longsword", Items.SHIELD, armor("sharpshooter_set", "Marksman Set", 9, .03F, .03F),
+                stats("resistance", .05F, "movement_speed", .08F, "health", 2, "aura:ability_power", .35F, "aura:skill_power_bonus", 1, "aura:skill_resistance_bonus", 1),
+                stats("draw_speed", .06F, "projectile_resistance", .04F, "attack_damage", 2, "bonus_chance", .02F, "attack_range", .5F), List.of(), effects("minecraft:power", 1, "minecraft:punch", 1, "minecraft:flame", 1), supplies(ModItems.ARCANE_APPLE.get(), 2)));
+        presets.add(preset("gladiator", "Gladiator", LoadoutTheme.GLADIATOR, "broadsword", "dagger", Items.SHIELD, armor("arena_set", "Gladiator Set", 11, .05F, .05F),
+                stats("resistance", .06F, "movement_speed", .04F, "health", 3, "aura:ability_power", .35F, "aura:skill_resistance_bonus", 1, "aura:skill_strength_bonus", 1),
+                stats("attack_damage", 3, "sweeping_range", .4F, "resistance", .04F, "health", 3, "stun_chance", .02F), effects("minecraft:thorns", 1), effects("expanded_combat:blocking", 1), supplies(Items.GOLDEN_APPLE, 1)));
+        presets.add(preset("spellblade", "Spellblade", LoadoutTheme.SPELLBLADE, "longsword", "glaive", ModItems.DUNGEON_MAGNET.get(), armor("arcane_set", "Spellblade Set", 10, .05F, .03F),
+                stats("resistance", .05F, "movement_speed", .04F, "aura:ability_power", .75F, "health", 2, "aura:ability_magic_bonus", 1, "aura:ability_ice_bonus", 1),
+                stats("shocking_chance", .02F, "fangs", 2, "bonus_chance", .02F, "attack_damage", 2, "attack_speed", .03F), List.of(), effects("aether:renewal", 1, "simplyswords:catalysis", 1, "deeperdarker:catalysis", 1), supplies(ModItems.ARCANE_APPLE.get(), 4)));
+        presets.add(preset("warlord", "Warlord", LoadoutTheme.WARLORD, "hammer", "scatter_crossbow", requiredItem("arsenal:bomb"), armor("tyrant_set", "Warlord Set", 14, .11F, .09F),
+                stats("resistance", .11F, "health", 6, "movement_speed", .06F, "aura:ability_power", .35F, "aura:ability_fire_bonus", 1, "aura:skill_strength_bonus", 1),
+                stats("resistance", .09F, "toughness", 4, "health", 5, "knockback_resistance", .08F, "stun_chance", .02F, "attack_damage", 4), effects("minecraft:thorns", 1), effects("expanded_combat:ground_slam", 1, "dungeons_arise:ensnaring", 1), supplies(Items.GOLDEN_APPLE, 3)));
+        presets.add(preset("nomad", "Nomad", LoadoutTheme.NOMAD, "machete", "long_bow", Items.SHIELD, armor("traveler_set", "Nomad Set", 7, .02F, .02F),
+                stats("movement_speed", .09F, "resistance", .03F, "health", 2, "aura:ability_power", .35F, "aura:ability_fire_bonus", 1, "aura:ability_poison_bonus", 1),
+                stats("attack_speed", .04F, "draw_speed", .05F, "durability", 12), effects("combat_roll:longfooted", 1), List.of(), List.of()));
+        return List.copyOf(presets);
     }
 
-    private static LoadoutDefinition preset(
-            String id,
-            String displayName,
-            LoadoutTheme theme,
-            String primary,
-            String secondary,
-            net.minecraft.world.item.Item utilityItem,
-            ArmorSetDefinition armorSet,
-            List<StatRollRange> armorStatPool,
-            List<StatRollRange> weaponStatPool,
-            List<EffectSpec> armorEffectPool,
-            List<EffectSpec> weaponEffectPool,
-            List<FoodSupplySpec> supplies
-    ) {
-        return new LoadoutDefinition(id, displayName, theme, primary, secondary, utilityItem, armorSet, armorStatPool, weaponStatPool, weaponStatPool, armorEffectPool, weaponEffectPool, supplies);
+    private static LoadoutDefinition preset(String id, String name, LoadoutTheme theme, String primary, String secondary, Item utility, ArmorSetDefinition armor, List<StatRollRange> armorStats, List<StatRollRange> weaponStats, List<EffectSpec> armorEffects, List<EffectSpec> weaponEffects, List<FoodSupplySpec> supplies) {
+        return new LoadoutDefinition(id, name, theme, primary, secondary, utility, armor, armorStats, weaponStats, weaponStats, armorEffects, weaponEffects, supplies);
     }
 
-    private static ArmorSetDefinition armor(String setId, String displayName, float armorMin, float armorMax, float resistanceMin, float resistanceMax, float kbrMin, float kbrMax) {
-        return new ArmorSetDefinition(setId, displayName, armorMin, armorMax, resistanceMin, resistanceMax, kbrMin, kbrMax, runeSlotsFor(armorMax));
+    private static ArmorSetDefinition armor(String id, String name, float armor, float resistance, float knockbackResistance) {
+        return new ArmorSetDefinition(id, name, armor, armor, resistance, resistance, knockbackResistance, knockbackResistance, 5);
     }
 
-    private static int runeSlotsFor(float armorMax) {
-        if (armorMax >= 15.0F) {
-            return 5;
+    private static List<StatRollRange> stats(Object... entries) {
+        ArrayList<StatRollRange> stats = new ArrayList<>(entries.length / 2);
+        for (int index = 0; index < entries.length; index += 2) {
+            String id = (String) entries[index];
+            float value = ((Number) entries[index + 1]).floatValue();
+            stats.add(new StatRollRange(id, value, value));
         }
-        if (armorMax >= 11.0F) {
-            return 4;
-        }
-        return armorMax >= 8.0F ? 3 : 2;
+        return List.copyOf(stats);
     }
 
-    private static StatRollRange stat(String statId, float min, float max) {
-        return new StatRollRange(statId, min, max);
+    private static List<EffectSpec> effects(String id, int level, Object... rest) {
+        ArrayList<EffectSpec> effects = new ArrayList<>();
+        effects.add(effect(id, level));
+        for (int index = 0; index < rest.length; index += 2) effects.add(effect((String) rest[index], (Integer) rest[index + 1]));
+        return List.copyOf(effects);
     }
 
-    private static EffectSpec effect(String id, int min, int max) {
-        return new EffectSpec(ResourceLocation.parse(id), min, max);
+    private static EffectSpec effect(String id, int level) {
+        return new EffectSpec(ResourceLocation.parse(id), level, level);
     }
 
-    private static FoodSupplySpec supply(net.minecraft.world.item.Item item, int min, int max) {
-        return new FoodSupplySpec(item, min, max);
+    private static List<FoodSupplySpec> supplies(Item item, int count) {
+        return List.of(new FoodSupplySpec(item, count, count));
     }
 
-    private static net.minecraft.world.item.Item optionalItem(String id, net.minecraft.world.item.Item fallback) {
-        ResourceLocation key = ResourceLocation.tryParse(id);
-        return key != null && net.minecraft.core.registries.BuiltInRegistries.ITEM.containsKey(key)
-                ? net.minecraft.core.registries.BuiltInRegistries.ITEM.get(key)
-                : fallback;
+    private static Item requiredItem(String id) {
+        ResourceLocation key = ResourceLocation.parse(id);
+        return BuiltInRegistries.ITEM.getOptional(key)
+                .orElseThrow(() -> new IllegalStateException("Required loadout item is missing: " + id));
     }
 }

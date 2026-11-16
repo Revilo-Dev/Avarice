@@ -29,6 +29,7 @@ import com.revilo.gatesofavarice.menu.DungeonWaveMenu;
 import com.revilo.gatesofavarice.network.DungeonCompletePayload;
 import com.revilo.gatesofavarice.network.DungeonWaveHudPayload;
 import com.revilo.gatesofavarice.registry.ModEntities;
+import com.revilo.gatesofavarice.registry.ModBlocks;
 import com.revilo.gatesofavarice.registry.ModItems;
 import com.revilo.gatesofavarice.registry.ModAttachments;
 import com.revilo.gatesofavarice.registry.LoadoutArmorRegistry;
@@ -78,6 +79,7 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.entity.monster.Creeper;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.effect.MobEffect;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.entity.ai.attributes.Attribute;
@@ -126,7 +128,6 @@ public final class DungeonRunManager {
     private static final Map<UUID, UUID> PLAYER_TO_OWNER = new HashMap<>();
     private static final Map<UUID, PendingSnapshotRestore> PENDING_SNAPSHOT_RESTORES = new HashMap<>();
     private static final Map<UUID, DungeonCompletePayload> PENDING_COMPLETION_SCREENS = new HashMap<>();
-    private static final Map<UUID, Integer> LAST_OVERWORLD_LEVELS = new HashMap<>();
 
     private static final ResourceLocation MOB_HEALTH_MODIFIER_ID = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_wave_health");
     private static final ResourceLocation MOB_DAMAGE_MODIFIER_ID = ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_wave_damage");
@@ -135,7 +136,6 @@ public final class DungeonRunManager {
     private static final double BASE_ELITE_CHANCE = 0.03D;
     private static final int LEVEL_POINTS_PER_LOOT_PICKUP = 1;
     private static final int AUTOSAVE_INTERVAL_TICKS = 20 * 30;
-    private static final int BASE_AMMO_PER_WAVE = 30;
     private static final ResourceLocation NO_AMMO = ResourceLocation.withDefaultNamespace("air");
     private static final List<ResourceLocation> AMMO_TIERS = List.of(
             ResourceLocation.fromNamespaceAndPath("arsenal", "copper_arrow"),
@@ -318,7 +318,7 @@ public final class DungeonRunManager {
     public static void exitViaBailPortal(ServerPlayer player, UUID ownerId, GatewayCrystalEntity portal) {
         ensureLoaded(player.server);
         RunState run = RUNS_BY_OWNER.get(ownerId);
-        if (run == null || !isRunExitPortal(run, portal)) return;
+        if (run == null || (portal != null && !isRunExitPortal(run, portal))) return;
         PlayerSnapshot snapshot = run.snapshots.get(player.getUUID());
         if (snapshot == null) return;
         clearHudToPlayer(player);
@@ -345,6 +345,12 @@ public final class DungeonRunManager {
             markStateDirty();
             forceCriticalSave(player.server);
         }
+    }
+
+    public static void returnThroughGatewayBlock(ServerPlayer player, BlockPos gatewayPos) {
+        RunState run = getRunForPlayer(player);
+        if (run == null || !isReturnGatewayPosition(run, gatewayPos)) return;
+        exitViaBailPortal(player, run.ownerId, null);
     }
 
     /** Bail Stones are retired; dungeon exits are handled by the red shop portal. */
@@ -408,8 +414,8 @@ public final class DungeonRunManager {
     public static void advanceThroughFloorGateway(ServerPlayer player, UUID ownerId, GatewayCrystalEntity portal) {
         ensureLoaded(player.server);
         RunState run = RUNS_BY_OWNER.get(ownerId);
-        if (run == null || (run.phase != RunPhase.CHECKPOINT && run.phase != RunPhase.SHOP) || !run.participants.contains(player.getUUID()) || !isRunAdvancePortal(run, portal)) return;
-        portal.discard();
+        if (run == null || (run.phase != RunPhase.CHECKPOINT && run.phase != RunPhase.SHOP) || !run.participants.contains(player.getUUID()) || (portal != null && !isRunAdvancePortal(run, portal))) return;
+        if (portal != null) portal.discard();
         run.advancePortalId = -1;
         ServerLevel dungeon = getDungeonLevel(run);
         if (dungeon != null) {
@@ -431,10 +437,10 @@ public final class DungeonRunManager {
         ensureLoaded(player.server);
         RunState run = RUNS_BY_OWNER.get(ownerId);
         if (run == null || run.phase != RunPhase.SHOP || !run.participants.contains(player.getUUID())
-                || !portal.isShopPortal() || !run.ownerId.equals(portal.getOwnerId())) {
+                || (portal != null && (!portal.isShopPortal() || !run.ownerId.equals(portal.getOwnerId())))) {
             return;
         }
-        portal.discard();
+        if (portal != null) portal.discard();
         run.advancePortalId = -1;
         for (ServerPlayer participant : run.liveParticipants()) {
             DungeonInstanceManager.teleportToShopInstance(participant, run.ownerId);
@@ -449,6 +455,21 @@ public final class DungeonRunManager {
         }
         markStateDirty();
         forceCriticalSave(player.server);
+    }
+
+    public static void useNextFloorGatewayBlock(ServerPlayer player, BlockPos gatewayPos) {
+        RunState run = getRunForPlayer(player);
+        if (run == null || run.phase != RunPhase.SHOP) return;
+        if (gatewayPos.distSqr(BlockPos.containing(DungeonInstanceManager.shopAdvancePortalPosition(run.ownerId))) <= 4) {
+            advanceThroughFloorGateway(player, run.ownerId, null);
+        } else if (gatewayPos.distSqr(BlockPos.containing(DungeonInstanceManager.advancePortalPosition(run.instanceId))) <= 4) {
+            enterShopThroughGateway(player, run.ownerId, null);
+        }
+    }
+
+    private static boolean isReturnGatewayPosition(RunState run, BlockPos pos) {
+        return pos.distSqr(BlockPos.containing(DungeonInstanceManager.exitPortalPosition(run.instanceId))) <= 4
+                || pos.distSqr(BlockPos.containing(DungeonInstanceManager.shopExitPortalPosition(run.ownerId))) <= 4;
     }
 
     private static boolean isRunExitPortal(RunState run, GatewayCrystalEntity portal) {
@@ -882,6 +903,7 @@ public final class DungeonRunManager {
         LootTable lootTable = player.server.reloadableRegistries().getLootTable(lootTableKey);
         long seed = containerLoot.seed() == 0L ? random.nextLong() : containerLoot.seed();
         ArrayList<ItemStack> rolledLoot = new ArrayList<>(lootTable.getRandomItems(params, seed));
+        rolledLoot.add(createRolledDungeonWeapon(random, Math.max(1, getEffectivePlayerLevel(player)), player.registryAccess()));
         if (run == null || run.quantityBonusModifier <= 0.0D) {
             return rolledLoot;
         }
@@ -1226,9 +1248,6 @@ public final class DungeonRunManager {
         ensureLoaded(event.getServer());
         flushPendingCompletionScreens(event.getServer());
         ServerLevel overworld = event.getServer().overworld();
-        if (overworld != null && overworld.getGameTime() % 20L == 0L) {
-            refreshOverworldRuneSlots(event.getServer());
-        }
         if (RUNS_BY_OWNER.isEmpty() && PENDING_SNAPSHOT_RESTORES.isEmpty() && PENDING_COMPLETION_SCREENS.isEmpty()) {
             return;
         }
@@ -1240,6 +1259,9 @@ public final class DungeonRunManager {
             ServerLevel dungeon = dungeonLevel;
             if (dungeon == null) continue;
             DungeonInstanceManager.keepInstanceAlive(run.instanceId, dungeon);
+            if (run.phase == RunPhase.SELECTING_BOOSTER || run.phase == RunPhase.SELECTING_LOOT) {
+                run.pausedRunTicks++;
+            }
             for (ServerPlayer participant : run.liveParticipants()) {
                 DungeonWeaponEquipment.enforceHotbarSlots(participant);
                 maintainDungeonSaturation(participant);
@@ -1295,34 +1317,6 @@ public final class DungeonRunManager {
             }
         }
         maybeAutosave(event.getServer(), dungeonLevel != null ? dungeonLevel.getGameTime() : (overworld != null ? overworld.getGameTime() : 0L));
-    }
-
-    private static void refreshOverworldRuneSlots(MinecraftServer server) {
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            if (player.level().dimension() == ModDimensions.DUNGEON_LEVEL) continue;
-            int level = getEffectivePlayerLevel(player);
-            Integer previous = LAST_OVERWORLD_LEVELS.put(player.getUUID(), level);
-            if (previous == null || level <= previous) continue;
-            int oldSlots = RunicLoadoutService.runeSlotsForPlayerLevel(previous);
-            int newSlots = RunicLoadoutService.runeSlotsForPlayerLevel(level);
-            if (newSlots <= oldSlots) continue;
-            applyRuneSlotCapacityToLoadout(player, newSlots);
-            player.displayClientMessage(Component.literal("Level " + level + " reached! Your dungeon loadout gained rune slots: " + oldSlots + " to " + newSlots)
-                    .withStyle(ChatFormatting.LIGHT_PURPLE), false);
-        }
-    }
-
-    private static void applyRuneSlotCapacityToLoadout(ServerPlayer player, int capacity) {
-        for (ItemStack stack : player.getInventory().items) {
-            if (DungeonBoundItems.isDungeonBound(stack)) RunicLoadoutService.applyRuneSlotCapacity(stack, capacity);
-        }
-        for (ItemStack stack : player.getInventory().armor) {
-            if (DungeonBoundItems.isDungeonBound(stack)) RunicLoadoutService.applyRuneSlotCapacity(stack, capacity);
-        }
-        for (ItemStack stack : player.getInventory().offhand) {
-            if (DungeonBoundItems.isDungeonBound(stack)) RunicLoadoutService.applyRuneSlotCapacity(stack, capacity);
-        }
-        player.inventoryMenu.broadcastChanges();
     }
 
     private static void flushPendingCompletionScreens(MinecraftServer server) {
@@ -1487,6 +1481,9 @@ public final class DungeonRunManager {
         if (stack.isEmpty() || stack.is(ModItems.MYTHIC_COIN.get())) {
             return;
         }
+        if (stack.is(ModItems.LOOT_POUCH.get())) {
+            DungeonBoundItems.forceMarkDungeonBound(stack);
+        }
         awardDungeonProgressionPoints(player, run, LEVEL_POINTS_PER_LOOT_PICKUP);
     }
 
@@ -1549,12 +1546,24 @@ public final class DungeonRunManager {
             return;
         }
         ItemStack projectile = itemStack(ammoId).copy();
-        if (event.getProjectileWeaponItemStack().getItem() instanceof net.minecraft.world.item.CrossbowItem
-                && !(projectile.getItem() instanceof net.minecraft.world.item.ArrowItem)
+        ResourceLocation weaponId = BuiltInRegistries.ITEM.getKey(event.getProjectileWeaponItemStack().getItem());
+        String weaponPath = weaponId == null ? "" : weaponId.getPath();
+        boolean crossbow = event.getProjectileWeaponItemStack().getItem() instanceof net.minecraft.world.item.CrossbowItem
+                || weaponPath.contains("crossbow");
+        if (!(projectile.getItem() instanceof net.minecraft.world.item.ArrowItem)
                 && !projectile.is(Items.FIREWORK_ROCKET)) {
             projectile = new ItemStack(Items.ARROW);
         }
         event.setProjectileItemStack(projectile);
+        if (crossbow && player instanceof ServerPlayer serverPlayer) {
+            RunState run = getRunForPlayer(serverPlayer);
+            if (run != null) {
+                run.ammoRemaining.put(serverPlayer.getUUID(), Math.max(0, remaining - 1));
+                markStateDirty();
+                syncHudToPlayer(serverPlayer, run.phase == RunPhase.IN_WAVE, run.waveNumber,
+                        Math.max(0, run.toSpawn + run.aliveMobs.size()), Math.max(1, run.waveTotalMobs));
+            }
+        }
     }
 
     @SubscribeEvent
@@ -1727,7 +1736,6 @@ public final class DungeonRunManager {
         run.toSpawn = Math.max(50, (int) Math.round(baseCount * partyMultiplier * run.enemyCountMultiplier * progressionDifficulty));
         run.waveTotalMobs = run.toSpawn;
         run.currentWavePools = buildWavePools(run);
-        for (ServerPlayer player : run.liveParticipants()) replenishWaveAmmo(player, run);
         spawnInitialWaveMobs(run);
         syncHud(run, true);
         markStateDirty();
@@ -1815,43 +1823,13 @@ public final class DungeonRunManager {
     }
 
     private static void spawnExitPortal(RunState run, ServerLevel level) {
-        if (run.exitPortalId >= 0) {
-            Entity existing = level.getEntity(run.exitPortalId);
-            if (existing instanceof GatewayCrystalEntity portal && portal.isAlive()) {
-                return;
-            }
-            run.exitPortalId = -1;
-        }
-        GatewayCrystalEntity portal = ModEntities.GATEWAY_CRYSTAL.get().create(level);
-        if (portal == null) return;
-        net.minecraft.world.phys.Vec3 portalPos = DungeonInstanceManager.exitPortalPosition(run.instanceId);
-        portal.setOwnerId(run.ownerId);
-        portal.setReturnPortal(true);
-        portal.moveTo(portalPos.x(), portalPos.y(), portalPos.z(), 0.0F, 0.0F);
-        if (level.addFreshEntity(portal)) {
-            run.exitPortalId = portal.getId();
-            markStateDirty();
-        }
+        placeGateway(level, DungeonInstanceManager.exitPortalPosition(run.instanceId), ModBlocks.RETURN_GATEWAY.get());
+        run.exitPortalId = -1;
     }
 
     private static void spawnShopExitPortal(RunState run, ServerLevel level) {
-        if (run.exitPortalId >= 0) {
-            Entity existing = level.getEntity(run.exitPortalId);
-            if (existing instanceof GatewayCrystalEntity portal && portal.isAlive() && portal.isReturnPortal()) return;
-            run.exitPortalId = -1;
-        }
-        GatewayCrystalEntity portal = ModEntities.GATEWAY_CRYSTAL.get().create(level);
-        if (portal == null) return;
-        Vec3 pos = DungeonInstanceManager.shopExitPortalPosition(run.ownerId);
-        portal.setOwnerId(run.ownerId);
-        portal.setReturnPortal(true);
-        portal.setCustomName(Component.literal("EXIT").withStyle(ChatFormatting.RED, ChatFormatting.BOLD));
-        portal.setCustomNameVisible(true);
-        portal.moveTo(pos.x(), pos.y(), pos.z(), 0.0F, 0.0F);
-        if (level.addFreshEntity(portal)) {
-            run.exitPortalId = portal.getId();
-            markStateDirty();
-        }
+        placeGateway(level, DungeonInstanceManager.shopExitPortalPosition(run.ownerId), ModBlocks.RETURN_GATEWAY.get());
+        run.exitPortalId = -1;
     }
 
     private static boolean isRunAdvancePortal(RunState run, GatewayCrystalEntity portal) {
@@ -1860,6 +1838,20 @@ public final class DungeonRunManager {
             run.advancePortalId = portal.getId();
             markStateDirty();
         }
+        return true;
+    }
+
+    public static boolean debugOpenBoosterPack(ServerPlayer player) {
+        ensureLoaded(player.server);
+        RunState run = getRunForPlayer(player);
+        if (run == null || !player.getUUID().equals(run.ownerId)) return false;
+        discardTrackedMobs(run, getDungeonLevel(run));
+        run.phase = RunPhase.SELECTING_BOOSTER;
+        run.intermissionTicks = 0;
+        rollBoosterOptions(run, player.getRandom());
+        openWaveMenu(player, run);
+        markStateDirty();
+        forceCriticalSave(player.server);
         return true;
     }
 
@@ -1903,27 +1895,13 @@ public final class DungeonRunManager {
     }
 
     private static void spawnAdvancePortal(RunState run, ServerLevel level) {
-        if (run.advancePortalId >= 0) {
-            Entity existing = level.getEntity(run.advancePortalId);
-            if (existing instanceof GatewayCrystalEntity portal && portal.isAlive() && portal.isAdvancePortal()) return;
-            run.advancePortalId = -1;
-        }
-        GatewayCrystalEntity portal = ModEntities.GATEWAY_CRYSTAL.get().create(level);
-        if (portal == null) return;
         Vec3 pos = run.phase == RunPhase.SHOP
                 ? DungeonInstanceManager.shopAdvancePortalPosition(run.ownerId)
                 : DungeonInstanceManager.advancePortalPosition(run.instanceId);
-        portal.setOwnerId(run.ownerId);
-        portal.setAdvancePortal(true);
-        portal.setCustomName(Component.literal("Next Floor").withStyle(ChatFormatting.AQUA, ChatFormatting.BOLD));
-        portal.setCustomNameVisible(true);
-        portal.moveTo(pos.x(), pos.y(), pos.z(), 0.0F, 0.0F);
-        if (level.addFreshEntity(portal)) {
-            run.advancePortalId = portal.getId();
-            for (ServerPlayer player : run.liveParticipants()) {
-                player.displayClientMessage(Component.literal("A gateway has opened to the next floor").withStyle(ChatFormatting.LIGHT_PURPLE), true);
-            }
-            markStateDirty();
+        placeGateway(level, pos, ModBlocks.NEXT_FLOOR_GATEWAY.get());
+        run.advancePortalId = -1;
+        for (ServerPlayer player : run.liveParticipants()) {
+            player.displayClientMessage(Component.literal("A gateway has opened to the next floor").withStyle(ChatFormatting.LIGHT_PURPLE), true);
         }
     }
 
@@ -1966,13 +1944,6 @@ public final class DungeonRunManager {
         int before = LevelUpIntegration.getEffectiveLevel(player);
         LevelUpIntegration.awardXp(player, amount, ResourceLocation.fromNamespaceAndPath("gatesofavarice", "dungeon_shop_levelup"));
         int after = LevelUpIntegration.getEffectiveLevel(player);
-        int oldSlots = RunicLoadoutService.runeSlotsForPlayerLevel(before);
-        int newSlots = RunicLoadoutService.runeSlotsForPlayerLevel(after);
-        if (newSlots > oldSlots) {
-            applyRuneSlotCapacityToLoadout(player, newSlots);
-            player.displayClientMessage(Component.literal("Your dungeon loadout rune slots upgraded: " + oldSlots + " to " + newSlots)
-                    .withStyle(ChatFormatting.LIGHT_PURPLE), false);
-        }
         player.displayClientMessage(Component.literal(after > before
                 ? "Dungeon experience claimed: level " + before + " to " + after
                 : "Dungeon experience claimed: " + amount + " XP").withStyle(ChatFormatting.GOLD), false);
@@ -1990,38 +1961,33 @@ public final class DungeonRunManager {
     }
 
     private static void applyLevelBasedLoadoutGrowth(ServerPlayer player, int oldLevel) {
-        int newLevel = getEffectivePlayerLevel(player);
-        int oldSlots = RunicLoadoutService.runeSlotsForPlayerLevel(oldLevel);
-        int newSlots = RunicLoadoutService.runeSlotsForPlayerLevel(newLevel);
-        if (newSlots > oldSlots) applyRuneSlotCapacityToLoadout(player, newSlots);
+        // Loadout growth comes from upgrades; rune capacity is material-bound.
     }
 
     private static void spawnShopPortal(RunState run, ServerLevel level) {
-        if (run.advancePortalId >= 0) {
-            Entity existing = level.getEntity(run.advancePortalId);
-            if (existing instanceof GatewayCrystalEntity portal && portal.isAlive() && portal.isShopPortal()) return;
-            run.advancePortalId = -1;
-        }
-        GatewayCrystalEntity portal = ModEntities.GATEWAY_CRYSTAL.get().create(level);
-        if (portal == null) return;
         Vec3 pos = DungeonInstanceManager.advancePortalPosition(run.instanceId);
-        portal.setOwnerId(run.ownerId);
-        portal.setAdvancePortal(true);
-        portal.setShopPortal(true);
-        portal.moveTo(pos.x(), pos.y(), pos.z(), 0.0F, 0.0F);
-        if (level.addFreshEntity(portal)) {
-            run.advancePortalId = portal.getId();
-            markStateDirty();
-        }
+        placeGateway(level, pos, ModBlocks.NEXT_FLOOR_GATEWAY.get());
+        run.advancePortalId = -1;
     }
 
     private static void discardAdvancePortal(RunState run) {
         ServerLevel dungeon = getDungeonLevel(run);
-        if (dungeon != null && run.advancePortalId >= 0) {
-            Entity portal = dungeon.getEntity(run.advancePortalId);
-            if (portal != null) portal.discard();
+        if (dungeon != null) {
+            clearGateway(dungeon, DungeonInstanceManager.advancePortalPosition(run.instanceId));
+            clearGateway(dungeon, DungeonInstanceManager.shopAdvancePortalPosition(run.ownerId));
         }
         run.advancePortalId = -1;
+    }
+
+    private static void placeGateway(ServerLevel level, Vec3 position, net.minecraft.world.level.block.Block block) {
+        level.setBlockAndUpdate(BlockPos.containing(position), block.defaultBlockState());
+    }
+
+    private static void clearGateway(ServerLevel level, Vec3 position) {
+        BlockPos blockPos = BlockPos.containing(position);
+        if (level.getBlockState(blockPos).is(ModBlocks.NEXT_FLOOR_GATEWAY.get()) || level.getBlockState(blockPos).is(ModBlocks.RETURN_GATEWAY.get())) {
+            level.setBlockAndUpdate(blockPos, Blocks.AIR.defaultBlockState());
+        }
     }
 
     private static boolean ensureShopkeeper(RunState run, ServerLevel level) {
@@ -2032,8 +1998,8 @@ public final class DungeonRunManager {
         if (existingShopkeeper != null) {
             boolean changed = run.shopkeeperId != existingShopkeeper.getId() || !existingShopkeeper.getUUID().equals(run.shopkeeperUuid);
             markDungeonShopkeeper(existingShopkeeper, run.ownerId);
-            ShopkeeperManager.setSpecialistRole(existingShopkeeper, "archive_keeper",
-                    Component.literal("Archive Keeper").withStyle(ChatFormatting.AQUA));
+            ShopkeeperManager.setSpecialistRole(existingShopkeeper, "knowledge_keeper",
+                    Component.literal("Knowledge Keeper").withStyle(ChatFormatting.AQUA));
             run.shopkeeperId = existingShopkeeper.getId();
             run.shopkeeperUuid = existingShopkeeper.getUUID();
             positionShopkeeper(existingShopkeeper, DungeonInstanceManager.shopkeeperPosition(run.ownerId));
@@ -2053,8 +2019,8 @@ public final class DungeonRunManager {
             return false;
         }
         markDungeonShopkeeper(shop, run.ownerId);
-        ShopkeeperManager.setSpecialistRole(shop, "archive_keeper",
-                Component.literal("Archive Keeper").withStyle(ChatFormatting.AQUA));
+        ShopkeeperManager.setSpecialistRole(shop, "knowledge_keeper",
+                Component.literal("Knowledge Keeper").withStyle(ChatFormatting.AQUA));
         positionShopkeeper(shop, shopPos);
         run.shopkeeperId = shop.getId();
         run.shopkeeperUuid = shop.getUUID();
@@ -2160,7 +2126,7 @@ public final class DungeonRunManager {
         CompoundTag data = trader.getPersistentData();
         return !data.hasUUID(DUNGEON_SHOPKEEPER_OWNER_KEY)
                 || data.getUUID(DUNGEON_SHOPKEEPER_OWNER_KEY).equals(run.ownerId)
-                || "archive_keeper".equals(ShopkeeperManager.getSpecialistRole(trader));
+                || "knowledge_keeper".equals(ShopkeeperManager.getSpecialistRole(trader));
     }
 
     private static void discardRunShopkeeper(RunState run) {
@@ -2334,7 +2300,7 @@ public final class DungeonRunManager {
                 secondary,
                 pickLoadoutUtility(definition),
                 itemStack(ammoId),
-                isRanged(definition) ? BASE_AMMO_PER_WAVE + Math.max(0, avgLevel - 1) / 5 * 2 : 0,
+                0,
                 definition.supplies().stream()
                         .filter(spec -> isAllowedLoadoutSupply(spec.item()))
                         .map(spec -> new ItemStack(spec.item(), spec.minCount() + random.nextInt(Math.max(1, spec.maxCount() - spec.minCount() + 1))))
@@ -2514,9 +2480,10 @@ public final class DungeonRunManager {
             RunicLoadoutService.applyLoadoutStats(player.serverLevel(), secondary, definition.secondaryRunicStatPool(), random);
             RunicLoadoutService.applyLoadoutEffects(player.serverLevel(), primary, definition.weaponEffectPool(), random);
             RunicLoadoutService.applyLoadoutEffects(player.serverLevel(), secondary, definition.weaponEffectPool(), random);
-            int runeSlotCapacity = RunicLoadoutService.runeSlotsForPlayerLevel(playerLevel);
-            RunicLoadoutService.applyRuneSlotCapacity(primary, runeSlotCapacity);
-            RunicLoadoutService.applyRuneSlotCapacity(secondary, runeSlotCapacity);
+            DungeonGearRoller.nameLoadoutWeapon(primary, definition.id(), true);
+            DungeonGearRoller.nameLoadoutWeapon(secondary, definition.id(), false);
+            RunicLoadoutService.applyMaterialRuneSlots(primary);
+            RunicLoadoutService.applyMaterialRuneSlots(secondary);
         }
         applyRangedLoadoutEnchantments(player, primary, definition);
         applyRangedLoadoutEnchantments(player, secondary, definition);
@@ -2529,12 +2496,11 @@ public final class DungeonRunManager {
         resendArmorSlots(player);
         DungeonWeaponEquipment.equip(player, primary);
         DungeonWeaponEquipment.equip(player, secondary);
-        if (!equipUtility(player, utility)) {
+        if (!equipUtility(player, utility, definition)) {
             player.getInventory().add(utility);
         }
         for (ItemStack food : loadout.food()) {
             ItemStack foodCopy = food.copy();
-            if (isManagedAmmo(foodCopy)) continue;
             DungeonBoundItems.forceMarkDungeonBound(foodCopy);
             player.getInventory().add(foodCopy);
         }
@@ -2544,7 +2510,9 @@ public final class DungeonRunManager {
         }
         if (run != null && !loadout.ammo().isEmpty()) {
             run.ammoItems.put(player.getUUID(), BuiltInRegistries.ITEM.getKey(loadout.ammo().getItem()));
-            run.ammoPerWave.put(player.getUUID(), loadout.ammoCount());
+            int startingAmmo = rollStartingAmmo(loadout.ammo(), random);
+            run.ammoCapacity.put(player.getUUID(), startingAmmo);
+            run.ammoRemaining.put(player.getUUID(), startingAmmo);
         }
         removeBailStones(player);
         player.setHealth(player.getMaxHealth());
@@ -2580,10 +2548,10 @@ public final class DungeonRunManager {
         DungeonWeaponEquipment.equip(player, stack);
     }
 
-    private static boolean equipUtility(ServerPlayer player, ItemStack stack) {
+    private static boolean equipUtility(ServerPlayer player, ItemStack stack, LoadoutModels.LoadoutDefinition definition) {
         if (stack.is(Items.SHIELD)) {
             DungeonGearRoller.rollAndBind(stack, player.getRandom(), getEffectivePlayerLevel(player), 0L, player.registryAccess());
-            DungeonBoundItems.setAutoBlockChance(stack, DungeonBoundItems.BASE_AUTO_BLOCK_CHANCE);
+            DungeonBoundItems.setAutoBlockChance(stack, shieldAutoBlockChance(definition));
             player.setItemSlot(EquipmentSlot.OFFHAND, stack);
             return true;
         }
@@ -2593,13 +2561,24 @@ public final class DungeonRunManager {
         return CuriosCompat.equipBeltMagnet(player, stack);
     }
 
+    private static double shieldAutoBlockChance(LoadoutModels.LoadoutDefinition definition) {
+        if (definition == null) return DungeonBoundItems.BASE_AUTO_BLOCK_CHANCE;
+        return switch (definition.id()) {
+            case "vanguard" -> 0.35D;
+            case "knight" -> 0.30D;
+            case "warlord", "gladiator" -> 0.25D;
+            case "ranger", "marksman", "nomad" -> 0.15D;
+            default -> DungeonBoundItems.BASE_AUTO_BLOCK_CHANCE;
+        };
+    }
+
     private static void rollArmorPiece(ServerPlayer player, ItemStack stack, LoadoutModels.LoadoutDefinition definition, EquipmentSlot slot, RandomSource random) {
         RunicLoadoutService.tagLoadoutIdentity(stack, definition.id(), definition.armorSet().displayName(), slot.getName());
         RunicLoadoutService.applyDungeonArmorBaseStats(stack, definition.armorSet(), slot, random);
         RunicLoadoutService.applyLoadoutStats(player.serverLevel(), stack, definition.armorRunicStatPool(), random);
         AuraAttributeSupport.applyLoadoutBonuses(stack, definition.id(), slot, definition.armorRunicStatPool());
         RunicLoadoutService.applyLoadoutEffects(player.serverLevel(), stack, definition.armorEffectPool(), random);
-        RunicLoadoutService.applyRuneSlotCapacity(stack, RunicLoadoutService.runeSlotsForPlayerLevel(getEffectivePlayerLevel(player)));
+        RunicLoadoutService.applyMaterialRuneSlots(stack);
         if (com.revilo.gatesofavarice.config.GatewayExpansionConfig.FORCE_BINDING_ON_LOADOUT_ARMOR.get()) {
             net.minecraft.core.Holder.Reference<net.minecraft.world.item.enchantment.Enchantment> binding =
                     player.serverLevel().registryAccess().lookupOrThrow(net.minecraft.core.registries.Registries.ENCHANTMENT)
@@ -2609,39 +2588,6 @@ public final class DungeonRunManager {
             }
         }
         RunicLoadoutService.syncRunicSlots(stack);
-    }
-
-    private static List<LoadoutDefinition> buildLoadoutDefinitions() {
-        return List.of(
-                loadout("Assassin", "dagger", "dagger", "Shadow Leather Set", Items.LEATHER_HELMET, Items.LEATHER_CHESTPLATE, Items.LEATHER_LEGGINGS, Items.LEATHER_BOOTS,
-                        List.of("Very high speed", "Low defence", "Small crit bonus", "Low health"), List.of(new ItemStack(Items.GOLDEN_APPLE, 2), new ItemStack(Items.COOKED_PORKCHOP, 16))),
-                loadout("Knight", "longsword", "crossbow", "Steel Knight Set", Items.IRON_HELMET, Items.IRON_CHESTPLATE, Items.IRON_LEGGINGS, Items.IRON_BOOTS,
-                        List.of("High defence", "Medium speed", "Medium health boost", "Small blocking"), List.of(new ItemStack(Items.COOKED_BEEF, 16), new ItemStack(Items.GOLDEN_CARROT, 8))),
-                loadout("Berserker", "axe", "machete", "Rage Plate Set", Items.IRON_HELMET, Items.IRON_CHESTPLATE, Items.IRON_LEGGINGS, Items.IRON_BOOTS,
-                        List.of("Medium defence", "Medium speed", "High health boost", "Low ability power"), List.of(new ItemStack(Items.COOKED_BEEF, 24), new ItemStack(Items.GOLDEN_APPLE, 1))),
-                loadout("Vanguard", "hammer", "broadsword", "Fortress Set", Items.DIAMOND_HELMET, Items.DIAMOND_CHESTPLATE, Items.DIAMOND_LEGGINGS, Items.DIAMOND_BOOTS,
-                        List.of("Very high defence", "Very low speed", "Massive health boost", "Medium shockwaves"), List.of(new ItemStack(Items.RABBIT_STEW, 6), new ItemStack(Items.COOKED_BEEF, 12))),
-                loadout("Samurai", "gaundao", "dagger", "Windwalker Set", Items.CHAINMAIL_HELMET, Items.CHAINMAIL_CHESTPLATE, Items.CHAINMAIL_LEGGINGS, Items.CHAINMAIL_BOOTS,
-                        List.of("High speed", "Medium defence", "Small ability power", "Medium health"), List.of(new ItemStack(ModItems.ARCANE_APPLE.get(), 2), new ItemStack(Items.COOKED_SALMON, 16), new ItemStack(Items.GOLDEN_CARROT, 12))),
-                loadout("Reaper", "glaive", "dagger", "Soulbound Set", Items.CHAINMAIL_HELMET, Items.IRON_CHESTPLATE, Items.CHAINMAIL_LEGGINGS, Items.IRON_BOOTS,
-                        List.of("Medium defence", "Medium speed", "High soul drain", "Medium ability power"), List.of(new ItemStack(ModItems.ARCANE_APPLE.get(), 3), new ItemStack(Items.BEETROOT_SOUP, 8))),
-                loadout("Ranger", "bow", "machete", "Hunter Set", Items.LEATHER_HELMET, Items.LEATHER_CHESTPLATE, Items.LEATHER_LEGGINGS, Items.LEATHER_BOOTS,
-                        List.of("High speed", "Low-medium defence", "Small ability power", "Low health boost"), List.of(new ItemStack(ModItems.ARCANE_APPLE.get(), 1), new ItemStack(Items.COOKED_CHICKEN, 16), new ItemStack(Items.SWEET_BERRIES, 32))),
-                loadout("Marksman", "crossbow", "longsword", "Sharpshooter Set", Items.CHAINMAIL_HELMET, Items.CHAINMAIL_CHESTPLATE, Items.CHAINMAIL_LEGGINGS, Items.CHAINMAIL_BOOTS,
-                        List.of("Medium defence", "Medium speed", "Medium ability power", "Small health boost"), List.of(new ItemStack(ModItems.ARCANE_APPLE.get(), 2), new ItemStack(Items.GOLDEN_CARROT, 16), new ItemStack(Items.PUMPKIN_PIE, 8))),
-                loadout("Gladiator", "broadsword", "dagger", "Arena Set", Items.IRON_HELMET, Items.IRON_CHESTPLATE, Items.IRON_LEGGINGS, Items.IRON_BOOTS,
-                        List.of("Medium-high defence", "Medium speed", "Medium blocking", "Medium health boost"), List.of(new ItemStack(Items.COOKED_BEEF, 20), new ItemStack(Items.GOLDEN_APPLE, 1))),
-                loadout("Spellblade", "longsword", "glaive", "Arcane Set", Items.GOLDEN_HELMET, Items.CHAINMAIL_CHESTPLATE, Items.GOLDEN_LEGGINGS, Items.CHAINMAIL_BOOTS,
-                        List.of("Medium defence", "Medium speed", "High ability power", "Small health boost"), List.of(new ItemStack(ModItems.ARCANE_APPLE.get(), 4), new ItemStack(Items.GOLDEN_CARROT, 16), new ItemStack(Items.HONEY_BOTTLE, 6))),
-                loadout("Warlord", "hammer", "crossbow", "Tyrant Set", Items.DIAMOND_HELMET, Items.DIAMOND_CHESTPLATE, Items.DIAMOND_LEGGINGS, Items.DIAMOND_BOOTS,
-                        List.of("Very high defence", "Heavy shockwaves", "High health boost", "Very low speed"), List.of(new ItemStack(Items.COOKED_MUTTON, 24), new ItemStack(Items.GOLDEN_APPLE, 3))),
-                loadout("Nomad", "machete", "bow", "Traveler Set", Items.LEATHER_HELMET, Items.CHAINMAIL_CHESTPLATE, Items.LEATHER_LEGGINGS, Items.LEATHER_BOOTS,
-                        List.of("Very high speed", "Low defence", "Small health boost", "Low ability power"), List.of(new ItemStack(Items.BREAD, 24), new ItemStack(Items.COOKED_COD, 12)))
-        );
-    }
-
-    private static LoadoutDefinition loadout(String name, String primaryKind, String secondaryKind, String armorName, Item head, Item chest, Item legs, Item feet, List<String> traits, List<ItemStack> food) {
-        return new LoadoutDefinition(name, primaryKind, secondaryKind, armorName, head, chest, legs, feet, traits, food);
     }
 
     private static List<WeightedItem> buildWeaponPool() {
@@ -2752,14 +2698,8 @@ public final class DungeonRunManager {
         return pickWeightedWeaponForMaterial(random, rollWeaponMaterial(random, playerLevel));
     }
 
-    private static Item pickWeightedWeaponForFloor(RandomSource random, int floor) {
-        return pickWeightedWeaponForMaterial(random, rollWeaponMaterialForFloor(random, floor));
-    }
-
     private static Item pickWeightedWeaponForMaterial(RandomSource random, String material) {
-        if (WEAPON_POOL.isEmpty()) {
-            return Items.IRON_SWORD;
-        }
+        if (WEAPON_POOL.isEmpty()) throw new IllegalStateException("No Arsenal dungeon weapons are registered.");
         ArrayList<WeightedItem> eligible = new ArrayList<>();
         for (WeightedItem entry : WEAPON_POOL) {
             ResourceLocation id = BuiltInRegistries.ITEM.getKey(entry.item());
@@ -2767,11 +2707,7 @@ public final class DungeonRunManager {
                 eligible.add(entry);
             }
         }
-        if (eligible.isEmpty()) {
-            Item fallback = resolveItem("gatewayexpansion:" + material + "_sword");
-            if (fallback == null) fallback = resolveItem("arsenal:" + material + "_longsword");
-            return fallback == null ? Items.IRON_SWORD : fallback;
-        }
+        if (eligible.isEmpty()) throw new IllegalStateException("No Arsenal weapons are registered for material: " + material);
         int totalWeight = 0;
         for (WeightedItem entry : eligible) totalWeight += entry.weight();
         int roll = random.nextInt(totalWeight);
@@ -2790,23 +2726,18 @@ public final class DungeonRunManager {
             return Items.BOW;
         }
         if ("short_bow".equals(kind)) {
-            Item item = resolveItem("arsenal:short_bow");
-            return item == null ? Items.BOW : item;
+            return requireRegisteredItem("arsenal:short_bow");
         }
         if ("long_bow".equals(kind)) {
-            Item item = resolveItem("arsenal:long_bow");
-            return item == null ? Items.BOW : item;
+            return requireRegisteredItem("arsenal:long_bow");
         }
         if ("crossbow".equals(kind)) {
             return Items.CROSSBOW;
         }
         if ("heavy_crossbow".equals(kind) || "dual_crossbow".equals(kind) || "scatter_crossbow".equals(kind)) {
-            Item item = resolveItem("arsenal:" + kind);
-            return item == null ? Items.CROSSBOW : item;
+            return requireRegisteredItem("arsenal:" + kind);
         }
-        if ("axe".equals(kind)) {
-            return pickWeaponByPath(random, playerLevel, "paxel");
-        }
+        if ("axe".equals(kind)) return pickWeaponByPath(random, playerLevel, "hammer");
         return pickWeaponByPath(random, playerLevel, kind);
     }
 
@@ -2822,13 +2753,7 @@ public final class DungeonRunManager {
                 eligible.add(entry);
             }
         }
-        if (eligible.isEmpty()) {
-            String fallbackKind = "axe".equals(pathNeedle) || "paxel".equals(pathNeedle) ? "hammer" : pathNeedle;
-            Item fallback = resolveItem("arsenal:" + material + "_" + fallbackKind);
-            if (fallback == null) fallback = resolveItem("gatewayexpansion:" + material + "_" + pathNeedle);
-            if (fallback == null) fallback = resolveItem("arsenal:" + material + "_longsword");
-            return fallback == null ? Items.IRON_SWORD : fallback;
-        }
+        if (eligible.isEmpty()) throw new IllegalStateException("No Arsenal " + material + " weapon matches: " + pathNeedle);
         int totalWeight = 0;
         for (WeightedItem entry : eligible) totalWeight += entry.weight();
         int roll = random.nextInt(totalWeight);
@@ -2843,13 +2768,7 @@ public final class DungeonRunManager {
     }
 
     private static String rollWeaponMaterial(RandomSource random, int playerLevel) {
-        int level = Mth.clamp(playerLevel, 0, 100);
-        if (level <= 5) return "mana_steel";
-        if (level <= 20) return rollMaterialBand(random, level, 6, 20, "mana_steel", "elixrite");
-        if (level <= 40) return rollMaterialBand(random, level, 21, 40, "astrite", "lunarium");
-        if (level <= 60) return rollMaterialBand(random, level, 41, 60, "ignite", "iridium");
-        if (level <= 80) return rollMaterialBand(random, level, 61, 80, "mythril", "arcanium");
-        return "prismatic_steel";
+        return rollWeaponMaterialForFloor(random, Mth.clamp(playerLevel, 0, 100));
     }
 
     private static String rollWeaponMaterialForFloor(RandomSource random, int floor) {
@@ -2858,9 +2777,9 @@ public final class DungeonRunManager {
         addFloorMaterial(eligible, level, 0, 15, "mana_steel");
         addFloorMaterial(eligible, level, 10, 25, "elixrite");
         addFloorMaterial(eligible, level, 20, 40, "astrite");
-        addFloorMaterial(eligible, level, 30, 55, "lunarium");
+        addFloorMaterial(eligible, level, 30, 60, "lunarium");
         addFloorMaterial(eligible, level, 50, 70, "ignite");
-        addFloorMaterial(eligible, level, 60, 80, "iridium");
+        addFloorMaterial(eligible, level, 60, 85, "iridium");
         addFloorMaterial(eligible, level, 70, 90, "mythril");
         addFloorMaterial(eligible, level, 75, 100, "arcanium");
         addFloorMaterial(eligible, level, 90, 100, "prismatic_steel");
@@ -2870,12 +2789,6 @@ public final class DungeonRunManager {
 
     private static void addFloorMaterial(List<String> eligible, int floor, int min, int max, String material) {
         if (floor >= min && floor <= max) eligible.add(material);
-    }
-
-    private static String rollMaterialBand(RandomSource random, int level, int minLevel, int maxLevel,
-            String lowerMaterial, String upperMaterial) {
-        double upperChance = (level - minLevel + 1.0D) / (maxLevel - minLevel + 1.0D);
-        return random.nextDouble() < upperChance ? upperMaterial : lowerMaterial;
     }
 
     private static String weaponMaterial(ResourceLocation id) {
@@ -2909,53 +2822,22 @@ public final class DungeonRunManager {
         return BuiltInRegistries.ITEM.get(key);
     }
 
+    private static Item requireRegisteredItem(String id) {
+        Item item = resolveItem(id);
+        if (item == null) throw new IllegalStateException("Required loadout item is missing: " + id);
+        return item;
+    }
+
     private static int getEffectivePlayerLevel(ServerPlayer player) {
         return LevelUpIntegration.getEffectiveLevel(player);
     }
 
     private static void applyLoadout(ServerPlayer player, int loadoutId) {
-        clearForDungeon(player);
-        switch (loadoutId) {
-            case 0 -> equipVanguard(player);
-            case 1 -> equipRanger(player);
-            default -> equipSpellblade(player);
-        }
-        removeBailStones(player);
         RunState run = getRunForPlayer(player);
-        if (run != null && loadoutId == 1) {
-            ResourceLocation ammo = AMMO_TIERS.get(Math.min(AMMO_TIERS.size() - 2, Math.max(0, getEffectivePlayerLevel(player) - 1) / 10));
-            run.ammoItems.put(player.getUUID(), ammo);
-            run.ammoPerWave.put(player.getUUID(), BASE_AMMO_PER_WAVE);
-            run.ammoRemaining.put(player.getUUID(), BASE_AMMO_PER_WAVE);
-        }
-        player.inventoryMenu.broadcastChanges();
-        player.containerMenu.broadcastChanges();
-    }
-
-    private static void equipVanguard(ServerPlayer player) {
-        equipWeaponSlots(player, new ItemStack(Items.IRON_SWORD), new ItemStack(Items.IRON_AXE));
-        equipUtility(player, new ItemStack(Items.SHIELD));
-        equipArmorSet(player, Items.IRON_HELMET, Items.IRON_CHESTPLATE, Items.IRON_LEGGINGS, Items.IRON_BOOTS);
-    }
-
-    private static void equipRanger(ServerPlayer player) {
-        ItemStack bow = new ItemStack(Items.BOW);
-        bow.enchant(player.registryAccess().holderOrThrow(Enchantments.POWER), 1);
-        applyRangedLoadoutEnchantments(player, bow, null);
-        equipWeaponSlots(player, bow, new ItemStack(Items.STONE_SWORD));
-        equipArmorSet(player, Items.CHAINMAIL_HELMET, Items.CHAINMAIL_CHESTPLATE, Items.CHAINMAIL_LEGGINGS, Items.CHAINMAIL_BOOTS);
-    }
-
-    private static void equipSpellblade(ServerPlayer player) {
-        equipWeaponSlots(player, new ItemStack(Items.TRIDENT), new ItemStack(Items.IRON_AXE));
-        equipArmorSet(player, Items.GOLDEN_HELMET, Items.GOLDEN_CHESTPLATE, Items.GOLDEN_LEGGINGS, Items.GOLDEN_BOOTS);
-    }
-
-    private static void equipArmorSet(ServerPlayer player, Item helmet, Item chest, Item legs, Item boots) {
-        player.setItemSlot(EquipmentSlot.HEAD, new ItemStack(helmet));
-        player.setItemSlot(EquipmentSlot.CHEST, new ItemStack(chest));
-        player.setItemSlot(EquipmentSlot.LEGS, new ItemStack(legs));
-        player.setItemSlot(EquipmentSlot.FEET, new ItemStack(boots));
+        if (run == null) return;
+        if (run.loadoutOptions.isEmpty()) rollLoadoutOptions(run, player.getRandom());
+        if (loadoutId < 0 || loadoutId >= run.loadoutOptions.size()) return;
+        grantLoadout(player, run.loadoutOptions.get(loadoutId), player.getRandom());
     }
 
     private static RunState getRunForPlayer(Player player) {
@@ -2985,15 +2867,6 @@ public final class DungeonRunManager {
             }
         }
         run.aliveMobs.clear();
-    }
-
-    private static void equipWeaponSlots(ServerPlayer player, ItemStack primary, ItemStack secondary) {
-        DungeonGearRoller.rollAndBind(primary, player.getRandom(), getEffectivePlayerLevel(player), 0L, player.registryAccess());
-        DungeonGearRoller.rollAndBind(secondary, player.getRandom(), getEffectivePlayerLevel(player), 0L, player.registryAccess());
-        DungeonBoundItems.markPrimaryWeapon(primary);
-        DungeonBoundItems.markSecondaryWeapon(secondary);
-        DungeonWeaponEquipment.equip(player, primary);
-        DungeonWeaponEquipment.equip(player, secondary);
     }
 
     /** Removes wave mobs left by a completed or otherwise lost run before a fresh run begins. */
@@ -3061,11 +2934,18 @@ public final class DungeonRunManager {
     }
 
     public static void spawnDungeonWeaponDrop(ServerLevel level, double x, double y, double z, int floor) {
-        ItemStack weapon = new ItemStack(pickWeightedWeaponForFloor(level.random, floor));
-        DungeonGearRoller.rollAndBind(weapon, level.random, Math.max(1, floor), 0L, level.registryAccess());
+        ItemStack weapon = createRolledDungeonWeapon(level.random, Math.max(1, floor), level.registryAccess());
         if (level.random.nextBoolean()) DungeonBoundItems.markPrimaryWeapon(weapon);
         else DungeonBoundItems.markSecondaryWeapon(weapon);
         com.revilo.gatesofavarice.entity.DungeonDropEntity.spawnWeapon(level, x, y, z, weapon);
+    }
+
+    private static ItemStack createRolledDungeonWeapon(RandomSource random, int level, net.minecraft.core.RegistryAccess registryAccess) {
+        ItemStack weapon = new ItemStack(pickWeightedWeapon(random, level));
+        DungeonGearRoller.rollAndBind(weapon, random, level, 0L, registryAccess);
+        DungeonGearRoller.rollWeaponAffixes(weapon, random);
+        RunicLoadoutService.applyMaterialRuneSlots(weapon);
+        return weapon;
     }
 
     private static ItemStack createDungeonDrop(Item item, int playerLevel, int wave, RandomSource random) {
@@ -3171,8 +3051,10 @@ public final class DungeonRunManager {
         ResourceLocation current = run.ammoItems.get(player.getUUID());
         int index = AMMO_TIERS.indexOf(current);
         if (index < 0 || index >= AMMO_TIERS.size() - 1) return false;
-        run.ammoItems.put(player.getUUID(), AMMO_TIERS.get(index + 1));
-        replenishWaveAmmo(player, run);
+        ResourceLocation upgraded = AMMO_TIERS.get(index + 1);
+        run.ammoItems.put(player.getUUID(), upgraded);
+        run.ammoCapacity.put(player.getUUID(), rollStartingAmmo(itemStack(upgraded), player.getRandom()));
+        run.ammoRemaining.put(player.getUUID(), run.ammoCapacity.get(player.getUUID()));
         syncHud(run, run.phase == RunPhase.IN_WAVE);
         markStateDirty();
         return true;
@@ -3181,8 +3063,9 @@ public final class DungeonRunManager {
     public static boolean upgradeAmmoCount(ServerPlayer player, int amount) {
         RunState run = getRunForPlayer(player);
         if (run == null || !run.ammoItems.containsKey(player.getUUID())) return false;
-        run.ammoPerWave.merge(player.getUUID(), Math.max(1, amount), Integer::sum);
-        replenishWaveAmmo(player, run);
+        int increase = Math.max(1, amount);
+        run.ammoCapacity.merge(player.getUUID(), increase, Integer::sum);
+        run.ammoRemaining.merge(player.getUUID(), increase, Integer::sum);
         syncHud(run, run.phase == RunPhase.IN_WAVE);
         markStateDirty();
         return true;
@@ -3193,9 +3076,9 @@ public final class DungeonRunManager {
         return run == null ? NO_AMMO : run.ammoItems.getOrDefault(player.getUUID(), NO_AMMO);
     }
 
-    public static int getAmmoPerWave(ServerPlayer player) {
+    public static int getAmmoCapacity(ServerPlayer player) {
         RunState run = getRunForPlayer(player);
-        return run == null ? 0 : run.ammoPerWave.getOrDefault(player.getUUID(), 0);
+        return run == null ? 0 : run.ammoCapacity.getOrDefault(player.getUUID(), 0);
     }
 
     private static EntityType<?> pickEntityType(RandomSource random, EnemyPoolSet pools, WaveArchetype archetype) {
@@ -3508,7 +3391,7 @@ public final class DungeonRunManager {
 
     private static DungeonWaveHudPayload createHudPayload(RunState run, ServerPlayer recipient, boolean active, int wave, int remaining, int total) {
         boolean upgradePhase = run != null && run.phase == RunPhase.SHOP;
-        boolean gatewayOpen = run != null && (run.phase == RunPhase.CHECKPOINT || (run.phase == RunPhase.SHOP && run.advancePortalId >= 0));
+        boolean gatewayOpen = run != null && (run.phase == RunPhase.CHECKPOINT || run.phase == RunPhase.SHOP);
         int countdownTicks = run != null && run.phase == RunPhase.INTERMISSION ? Math.max(0, run.intermissionTicks) : 0;
         boolean displayActive = active || upgradePhase || gatewayOpen || countdownTicks > 0;
         int displayRemaining = corruption(run);
@@ -3531,7 +3414,7 @@ public final class DungeonRunManager {
         if (dungeon == null) {
             return 0L;
         }
-        return Math.max(0L, dungeon.getGameTime() - run.runStartGameTime);
+        return Math.max(0L, dungeon.getGameTime() - run.runStartGameTime - run.pausedRunTicks);
     }
 
     private static void finishAndCleanup(RunState run) {
@@ -3550,6 +3433,12 @@ public final class DungeonRunManager {
         }
         ServerLevel dungeon = getDungeonLevel(run);
         discardTrackedMobs(run, dungeon);
+        if (dungeon != null) {
+            clearGateway(dungeon, DungeonInstanceManager.exitPortalPosition(run.instanceId));
+            clearGateway(dungeon, DungeonInstanceManager.advancePortalPosition(run.instanceId));
+            clearGateway(dungeon, DungeonInstanceManager.shopExitPortalPosition(run.ownerId));
+            clearGateway(dungeon, DungeonInstanceManager.shopAdvancePortalPosition(run.ownerId));
+        }
         if (run.shopkeeperId >= 0 || run.shopkeeperUuid != null) {
             if (dungeon != null) {
                 Entity shop = run.shopkeeperId >= 0 ? dungeon.getEntity(run.shopkeeperId) : dungeon.getEntity(run.shopkeeperUuid);
@@ -3689,7 +3578,9 @@ public final class DungeonRunManager {
 
     private static boolean isRanged(LoadoutModels.LoadoutDefinition definition) {
         return definition != null && (definition.primaryWeaponKind().contains("bow")
-                || definition.secondaryWeaponKind().contains("bow"));
+                || definition.secondaryWeaponKind().contains("bow")
+                || definition.primaryWeaponKind().contains("crossbow")
+                || definition.secondaryWeaponKind().contains("crossbow"));
     }
 
     private static ResourceLocation startingAmmo(LoadoutModels.LoadoutDefinition definition, int level) {
@@ -3699,24 +3590,19 @@ public final class DungeonRunManager {
         return AMMO_TIERS.get(tier);
     }
 
+    private static int rollStartingAmmo(ItemStack ammo, RandomSource random) {
+        ResourceLocation id = BuiltInRegistries.ITEM.getKey(ammo.getItem());
+        String path = id == null ? "" : id.getPath();
+        if (ammo.is(Items.FIREWORK_ROCKET)) return 8 + random.nextInt(5);
+        if (path.contains("netherite") || path.contains("amethyst")) return 24 + random.nextInt(9);
+        if (path.contains("diamond") || path.contains("golden")) return 32 + random.nextInt(9);
+        if (path.contains("iron")) return 40 + random.nextInt(9);
+        return 48 + random.nextInt(17);
+    }
+
     private static ItemStack itemStack(ResourceLocation id) {
         Item item = BuiltInRegistries.ITEM.get(id);
         return item == Items.AIR ? ItemStack.EMPTY : new ItemStack(item);
-    }
-
-    private static boolean isManagedAmmo(ItemStack stack) {
-        return !stack.isEmpty() && AMMO_TIERS.contains(BuiltInRegistries.ITEM.getKey(stack.getItem()));
-    }
-
-    private static void replenishWaveAmmo(ServerPlayer player, RunState run) {
-        ResourceLocation ammoId = run.ammoItems.get(player.getUUID());
-        int count = run.ammoPerWave.getOrDefault(player.getUUID(), 0);
-        if (ammoId == null || count <= 0) return;
-        for (int slot = 0; slot < player.getInventory().getContainerSize(); slot++) {
-            if (isManagedAmmo(player.getInventory().getItem(slot))) player.getInventory().setItem(slot, ItemStack.EMPTY);
-        }
-        run.ammoRemaining.put(player.getUUID(), count);
-        player.inventoryMenu.broadcastChanges();
     }
 
     public static void addArrowBundle(ServerPlayer player, ItemStack arrows) {
@@ -4149,6 +4035,7 @@ public final class DungeonRunManager {
         tag.putInt("tank_weight_bonus", run.tankWeightBonus);
         tag.putInt("elite_weight_bonus", run.eliteWeightBonus);
         tag.putLong("run_start_game_time", run.runStartGameTime);
+        tag.putLong("paused_run_ticks", run.pausedRunTicks);
         tag.putInt("mobs_killed", run.mobsKilled);
         tag.putInt("coins_earned", run.coinsEarned);
         tag.putInt("experience_earned", run.experienceEarned);
@@ -4187,7 +4074,7 @@ public final class DungeonRunManager {
         });
         tag.put("active_loadouts", activeLoadouts);
         tag.put("level_source_points", saveIntegerMap(run.levelSourcePoints));
-        tag.put("ammo_per_wave", saveIntegerMap(run.ammoPerWave));
+        tag.put("ammo_capacity", saveIntegerMap(run.ammoCapacity));
         tag.put("ammo_remaining", saveIntegerMap(run.ammoRemaining));
         ListTag ammoItems = new ListTag();
         run.ammoItems.forEach((player, item) -> { CompoundTag entry = new CompoundTag(); entry.putUUID("player", player); entry.putString("item", item.toString()); ammoItems.add(entry); });
@@ -4291,9 +4178,11 @@ public final class DungeonRunManager {
         run.tankWeightBonus = tag.getInt("tank_weight_bonus");
         run.eliteWeightBonus = tag.getInt("elite_weight_bonus");
         run.runStartGameTime = tag.contains("run_start_game_time") ? tag.getLong("run_start_game_time") : -1L;
+        run.pausedRunTicks = tag.getLong("paused_run_ticks");
         run.levelSourcePoints.clear();
         run.levelSourcePoints.putAll(loadIntegerMap(tag.getList("level_source_points", Tag.TAG_COMPOUND)));
-        run.ammoPerWave.putAll(loadIntegerMap(tag.getList("ammo_per_wave", Tag.TAG_COMPOUND)));
+        ListTag ammoCapacity = tag.getList("ammo_capacity", Tag.TAG_COMPOUND);
+        run.ammoCapacity.putAll(loadIntegerMap(ammoCapacity.isEmpty() ? tag.getList("ammo_per_wave", Tag.TAG_COMPOUND) : ammoCapacity));
         run.ammoRemaining.putAll(loadIntegerMap(tag.getList("ammo_remaining", Tag.TAG_COMPOUND)));
         for (Tag value : tag.getList("ammo_items", Tag.TAG_COMPOUND)) {
             CompoundTag entry = (CompoundTag) value;
@@ -4484,7 +4373,7 @@ public final class DungeonRunManager {
     }
 
     private static DungeonCompletePayload buildCompletionPayload(RunState run, ServerPlayer player, long now, List<ItemStack> rewards, int levelPoints, int cashedOutCoins, boolean survived) {
-        long elapsedTicks = run.runStartGameTime < 0L ? 0L : Math.max(0L, now - run.runStartGameTime);
+        long elapsedTicks = run.runStartGameTime < 0L ? 0L : Math.max(0L, now - run.runStartGameTime - run.pausedRunTicks);
         if (survived) {
             run.experienceEarned += cashedOutCoins;
         }
@@ -4595,9 +4484,10 @@ public final class DungeonRunManager {
         private int tankWeightBonus = 0;
         private int eliteWeightBonus = 0;
         private long runStartGameTime = -1L;
+        private long pausedRunTicks = 0L;
         private final Map<UUID, Integer> levelSourcePoints = new HashMap<>();
         private final Map<UUID, ResourceLocation> ammoItems = new HashMap<>();
-        private final Map<UUID, Integer> ammoPerWave = new HashMap<>();
+        private final Map<UUID, Integer> ammoCapacity = new HashMap<>();
         private final Map<UUID, Integer> ammoRemaining = new HashMap<>();
         private final Set<UUID> awardedExitXp = new HashSet<>();
         private int mobsKilled = 0;
@@ -4839,25 +4729,5 @@ public final class DungeonRunManager {
     ) {
     }
 
-    private record LoadoutDefinition(
-            String name,
-            String primaryKind,
-            String secondaryKind,
-            String armorName,
-            Item head,
-            Item chest,
-            Item legs,
-            Item feet,
-            List<String> traits,
-            List<ItemStack> food
-    ) {
-        private String foodSummary() {
-            ArrayList<String> parts = new ArrayList<>();
-            for (ItemStack stack : this.food) {
-                parts.add(stack.getHoverName().getString() + " x" + stack.getCount());
-            }
-            return String.join(", ", parts);
-        }
-    }
 }
 

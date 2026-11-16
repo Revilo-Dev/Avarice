@@ -19,6 +19,6 @@ public final class GodsTomeOfKnowledgeItem extends Item {
 
     @Override
     public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
-        tooltip.add(Component.literal("The Archive Keeper can reveal all knowledge within.").withStyle(ChatFormatting.LIGHT_PURPLE));
+        tooltip.add(Component.literal("The Knowledge Keeper can reveal all knowledge within.").withStyle(ChatFormatting.LIGHT_PURPLE));
     }
 }

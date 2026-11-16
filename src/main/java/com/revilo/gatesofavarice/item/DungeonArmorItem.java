@@ -19,11 +19,7 @@ public class DungeonArmorItem extends ArmorItem {
 
     public DungeonArmorItem(Type type, Properties properties) {
         super(ArmorMaterials.NETHERITE, type, properties);
-        this.defaultRuneSlots = switch (type) {
-            case HELMET, BOOTS -> 2;
-            case CHESTPLATE, LEGGINGS -> 3;
-            default -> 2;
-        };
+        this.defaultRuneSlots = 5;
     }
 
     @Override
@@ -37,7 +33,7 @@ public class DungeonArmorItem extends ArmorItem {
 
     @Override
     public void inventoryTick(ItemStack stack, net.minecraft.world.level.Level level, net.minecraft.world.entity.Entity entity, int slotId, boolean isSelected) {
-        RunicItemSupport.ensureRunicData(stack, Math.max(this.defaultRuneSlots, RuneSlots.capacity(stack)));
+        RunicItemSupport.ensureRunicData(stack, this.defaultRuneSlots);
         super.inventoryTick(stack, level, entity, slotId, isSelected);
     }
 

@@ -21,6 +21,7 @@ public final class DungeonDropRenderer extends EntityRenderer<DungeonDropEntity>
     public DungeonDropRenderer(EntityRendererProvider.Context context) {
         super(context);
         this.itemRenderer = context.getItemRenderer();
+        this.shadowRadius = 0.0F;
     }
 
     @Override
@@ -30,7 +31,8 @@ public final class DungeonDropRenderer extends EntityRenderer<DungeonDropEntity>
         poseStack.translate(0.0D, .22D + Math.sin((entity.tickCount + partialTick) * .16D) * .08D, 0.0D);
         poseStack.mulPose(this.entityRenderDispatcher.cameraOrientation());
         poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
-        poseStack.scale(.8F, .8F, .8F);
+        float scale = entity.isArrowBundle() ? .8F : 2.4F;
+        poseStack.scale(scale, scale, scale);
         this.itemRenderer.renderStatic(entity.stack(), ItemDisplayContext.GROUND, LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, poseStack, buffer, entity.level(), entity.getId());
         poseStack.popPose();
         if (Minecraft.getInstance().hitResult instanceof EntityHitResult hit && hit.getEntity() == entity) {
@@ -45,7 +47,7 @@ public final class DungeonDropRenderer extends EntityRenderer<DungeonDropEntity>
             String value = line.getString();
             if (!value.equals(entity.stack().getHoverName().getString()) && !value.isBlank()) text.append('\n').append(value);
         }
-        text.append("\nHold Shift to equip");
+        text.append("\nShift to switch");
         return net.minecraft.network.chat.Component.literal(text.toString());
     }
 

@@ -2,7 +2,6 @@ package com.revilo.gatesofavarice.client;
 
 import com.revilo.gatesofavarice.client.model.GatekeeperModel;
 import com.revilo.gatesofavarice.client.render.GatekeeperRenderer;
-import com.revilo.gatesofavarice.client.render.GatewayCrystalRenderer;
 import com.revilo.gatesofavarice.client.render.MythicCoinOrbRenderer;
 import com.revilo.gatesofavarice.client.render.DungeonDropRenderer;
 import com.revilo.gatesofavarice.client.render.GatewayWorkbenchBlockEntityRenderer;
@@ -68,7 +67,6 @@ public final class GatewayExpansionClient {
         public static void registerBlockEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
             event.registerBlockEntityRenderer(ModBlockEntities.GATEWAY_WORKBENCH.get(), GatewayWorkbenchBlockEntityRenderer::new);
             event.registerEntityRenderer(ModEntities.GATEKEEPER.get(), GatekeeperRenderer::new);
-            event.registerEntityRenderer(ModEntities.GATEWAY_CRYSTAL.get(), GatewayCrystalRenderer::new);
             event.registerEntityRenderer(ModEntities.MYTHIC_COIN_ORB.get(), MythicCoinOrbRenderer::new);
             event.registerEntityRenderer(ModEntities.DUNGEON_DROP.get(), DungeonDropRenderer::new);
         }

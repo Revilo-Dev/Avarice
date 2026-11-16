@@ -154,7 +154,7 @@ public final class ShopkeeperManager {
         if (DungeonRunManager.tryResumePendingWaveMenu(player, trader.getId())) {
             return;
         }
-        if ("archive_keeper".equals(getSpecialistRole(trader))) {
+        if ("knowledge_keeper".equals(getSpecialistRole(trader))) {
             redeemArchiveKnowledge(player);
             return;
         }
@@ -191,7 +191,7 @@ public final class ShopkeeperManager {
             if (stack.is(ModItems.GODS_TOME_OF_KNOWLEDGE.get())) {
                 stack.shrink(1);
                 int count = KnowledgeManager.unlockAll(player);
-                player.displayClientMessage(Component.literal("The Archive Keeper revealed " + count + " discoveries.").withStyle(ChatFormatting.LIGHT_PURPLE), false);
+                player.displayClientMessage(Component.literal("The Knowledge Keeper revealed " + count + " discoveries.").withStyle(ChatFormatting.LIGHT_PURPLE), false);
                 player.inventoryMenu.broadcastChanges();
                 return;
             }
@@ -236,10 +236,23 @@ public final class ShopkeeperManager {
 
     /** Keeps every role-specific trader present in the archive shop layout. */
     public static void ensureShopSpecialists(ServerLevel level, java.util.UUID instanceOwnerId, Player summoner) {
+        removeLegacySpecialists(level);
         ensureSpecialist(level, DungeonInstanceManager.armorerPosition(instanceOwnerId), "armorer", Component.literal("Armorer").withStyle(ChatFormatting.RED), summoner);
         ensureSpecialist(level, DungeonInstanceManager.enchanterPosition(instanceOwnerId), "enchanter", Component.literal("Enchanter").withStyle(ChatFormatting.LIGHT_PURPLE), summoner);
-        ensureSpecialist(level, DungeonInstanceManager.merchantPosition(instanceOwnerId), "merchant", Component.literal("Merchant").withStyle(ChatFormatting.GOLD), summoner);
-        ensureSpecialist(level, DungeonInstanceManager.tarotDealerPosition(instanceOwnerId), "tarot_dealer", Component.literal("Booster Dealer").withStyle(ChatFormatting.DARK_PURPLE), summoner);
+        ensureSpecialist(level, DungeonInstanceManager.merchantPosition(instanceOwnerId), "resistance_master", Component.literal("Resistance Master").withStyle(ChatFormatting.DARK_GREEN), summoner);
+    }
+
+    private static void removeLegacySpecialists(ServerLevel level) {
+        removeSpecialistsAt(level, DungeonInstanceManager.merchantPosition(null), "merchant");
+        removeSpecialistsAt(level, DungeonInstanceManager.tarotDealerPosition(null), "tarot_dealer");
+    }
+
+    private static void removeSpecialistsAt(ServerLevel level, Vec3 position, String role) {
+        for (GatekeeperEntity trader : level.getEntitiesOfClass(GatekeeperEntity.class,
+                new net.minecraft.world.phys.AABB(position, position).inflate(3.0D),
+                entity -> role.equals(getSpecialistRole(entity)))) {
+            trader.discard();
+        }
     }
 
     private static void ensureSpecialist(ServerLevel level, Vec3 position, String role, Component name, Player summoner) {
@@ -251,9 +264,6 @@ public final class ShopkeeperManager {
             existing.setCustomName(name);
             existing.setCustomNameVisible(true);
             positionKeeper(existing, position);
-            if ("merchant".equals(role) && !existing.getPersistentData().getBoolean(CATEGORIZED_MERCHANT_KEY)) {
-                rollCategorizedMerchantOffers(existing, level.random, getPlayerLevel(summoner));
-            }
             for (GatekeeperEntity duplicate : matches) if (duplicate != existing) duplicate.discard();
             return;
         }
@@ -261,7 +271,6 @@ public final class ShopkeeperManager {
         if (trader == null) return;
         trader.getPersistentData().putString(SHOP_SPECIALIST_ROLE_KEY, role);
         trader.setCustomName(name);
-        if ("merchant".equals(role)) rollCategorizedMerchantOffers(trader, level.random, getPlayerLevel(summoner));
         positionKeeper(trader, position);
     }
 
@@ -287,11 +296,10 @@ public final class ShopkeeperManager {
 
     public static int getSpecialistRoleId(GatekeeperEntity trader) {
         return switch (getSpecialistRole(trader)) {
-            case "archive_keeper" -> 1;
+            case "knowledge_keeper" -> 1;
             case "armorer" -> 2;
             case "enchanter" -> 3;
-            case "merchant" -> 4;
-            case "tarot_dealer" -> 5;
+            case "resistance_master" -> 4;
             default -> 0;
         };
     }
@@ -364,11 +372,7 @@ public final class ShopkeeperManager {
             return false;
         }
 
-        if ("merchant".equals(getSpecialistRole(trader))) {
-            rollCategorizedMerchantOffers(trader, player.getRandom(), getPlayerLevel(player));
-        } else {
-            rollVisibleOffers(trader, player.getRandom(), getPlayerLevel(player));
-        }
+        rollVisibleOffers(trader, player.getRandom(), getPlayerLevel(player));
         CompoundTag tag = trader.getPersistentData();
         tag.putInt(REROLL_COUNT_KEY, rerollCount + 1);
         return true;

@@ -18,6 +18,6 @@ public final class GodlyKnowledgeItem extends Item {
             tooltip.add(Component.literal(entry.title()).withStyle(entry.rarity().color()));
             tooltip.add(Component.literal(entry.description()).withStyle(ChatFormatting.GRAY));
         }, () -> tooltip.add(Component.literal("Unknown knowledge").withStyle(ChatFormatting.GRAY)));
-        tooltip.add(Component.literal("Give this to the Archive Keeper to learn it.").withStyle(ChatFormatting.DARK_GRAY));
+        tooltip.add(Component.literal("Give this to the Knowledge Keeper to learn it.").withStyle(ChatFormatting.DARK_GRAY));
     }
 }

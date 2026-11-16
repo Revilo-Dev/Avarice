@@ -17,6 +17,7 @@ import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.core.particles.ParticleTypes;
 import java.util.UUID;
 
 /** Floating dungeon-only loot. It intentionally is not an ItemEntity. */
@@ -62,6 +63,14 @@ public final class DungeonDropEntity extends Entity {
         this.setDeltaMovement(this.getDeltaMovement().add(0, -0.02D, 0).scale(.96D));
         this.move(MoverType.SELF, this.getDeltaMovement());
         if (this.onGround()) this.setDeltaMovement(this.getDeltaMovement().multiply(.7D, -.3D, .7D));
+        if (this.level().isClientSide() && !this.isArrowBundle() && this.tickCount % 6 == 0) {
+            for (int index = 0; index < 12; index++) {
+                double angle = Math.PI * 2.0D * index / 12.0D;
+                this.level().addParticle(ParticleTypes.END_ROD,
+                        this.getX() + Math.cos(angle) * .55D, this.getY() + .03D, this.getZ() + Math.sin(angle) * .55D,
+                        0.0D, .003D, 0.0D);
+            }
+        }
         if (!this.level().isClientSide()) {
             if (swappingPlayerId != null && this.level() instanceof ServerLevel level) {
                 ServerPlayer swappingPlayer = level.getServer().getPlayerList().getPlayer(swappingPlayerId);

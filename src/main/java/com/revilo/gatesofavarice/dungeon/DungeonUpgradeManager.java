@@ -435,16 +435,16 @@ public final class DungeonUpgradeManager {
             }
             if ("armorer".equals(shopMode)) {
                 generated = generated.stream().map(DungeonUpgradeManager::asInscriptionCard).toList();
-                if (category == UpgradeCategory.PRIMARY_WEAPON && DungeonRunManager.getAmmoPerWave(player) > 0) {
+                if (category == UpgradeCategory.PRIMARY_WEAPON && DungeonRunManager.getAmmoCapacity(player) > 0) {
                     java.util.ArrayList<UpgradeCard> ammoCards = new java.util.ArrayList<>();
                     ResourceLocation ammoId = DungeonRunManager.getAmmoType(player);
                     if (!ammoId.equals(ResourceLocation.withDefaultNamespace("firework_rocket"))) {
                         ammoCards.add(new UpgradeCard("ammo_type_" + session.cardGenerationNonce, UpgradeCardType.UPGRADE_AMMO_TYPE,
                                 category, "Bow Ammunition", "Ammo", "Upgrade ammo type", ammoId.getPath(), "Next tier", 2, 0));
                     }
-                    int countNow = DungeonRunManager.getAmmoPerWave(player);
+                    int countNow = DungeonRunManager.getAmmoCapacity(player);
                     ammoCards.add(new UpgradeCard("ammo_count_" + session.cardGenerationNonce, UpgradeCardType.UPGRADE_AMMO_COUNT,
-                            category, "Larger Quiver", "Ammo", "+10 per wave", Integer.toString(countNow), Integer.toString(countNow + 10), 1, 0));
+                            category, "Larger Quiver", "Ammo", "+10 ammo", Integer.toString(countNow), Integer.toString(countNow + 10), 1, 0));
                     ammoCards.addAll(generated);
                     generated = pricedCards(ammoCards, waveNumber);
                 }
@@ -900,7 +900,8 @@ public final class DungeonUpgradeManager {
                 : DungeonUpgradeWeaponRolls.rollSecondaryUpgradeWeapon(random, playerLevel, current);
         ItemStack replacement = new ItemStack(item);
         DungeonGearRoller.rollAndBind(replacement, random, playerLevel, 0L, player.registryAccess());
-        RunicLoadoutService.applyRuneSlotCapacity(replacement, RunicLoadoutService.runeSlotsForPlayerLevel(playerLevel));
+        DungeonGearRoller.rollWeaponAffixes(replacement, random);
+        RunicLoadoutService.applyMaterialRuneSlots(replacement);
         if (primary) {
             DungeonBoundItems.markPrimaryWeapon(replacement);
         } else {

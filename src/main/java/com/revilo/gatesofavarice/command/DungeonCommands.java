@@ -44,6 +44,16 @@ public final class DungeonCommands {
                 .requires(source -> source.hasPermission(2))
                 .then(Commands.literal("recover")
                         .executes(context -> recover(context.getSource())))
+                .then(Commands.literal("trigger")
+                        .then(Commands.literal("loadout")
+                                .executes(context -> triggerLoadout(context.getSource())))
+                        .then(Commands.literal("boosterpack")
+                                .executes(context -> triggerBoosterPack(context.getSource())))
+                        .then(Commands.literal("next")
+                                .then(Commands.literal("floor")
+                                        .executes(context -> nextFloor(context.getSource()))))
+                        .then(Commands.literal("shop")
+                                .executes(context -> testShopPhase(context.getSource()))))
                 .then(Commands.literal("loadout")
                         .then(Commands.literal("list")
                                 .executes(context -> listLoadouts(context.getSource())))
@@ -204,6 +214,20 @@ public final class DungeonCommands {
         int recovered = DungeonRunManager.recoverStalledShops(source.getServer());
         source.sendSuccess(() -> Component.literal("Recovered dungeon runs: " + recovered), true);
         return recovered;
+    }
+
+    private static int triggerLoadout(CommandSourceStack source) {
+        return testLoadoutOpen(source);
+    }
+
+    private static int triggerBoosterPack(CommandSourceStack source) {
+        ServerPlayer player = requirePlayer(source);
+        if (player == null || !DungeonRunManager.debugOpenBoosterPack(player)) {
+            source.sendFailure(Component.literal("No active dungeon run owned by this player."));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Opened a booster pack selection."), true);
+        return 1;
     }
 
     private static int testDifficultyScale(CommandSourceStack source) {

@@ -82,11 +82,17 @@ public class GatekeeperEntity extends PathfinderMob {
 
     @Override
     public boolean hurt(DamageSource source, float amount) {
+        if (source.getEntity() instanceof Player player && player.getAbilities().instabuild) {
+            return super.hurt(source, amount);
+        }
         return false;
     }
 
     @Override
     public boolean isInvulnerableTo(DamageSource source) {
+        if (source.getEntity() instanceof Player player && player.getAbilities().instabuild) {
+            return false;
+        }
         return true;
     }
 

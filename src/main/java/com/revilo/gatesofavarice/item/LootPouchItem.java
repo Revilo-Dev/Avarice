@@ -1,6 +1,7 @@
 package com.revilo.gatesofavarice.item;
 
 import com.revilo.gatesofavarice.menu.LootPouchMenu;
+import com.revilo.gatesofavarice.dungeon.DungeonBoundItems;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -22,6 +23,7 @@ public final class LootPouchItem extends Item {
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack pouch = player.getItemInHand(hand);
         if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
+            DungeonBoundItems.markIfDungeonBound(pouch);
             int slot = hand == InteractionHand.MAIN_HAND ? player.getInventory().selected : 40;
             serverPlayer.openMenu(new SimpleMenuProvider((id, inventory, ignored) -> new LootPouchMenu(id, inventory, slot), Component.translatable("item.gatesofavarice.loot_pouch")), buffer -> buffer.writeVarInt(slot));
         }
