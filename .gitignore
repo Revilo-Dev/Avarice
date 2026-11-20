@@ -1,47 +1,44 @@
-#eclipse
-**/bin
-**/.settings
-**/.classpath
-*.project
-tests/.eclipse
+# eclipse
+/bin/
+*.launch
+/.settings/
+/.metadata/
+.classpath
+.project
 
-#In case people make their workspace in the repo
-/eclipse/
-
-#idea
-/.idea
-/*/out
-/classes
+# idea
+/out/
+*.ipr
+*.iws
 *.iml
+/.idea/
 
-#gradle
-/build
-/.gradle
-/*/build
-/*/.gradle
+# gradle
+/build/
+/.gradle/
+/gradlew
+/gradlew.bat
+/settings.gradle
 
-#occupational hazards
-/projects/**/*.launch
-/repo/
-.run
-src/generated/resources/.cache/
-tests/src/generated/resources/.cache/
+# wiki
+/wiki/
 
-#Patch rejects
-#/patches-/
-#*.patch.rej
-#/projects/*/rejects/
-
-# FML changelog
-changelog.txt
-*.py
-*.7z
+# runtime
+/run/
+/runs/
+/run-data/
 /logs/
+/crash-reports/
+*.log
+hs_err_pid*
+replay_pid*
 
-build
-**/build
+# local sources
+/.tmpneoforge/
+/.tmpneoforge2/
+/.tmpneoforge3/
+/repo/
 
-**/eclipse/
-**/runs/
-
-**/out/
+# os
+.DS_Store
+Thumbs.db
